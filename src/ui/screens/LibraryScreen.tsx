@@ -1,0 +1,78 @@
+import { useRouter } from 'expo-router';
+import { useEffect } from 'react';
+import { FlatList, Pressable, StyleSheet, Text } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { getDemoLibraryEntry } from '@/storage';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { projectAdded, projectsSelectors } from '@/store/projectsSlice';
+
+export function LibraryScreen() {
+  const dispatch = useAppDispatch();
+  const router = useRouter();
+  const projects = useAppSelector((s) => projectsSelectors.selectAll(s.projects));
+
+  useEffect(() => {
+    // Seed the bundled demo project on first launch so there's always
+    // something to open - see AGENTS.md phase 1 requirements.
+    if (projects.length === 0) {
+      dispatch(projectAdded(getDemoLibraryEntry()));
+    }
+  }, [projects.length, dispatch]);
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <Text style={styles.header}>Library</Text>
+      <FlatList
+        data={projects}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.list}
+        renderItem={({ item }) => (
+          <Pressable
+            style={styles.row}
+            onPress={() => router.push({ pathname: '/player/[projectId]', params: { projectId: item.id } })}
+          >
+            <Text style={styles.title}>{item.title}</Text>
+            <Text style={styles.meta}>
+              {item.bpm} bpm · {item.key} · {item.tracks.length} tracks
+            </Text>
+          </Pressable>
+        )}
+        ListEmptyComponent={<Text style={styles.meta}>No projects yet.</Text>}
+      />
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  header: {
+    color: '#ffffff',
+    fontSize: 28,
+    fontWeight: '700',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+  },
+  list: {
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  row: {
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: '#1c1c1e',
+  },
+  title: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  meta: {
+    color: '#9b9b9d',
+    fontSize: 13,
+    marginTop: 4,
+  },
+});

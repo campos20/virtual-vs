@@ -1,0 +1,150 @@
+import { useCallback, useRef, useState } from 'react';
+import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+
+interface VerticalFaderProps {
+  /** Committed value from the store; only reflected while not actively dragging. */
+  value: number;
+  maxValue?: number;
+  /** Called on every touch move - should drive the engine directly, not the store. */
+  onLiveChange: (value: number) => void;
+  /** Called once on release - should dispatch the committed value to the store. */
+  onCommit: (value: number) => void;
+  disabled?: boolean;
+  accentColor: string;
+}
+
+/**
+ * A vertical channel-strip fader (drag up = louder), built on
+ * react-native-gesture-handler's Gesture API (`.runOnJS(true)` since
+ * callbacks call plain JS - store dispatch, engine calls - not Reanimated
+ * shared values). While dragging, the cap tracks touch position locally and
+ * calls `onLiveChange` on every move; the store's committed `value` is only
+ * re-applied once the drag ends, so it can't fight the live gesture.
+ */
+export function VerticalFader({ value, maxValue = 1.2, onLiveChange, onCommit, disabled, accentColor }: VerticalFaderProps) {
+  const heightRef = useRef(0);
+  const draggingValueRef = useRef(value);
+  // Non-null while actively dragging (tracks touch position); null means
+  // "not dragging", so display falls back to the committed `value` prop -
+  // no effect needed to sync committed state into local state.
+  const [liveValue, setLiveValue] = useState<number | null>(null);
+
+  const updateFromLocationY = useCallback(
+    (y: number) => {
+      const height = heightRef.current;
+      if (height <= 0) return;
+      // y grows downward from the top of the track; louder = higher up = smaller y.
+      const ratio = Math.max(0, Math.min(1, 1 - y / height));
+      const next = ratio * maxValue;
+      draggingValueRef.current = next;
+      setLiveValue(next);
+      onLiveChange(next);
+    },
+    [maxValue, onLiveChange]
+  );
+
+  /* eslint-disable react-hooks/refs -- these callbacks run on later native
+   * gesture events, never during render; reading refs synchronously here
+   * (not React state) is what guarantees onEnd/onFinalize see the very
+   * latest dragged value even if it fires faster than React re-renders. */
+  const pan = Gesture.Pan()
+    .enabled(!disabled)
+    .runOnJS(true)
+    .onBegin((event) => updateFromLocationY(event.y))
+    .onUpdate((event) => updateFromLocationY(event.y))
+    .onEnd(() => {
+      setLiveValue(null);
+      onCommit(draggingValueRef.current);
+    })
+    .onFinalize((_event, success) => {
+      if (!success) {
+        setLiveValue(null);
+        onCommit(draggingValueRef.current);
+      }
+    });
+  /* eslint-enable react-hooks/refs */
+
+  function handleLayout(event: LayoutChangeEvent) {
+    heightRef.current = event.nativeEvent.layout.height;
+  }
+
+  const displayValue = liveValue ?? value;
+  const ratio = Math.max(0, Math.min(1, displayValue / maxValue));
+  const fillPercent = `${ratio * 100}%` as const;
+  const unityPercent = `${Math.min(100, (1 / maxValue) * 100)}%` as const;
+
+  return (
+    <View style={styles.wrapper}>
+      <Text style={styles.readout}>{Math.round(ratio * 100)}</Text>
+      <GestureDetector gesture={pan}>
+        <View style={styles.track} onLayout={handleLayout}>
+          <View style={styles.groove} pointerEvents="none" />
+          {/* Unity-gain (1.0) reference mark, like the 0 dB tick on a real fader. */}
+          <View style={[styles.unityTick, { bottom: unityPercent }]} pointerEvents="none" />
+          <View style={[styles.fill, { height: fillPercent, backgroundColor: accentColor }]} pointerEvents="none" />
+          <View style={[styles.cap, { bottom: fillPercent, borderColor: accentColor }]} pointerEvents="none" />
+        </View>
+      </GestureDetector>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrapper: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  readout: {
+    color: '#8e8e93',
+    fontSize: 10,
+    fontVariant: ['tabular-nums'],
+    marginBottom: 4,
+  },
+  track: {
+    // Fixed throw rather than flex: a fader that stretches to the full
+    // screen height has a uselessly long travel distance and doesn't read
+    // as a mixer fader.
+    height: 260,
+    width: 34,
+    borderRadius: 5,
+    backgroundColor: '#0e0e10',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#2c2c2e',
+  },
+  groove: {
+    position: 'absolute',
+    left: '50%',
+    marginLeft: -2,
+    top: 6,
+    bottom: 6,
+    width: 4,
+    borderRadius: 2,
+    backgroundColor: '#000000',
+  },
+  unityTick: {
+    position: 'absolute',
+    left: -3,
+    right: -3,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  fill: {
+    position: 'absolute',
+    left: '50%',
+    marginLeft: -2,
+    width: 4,
+    bottom: 0,
+    borderRadius: 2,
+  },
+  cap: {
+    position: 'absolute',
+    left: -7,
+    right: -7,
+    height: 16,
+    marginBottom: -8,
+    borderRadius: 3,
+    backgroundColor: '#e8e8ea',
+    borderWidth: 3,
+  },
+});
