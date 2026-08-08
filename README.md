@@ -12,18 +12,19 @@ Software Mansion's native Web Audio API implementation for React Native.
 
 ## The name
 
-**VS** stands for *Virtual Sound*: the multitrack backing tracks sent to a
-live sound system alongside the band. It fills in the parts nobody on stage
-is playing - synths, pads, backing vocals - so a small band can sound like
-its studio recordings, and it runs against a click so the musicians stay
-locked to it.
+**VS** stands for *Virtual Sound*: the multitrack backing tracks a band plays
+alongside live. It fills in the parts nobody on stage is playing - synths,
+pads, backing vocals - so a small band can sound like its studio recordings.
+The click is what holds it together: the band plays to the metronome so it
+stays locked to whatever the VS is playing.
 
-So "Virtual VS" expands to "Virtual *Virtual Sound*", and yes, the *virtual*
-is in there twice. That's deliberate. VS has long since stopped being read as
-an acronym and works as a term in its own right, the same way people say "ATM
-machine" or "PIN number" - and the extra *virtual* earns its place here,
-because this project virtualizes the VS rig itself: the laptop, the
-interface, and the DAW all collapse into the phone already in your pocket.
+This app is a VS. Not a companion to one, not a way to prepare tracks for one
+- the thing itself, running on a phone instead of the usual laptop + audio
+interface + DAW rig.
+
+The name repeats itself: "Virtual VS" unpacks to "Virtual *Virtual Sound*".
+That's known. VS stopped being read as an acronym a long time ago and works as
+a term on its own, the way people say "ATM machine" or "PIN number".
 
 ## Architecture
 
