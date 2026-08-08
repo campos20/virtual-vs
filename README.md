@@ -1,14 +1,29 @@
 # Virtual VS
 
 An open-source multitrack backing-track player for live musicians - a phone
-replacing the laptop + audio interface + DAW rig ("VS"/Playback-style" setup).
-Load a project of audio stems and it plays them all sample-locked, with
-per-stem volume/mute/solo/bus routing and a click. Everything is local; there
-is no backend.
+replacing the laptop + audio interface + DAW rig (a "VS"/Playback-style
+setup). Load a project of audio stems and it plays them all sample-locked,
+with per-stem volume/mute/solo/bus routing and a click. Everything is local;
+there is no backend.
 
 Built with [Expo](https://expo.dev) (SDK 57) and
 [`react-native-audio-api`](https://github.com/software-mansion/react-native-audio-api),
 Software Mansion's native Web Audio API implementation for React Native.
+
+## The name
+
+**VS** stands for *Virtual Sound*: the multitrack backing tracks sent to a
+live sound system alongside the band. It fills in the parts nobody on stage
+is playing - synths, pads, backing vocals - so a small band can sound like
+its studio recordings, and it runs against a click so the musicians stay
+locked to it.
+
+So "Virtual VS" expands to "Virtual *Virtual Sound*", and yes, the *virtual*
+is in there twice. That's deliberate. VS has long since stopped being read as
+an acronym and works as a term in its own right, the same way people say "ATM
+machine" or "PIN number" - and the extra *virtual* earns its place here,
+because this project virtualizes the VS rig itself: the laptop, the
+interface, and the DAW all collapse into the phone already in your pocket.
 
 ## Architecture
 
