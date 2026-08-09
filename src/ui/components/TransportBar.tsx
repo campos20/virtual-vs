@@ -56,7 +56,7 @@ export function TransportBar({ isPlaying, playheadSec, durationSec, onPlayPause,
       </GestureDetector>
 
       <View style={styles.row}>
-        <Pressable onPress={onStop} style={styles.stopButton} hitSlop={8}>
+        <Pressable onPress={onStop} style={styles.stopButton} hitSlop={8} testID="stop-button">
           <View style={styles.stopIcon} />
         </Pressable>
 
@@ -66,14 +66,14 @@ export function TransportBar({ isPlaying, playheadSec, durationSec, onPlayPause,
           {formatTime(durationSec)}
         </Text>
 
-        <Pressable onPress={onPlayPause} style={styles.playButton} hitSlop={8}>
+        <Pressable onPress={onPlayPause} style={styles.playButton} hitSlop={8} testID="play-pause-button">
           {isPlaying ? (
-            <View style={styles.pauseIcon}>
+            <View style={styles.pauseIcon} testID="pause-icon">
               <View style={styles.pauseBar} />
               <View style={styles.pauseBar} />
             </View>
           ) : (
-            <View style={styles.playTriangle} />
+            <View style={styles.playTriangle} testID="play-icon" />
           )}
         </Pressable>
       </View>

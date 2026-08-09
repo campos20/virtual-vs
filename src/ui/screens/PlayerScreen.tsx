@@ -1,31 +1,63 @@
-import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { audioEngine, type EngineTransportState, type TrackRuntimeState } from '@/engine';
-import { usePlayhead } from '@/hooks/usePlayhead';
-import { decodeProjectAudio, getProjectSourceForEntry } from '@/storage';
-import { store } from '@/store';
-import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { projectsSelectors } from '@/store/projectsSlice';
-import { monitorModeSet } from '@/store/settingsSlice';
-import { tracksInitializedForProject, tracksSelectors, trackEntityId } from '@/store/tracksSlice';
-import type { ProjectManifest } from '@/types/project';
-import { ChannelStrip } from '@/ui/components/ChannelStrip';
-import { MonitorSplitSwitch } from '@/ui/components/MonitorSplitSwitch';
-import { TransportBar } from '@/ui/components/TransportBar';
+import {
+  audioEngine,
+  type EngineTransportState,
+  type TrackRuntimeState,
+} from "@/engine";
+import { usePlayhead } from "@/hooks/usePlayhead";
+import { decodeProjectAudio, getProjectSourceForEntry } from "@/storage";
+import { store } from "@/store";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { projectsSelectors } from "@/store/projectsSlice";
+import { monitorModeSet } from "@/store/settingsSlice";
+import {
+  trackEntityId,
+  tracksInitializedForProject,
+  tracksSelectors,
+} from "@/store/tracksSlice";
+import type { ProjectManifest } from "@/types/project";
+import { ChannelStrip } from "@/ui/components/ChannelStrip";
+import { MonitorSplitSwitch } from "@/ui/components/MonitorSplitSwitch";
+import { TransportBar } from "@/ui/components/TransportBar";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+function BackButton() {
+  const router = useRouter();
+  return (
+    <Pressable
+      onPress={() => router.back()}
+      style={styles.backButton}
+      hitSlop={8}
+      testID="back-button"
+    >
+      <Text style={styles.backButtonText}>‹ Library</Text>
+    </Pressable>
+  );
+}
 
 export function PlayerScreen() {
   const { projectId } = useLocalSearchParams<{ projectId: string }>();
   const dispatch = useAppDispatch();
-  const entry = useAppSelector((s) => (projectId ? projectsSelectors.selectById(s.projects, projectId) : undefined));
+  const entry = useAppSelector((s) =>
+    projectId ? projectsSelectors.selectById(s.projects, projectId) : undefined,
+  );
   const monitorMode = useAppSelector((s) => s.settings.monitorMode);
 
   const [manifest, setManifest] = useState<ProjectManifest | null>(null);
   const [durationSec, setDurationSec] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [transportState, setTransportState] = useState<EngineTransportState>('stopped');
+  const [transportState, setTransportState] =
+    useState<EngineTransportState>("stopped");
 
   const { seconds: playheadSec } = usePlayhead();
 
@@ -41,12 +73,20 @@ export function PlayerScreen() {
         const decoded = await decodeProjectAudio(audioEngine.context, source);
         if (cancelled) return;
 
-        dispatch(tracksInitializedForProject({ projectId: entry.id, tracks: source.manifest.tracks }));
+        dispatch(
+          tracksInitializedForProject({
+            projectId: entry.id,
+            tracks: source.manifest.tracks,
+          }),
+        );
 
         const tracksState = store.getState().tracks;
         const initialTrackStates: Record<string, TrackRuntimeState> = {};
         for (const track of source.manifest.tracks) {
-          const committed = tracksSelectors.selectById(tracksState, trackEntityId(entry.id, track.id));
+          const committed = tracksSelectors.selectById(
+            tracksState,
+            trackEntityId(entry.id, track.id),
+          );
           if (committed) {
             initialTrackStates[track.id] = {
               id: track.id,
@@ -63,7 +103,7 @@ export function PlayerScreen() {
 
         const longestBufferSec = source.manifest.tracks.reduce(
           (max, t) => Math.max(max, decoded.trackBuffers[t.id]?.duration ?? 0),
-          0
+          0,
         );
 
         setDurationSec(longestBufferSec);
@@ -90,7 +130,7 @@ export function PlayerScreen() {
   }, []);
 
   function handlePlayPause() {
-    if (audioEngine.getTransportState() === 'playing') {
+    if (audioEngine.getTransportState() === "playing") {
       audioEngine.pause();
     } else {
       audioEngine.play();
@@ -113,6 +153,7 @@ export function PlayerScreen() {
   if (!entry) {
     return (
       <SafeAreaView style={styles.centered}>
+        <BackButton />
         <Text style={styles.error}>Project not found.</Text>
       </SafeAreaView>
     );
@@ -121,6 +162,7 @@ export function PlayerScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.centered}>
+        <BackButton />
         <ActivityIndicator color="#208AEF" />
       </SafeAreaView>
     );
@@ -129,14 +171,16 @@ export function PlayerScreen() {
   if (error || !manifest) {
     return (
       <SafeAreaView style={styles.centered}>
-        <Text style={styles.error}>{error ?? 'Failed to load project.'}</Text>
+        <BackButton />
+        <Text style={styles.error}>{error ?? "Failed to load project."}</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
+        <BackButton />
         <Text style={styles.title}>{manifest.title}</Text>
         <Text style={styles.subtitle}>
           {manifest.bpm} BPM · {manifest.key}
@@ -148,16 +192,21 @@ export function PlayerScreen() {
           horizontal
           data={manifest.tracks}
           keyExtractor={(t) => t.id}
-          renderItem={({ item, index }) => <ChannelStrip projectId={manifest.id} track={item} index={index} />}
+          renderItem={({ item, index }) => (
+            <ChannelStrip projectId={manifest.id} track={item} index={index} />
+          )}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.mixerContent}
         />
       </View>
 
       <View style={styles.console}>
-        <MonitorSplitSwitch mode={monitorMode} onChange={handleMonitorModeChange} />
+        <MonitorSplitSwitch
+          mode={monitorMode}
+          onChange={handleMonitorModeChange}
+        />
         <TransportBar
-          isPlaying={transportState === 'playing'}
+          isPlaying={transportState === "playing"}
           playheadSec={playheadSec}
           durationSec={durationSec}
           onPlayPause={handlePlayPause}
@@ -172,47 +221,58 @@ export function PlayerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: "#000000",
   },
   centered: {
     flex: 1,
-    backgroundColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#000000",
+    alignItems: "center",
+    justifyContent: "center",
   },
   header: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 40,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#2c2c2e',
+    borderBottomColor: "#2c2c2e",
+  },
+  backButton: {
+    position: "absolute",
+    top: 8,
+    left: 16,
+    zIndex: 1,
+  },
+  backButtonText: {
+    color: "#208AEF",
+    fontSize: 15,
+    fontWeight: "600",
   },
   title: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 22,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   subtitle: {
-    color: '#8e8e93',
+    color: "#8e8e93",
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
     letterSpacing: 0.5,
     marginTop: 2,
   },
   mixer: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: "#000000",
   },
   mixerContent: {
     // Strips stretch to fill the mixer area so the console reads as one
     // continuous surface instead of floating above empty space.
-    alignItems: 'stretch',
+    alignItems: "stretch",
   },
   console: {
-    backgroundColor: '#0c0c0e',
+    backgroundColor: "#0c0c0e",
   },
   error: {
-    color: '#ff453a',
+    color: "#ff453a",
     fontSize: 15,
   },
 });
