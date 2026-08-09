@@ -1,4 +1,5 @@
 export { getDemoLibraryEntry, getDemoProjectSource } from './demoProject';
+export { createProjectFromStems, type NewProjectFromStemsOptions } from './importProject';
 export {
   createFilesystemProjectSource,
   decodeProjectAudio,

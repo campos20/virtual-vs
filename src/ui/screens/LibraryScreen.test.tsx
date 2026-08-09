@@ -17,7 +17,7 @@ describe('LibraryScreen', () => {
     renderWithStore(<LibraryScreen />);
 
     expect(screen.getByText('Demo: Sync Test')).toBeTruthy();
-    expect(screen.getByText('120 bpm · A minor · 3 tracks')).toBeTruthy();
+    expect(screen.getByText('120 bpm · A minor · 3 stems')).toBeTruthy();
   });
 
   it('navigates to the player screen when a project row is pressed', () => {
@@ -29,5 +29,13 @@ describe('LibraryScreen', () => {
       pathname: '/player/[projectId]',
       params: { projectId: 'demo-sync-test' },
     });
+  });
+
+  it('navigates to the new-project screen when "+ New" is pressed', () => {
+    renderWithStore(<LibraryScreen />);
+
+    fireEvent.press(screen.getByTestId('new-project-button'));
+
+    expect(mockPush).toHaveBeenCalledWith('/new-project');
   });
 });

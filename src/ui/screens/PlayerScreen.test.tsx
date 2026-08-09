@@ -143,9 +143,24 @@ describe('PlayerScreen', () => {
 
     expect(audioEngine.getMonitorMode()).toBe('split');
 
-    fireEvent(screen.getByRole('switch'), 'valueChange', true);
+    // Console row order: monitor switch, then click switch.
+    const [monitorSwitch] = screen.getAllByRole('switch');
+    fireEvent(monitorSwitch, 'valueChange', true);
 
     expect(audioEngine.getMonitorMode()).toBe('monitor');
     expect(store.getState().settings.monitorMode).toBe('monitor');
+  });
+
+  it('flipping the click switch mutes/unmutes the engine click and updates the settings store', async () => {
+    const { store } = renderPlayerScreen();
+    await waitForMixerToLoad();
+
+    expect(audioEngine.getClickEnabled()).toBe(true);
+
+    const [, clickSwitch] = screen.getAllByRole('switch');
+    fireEvent(clickSwitch, 'valueChange', false);
+
+    expect(audioEngine.getClickEnabled()).toBe(false);
+    expect(store.getState().settings.clickEnabled).toBe(false);
   });
 });

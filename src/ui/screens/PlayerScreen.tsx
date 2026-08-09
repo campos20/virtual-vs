@@ -8,7 +8,7 @@ import { decodeProjectAudio, getProjectSourceForEntry } from "@/storage";
 import { store } from "@/store";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { projectsSelectors } from "@/store/projectsSlice";
-import { monitorModeSet } from "@/store/settingsSlice";
+import { clickEnabledSet, monitorModeSet } from "@/store/settingsSlice";
 import {
   trackEntityId,
   tracksInitializedForProject,
@@ -16,6 +16,7 @@ import {
 } from "@/store/tracksSlice";
 import type { ProjectManifest } from "@/types/project";
 import { ChannelStrip } from "@/ui/components/ChannelStrip";
+import { ClickToggle } from "@/ui/components/ClickToggle";
 import { MonitorSplitSwitch } from "@/ui/components/MonitorSplitSwitch";
 import { TransportBar } from "@/ui/components/TransportBar";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -51,6 +52,7 @@ export function PlayerScreen() {
     projectId ? projectsSelectors.selectById(s.projects, projectId) : undefined,
   );
   const monitorMode = useAppSelector((s) => s.settings.monitorMode);
+  const clickEnabled = useAppSelector((s) => s.settings.clickEnabled);
 
   const [manifest, setManifest] = useState<ProjectManifest | null>(null);
   const [durationSec, setDurationSec] = useState(0);
@@ -100,6 +102,7 @@ export function PlayerScreen() {
 
         audioEngine.loadProject(decoded, initialTrackStates);
         audioEngine.setMonitorMode(monitorMode);
+        audioEngine.setClickEnabled(clickEnabled);
 
         const longestBufferSec = source.manifest.tracks.reduce(
           (max, t) => Math.max(max, decoded.trackBuffers[t.id]?.duration ?? 0),
@@ -120,7 +123,7 @@ export function PlayerScreen() {
       cancelled = true;
       audioEngine.stop();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- monitorMode intentionally only applied on (re)load
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- monitorMode/clickEnabled intentionally only applied on (re)load
   }, [entry?.id, dispatch]);
 
   // The engine drives natural end-of-playback itself (see AudioEngine.handlePlaybackEndedNaturally)
@@ -148,6 +151,11 @@ export function PlayerScreen() {
   function handleMonitorModeChange(mode: typeof monitorMode) {
     audioEngine.setMonitorMode(mode);
     dispatch(monitorModeSet(mode));
+  }
+
+  function handleClickEnabledChange(enabled: boolean) {
+    audioEngine.setClickEnabled(enabled);
+    dispatch(clickEnabledSet(enabled));
   }
 
   if (!entry) {
@@ -205,6 +213,7 @@ export function PlayerScreen() {
           mode={monitorMode}
           onChange={handleMonitorModeChange}
         />
+        <ClickToggle enabled={clickEnabled} onChange={handleClickEnabledChange} />
         <TransportBar
           isPlaying={transportState === "playing"}
           playheadSec={playheadSec}

@@ -44,6 +44,7 @@ export class AudioEngine {
   private readonly cueBus: BusNodes;
   private readonly mainBus: BusNodes;
   private monitorMode: MonitorMode = 'split';
+  private clickEnabled = true;
 
   private manifestTrackIds: string[] = [];
   private tracks = new Map<string, TrackNodes>();
@@ -101,6 +102,25 @@ export class AudioEngine {
     return this.monitorMode;
   }
 
+  /** Mutes/unmutes the synthesized click without affecting any track's volume. */
+  setClickEnabled(enabled: boolean): void {
+    this.clickEnabled = enabled;
+    this.applyClickGain();
+  }
+
+  getClickEnabled(): boolean {
+    return this.clickEnabled;
+  }
+
+  private applyClickGain(): void {
+    if (!this.clickGain) return;
+    const target = this.clickEnabled ? 1 : 0;
+    const now = this.ctx.currentTime;
+    this.clickGain.gain.cancelScheduledValues(now);
+    this.clickGain.gain.setValueAtTime(this.clickGain.gain.value, now);
+    this.clickGain.gain.linearRampToValueAtTime(target, now + GAIN_RAMP_SEC);
+  }
+
   /** Subscribe to transport state changes (including natural end-of-playback). Returns an unsubscribe function. */
   onTransportStateChange(listener: (state: EngineTransportState) => void): () => void {
     this.transportListeners.add(listener);
@@ -154,6 +174,7 @@ export class AudioEngine {
     this.clickBuffer = generateClickBuffer(this.ctx, decoded.manifest.bpm, maxDurationSec);
     this.clickGain = this.ctx.createGain();
     this.clickGain.connect(this.cueBus.gain); // click is always cue-only
+    this.clickGain.gain.value = this.clickEnabled ? 1 : 0;
 
     this.playheadOffsetSec = 0;
     this.pausedAtSec = 0;
