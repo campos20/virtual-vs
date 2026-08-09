@@ -19,6 +19,8 @@ import { ChannelStrip } from "@/ui/components/ChannelStrip";
 import { ClickToggle } from "@/ui/components/ClickToggle";
 import { MonitorSplitSwitch } from "@/ui/components/MonitorSplitSwitch";
 import { TransportBar } from "@/ui/components/TransportBar";
+import { colors, elevation, radii, spacing } from "@/ui/theme";
+import { GlassView } from "expo-glass-effect";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -40,7 +42,15 @@ function BackButton() {
       hitSlop={8}
       testID="back-button"
     >
-      <Text style={styles.backButtonText}>‹ Library</Text>
+      {({ pressed }) => (
+        <GlassView
+          glassEffectStyle="regular"
+          isInteractive
+          style={[styles.backButtonGlass, pressed && styles.pressed]}
+        >
+          <Text style={styles.backButtonText}>‹ Library</Text>
+        </GlassView>
+      )}
     </Pressable>
   );
 }
@@ -171,7 +181,7 @@ export function PlayerScreen() {
     return (
       <SafeAreaView style={styles.centered}>
         <BackButton />
-        <ActivityIndicator color="#208AEF" />
+        <ActivityIndicator color={colors.accent} />
       </SafeAreaView>
     );
   }
@@ -187,13 +197,18 @@ export function PlayerScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <View style={styles.header}>
+      <GlassView glassEffectStyle="regular" style={styles.header}>
         <BackButton />
         <Text style={styles.title}>{manifest.title}</Text>
-        <Text style={styles.subtitle}>
-          {manifest.bpm} BPM · {manifest.key}
-        </Text>
-      </View>
+        <View style={styles.subtitleRow}>
+          <View style={styles.subtitlePill}>
+            <Text style={styles.subtitlePillText}>{manifest.bpm} BPM</Text>
+          </View>
+          <View style={styles.subtitlePill}>
+            <Text style={styles.subtitlePillText}>{manifest.key || "—"}</Text>
+          </View>
+        </View>
+      </GlassView>
 
       <View style={styles.mixer}>
         <FlatList
@@ -208,12 +223,15 @@ export function PlayerScreen() {
         />
       </View>
 
-      <View style={styles.console}>
-        <MonitorSplitSwitch
-          mode={monitorMode}
-          onChange={handleMonitorModeChange}
-        />
-        <ClickToggle enabled={clickEnabled} onChange={handleClickEnabledChange} />
+      <GlassView glassEffectStyle="regular" style={styles.console}>
+        <View style={styles.rack}>
+          <MonitorSplitSwitch
+            mode={monitorMode}
+            onChange={handleMonitorModeChange}
+          />
+          <View style={styles.rackDivider} />
+          <ClickToggle enabled={clickEnabled} onChange={handleClickEnabledChange} />
+        </View>
         <TransportBar
           isPlaying={transportState === "playing"}
           playheadSec={playheadSec}
@@ -222,7 +240,7 @@ export function PlayerScreen() {
           onStop={handleStop}
           onSeek={handleSeek}
         />
-      </View>
+      </GlassView>
     </SafeAreaView>
   );
 }
@@ -230,58 +248,98 @@ export function PlayerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#000000",
+    backgroundColor: colors.background,
   },
   centered: {
     flex: 1,
-    backgroundColor: "#000000",
+    backgroundColor: colors.background,
     alignItems: "center",
     justifyContent: "center",
   },
   header: {
-    paddingHorizontal: 16,
-    paddingTop: 40,
-    paddingBottom: 12,
+    paddingHorizontal: spacing.lg,
+    paddingTop: 48,
+    paddingBottom: spacing.md,
+    backgroundColor: colors.panel,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#2c2c2e",
+    borderBottomColor: colors.border,
   },
   backButton: {
     position: "absolute",
-    top: 8,
-    left: 16,
+    top: spacing.sm,
+    left: spacing.lg,
     zIndex: 1,
   },
-  backButtonText: {
-    color: "#208AEF",
-    fontSize: 15,
-    fontWeight: "600",
+  backButtonGlass: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
   },
-  title: {
-    color: "#ffffff",
-    fontSize: 22,
+  pressed: {
+    opacity: 0.7,
+  },
+  backButtonText: {
+    color: colors.accent,
+    fontSize: 14,
     fontWeight: "700",
   },
-  subtitle: {
-    color: "#8e8e93",
-    fontSize: 12,
-    fontWeight: "600",
-    letterSpacing: 0.5,
-    marginTop: 2,
+  title: {
+    color: colors.textPrimary,
+    fontSize: 24,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+  },
+  subtitleRow: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 6,
+  },
+  subtitlePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radii.pill,
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  subtitlePillText: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.3,
   },
   mixer: {
     flex: 1,
-    backgroundColor: "#000000",
+    backgroundColor: colors.background,
   },
   mixerContent: {
     // Strips stretch to fill the mixer area so the console reads as one
     // continuous surface instead of floating above empty space.
     alignItems: "stretch",
+    paddingHorizontal: 6,
   },
   console: {
-    backgroundColor: "#0c0c0e",
+    backgroundColor: colors.panel,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    ...elevation,
+  },
+  rack: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  rackDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: "stretch",
+    backgroundColor: colors.border,
+    marginVertical: 4,
   },
   error: {
-    color: "#ff453a",
+    color: colors.danger,
     fontSize: 15,
   },
 });

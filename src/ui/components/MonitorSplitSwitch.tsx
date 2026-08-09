@@ -1,5 +1,6 @@
 import { StyleSheet, Switch, Text, View } from 'react-native';
 import type { MonitorMode } from '@/engine';
+import { colors } from '@/ui/theme';
 
 interface MonitorSplitSwitchProps {
   mode: MonitorMode;
@@ -16,13 +17,13 @@ export function MonitorSplitSwitch({ mode, onChange }: MonitorSplitSwitchProps) 
     <View style={styles.container}>
       <Text style={styles.heading}>OUTPUT</Text>
       <View style={styles.row}>
-        <Text style={[styles.label, mode === 'split' && styles.labelActive]}>Split (L / R)</Text>
+        <Text style={[styles.label, mode === 'split' && styles.labelActive]}>Split</Text>
         <Switch
           value={mode === 'monitor'}
           onValueChange={(isMonitor) => onChange(isMonitor ? 'monitor' : 'split')}
-          trackColor={{ false: '#3a3a3c', true: '#208AEF' }}
+          trackColor={{ false: '#3a3a3c', true: colors.accent }}
         />
-        <Text style={[styles.label, mode === 'monitor' && styles.labelActive]}>Monitor (sum)</Text>
+        <Text style={[styles.label, mode === 'monitor' && styles.labelActive]}>Sum</Text>
       </View>
     </View>
   );
@@ -30,30 +31,29 @@ export function MonitorSplitSwitch({ mode, onChange }: MonitorSplitSwitchProps) 
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     alignItems: 'center',
-    paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#2c2c2e',
   },
   heading: {
-    color: '#5f5f63',
+    color: colors.textTertiary,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 1,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    gap: 8,
   },
   label: {
-    color: '#8e8e93',
-    fontSize: 13,
+    color: colors.textSecondary,
+    fontSize: 12,
     fontWeight: '600',
+    minWidth: 30,
   },
   labelActive: {
-    color: '#ffffff',
+    color: colors.textPrimary,
   },
 });

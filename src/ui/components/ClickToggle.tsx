@@ -1,4 +1,5 @@
 import { StyleSheet, Switch, Text, View } from 'react-native';
+import { colors } from '@/ui/theme';
 
 interface ClickToggleProps {
   enabled: boolean;
@@ -10,23 +11,21 @@ export function ClickToggle({ enabled, onChange }: ClickToggleProps) {
   return (
     <View style={styles.container}>
       <Text style={styles.heading}>CLICK</Text>
-      <Switch value={enabled} onValueChange={onChange} trackColor={{ false: '#3a3a3c', true: '#208AEF' }} />
+      <Switch value={enabled} onValueChange={onChange} trackColor={{ false: '#3a3a3c', true: colors.accent }} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     alignItems: 'center',
-    paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#2c2c2e',
   },
   heading: {
-    color: '#5f5f63',
+    color: colors.textTertiary,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 1,
-    marginBottom: 6,
+    marginBottom: 8,
   },
 });

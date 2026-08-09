@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { colors, glow, radii } from '@/ui/theme';
 
 interface TransportBarProps {
   isPlaying: boolean;
@@ -51,7 +52,7 @@ export function TransportBar({ isPlaying, playheadSec, durationSec, onPlayPause,
       <GestureDetector gesture={pan}>
         <View style={styles.scrubTrack} onLayout={handleLayout}>
           <View style={[styles.scrubFill, { width: progressPercent }]} />
-          <View style={[styles.scrubHead, { left: progressPercent }]} />
+          <View style={[styles.scrubHead, { left: progressPercent }, isPlaying && glow(colors.accent, 6)]} />
         </View>
       </GestureDetector>
 
@@ -60,22 +61,27 @@ export function TransportBar({ isPlaying, playheadSec, durationSec, onPlayPause,
           <View style={styles.stopIcon} />
         </Pressable>
 
-        <Text style={styles.time}>
-          {formatTime(playheadSec)}
-          <Text style={styles.timeSep}> / </Text>
-          {formatTime(durationSec)}
-        </Text>
+        <View style={styles.readout}>
+          <Text style={styles.time}>
+            <Text style={styles.timePlayed}>{formatTime(playheadSec)}</Text>
+            <Text style={styles.timeSep}> / </Text>
+            {formatTime(durationSec)}
+          </Text>
+        </View>
 
-        <Pressable onPress={onPlayPause} style={styles.playButton} hitSlop={8} testID="play-pause-button">
-          {isPlaying ? (
-            <View style={styles.pauseIcon} testID="pause-icon">
-              <View style={styles.pauseBar} />
-              <View style={styles.pauseBar} />
-            </View>
-          ) : (
-            <View style={styles.playTriangle} testID="play-icon" />
-          )}
-        </Pressable>
+        <View style={styles.playButtonWrap}>
+          {isPlaying && <View style={[styles.playGlow, glow(colors.accent, 16)]} />}
+          <Pressable onPress={onPlayPause} style={styles.playButton} hitSlop={8} testID="play-pause-button">
+            {isPlaying ? (
+              <View style={styles.pauseIcon} testID="pause-icon">
+                <View style={styles.pauseBar} />
+                <View style={styles.pauseBar} />
+              </View>
+            ) : (
+              <View style={styles.playTriangle} testID="play-icon" />
+            )}
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -83,54 +89,71 @@ export function TransportBar({ isPlaying, playheadSec, durationSec, onPlayPause,
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 10,
-    paddingBottom: 16,
+    paddingTop: 14,
+    paddingBottom: 18,
     paddingHorizontal: 16,
-    gap: 14,
+    gap: 18,
   },
   scrubTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#1c1c1e',
+    height: 8,
+    borderRadius: radii.pill,
+    backgroundColor: '#08080a',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.6)',
   },
   scrubFill: {
     height: '100%',
-    borderRadius: 3,
-    backgroundColor: '#208AEF',
+    borderRadius: radii.pill,
+    backgroundColor: colors.accent,
   },
   scrubHead: {
     position: 'absolute',
     top: -4,
-    width: 14,
-    height: 14,
-    marginLeft: -7,
-    borderRadius: 7,
+    width: 16,
+    height: 16,
+    marginLeft: -8,
+    borderRadius: 8,
     backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: colors.accent,
   },
   row: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 24,
+  },
+  readout: {
+    backgroundColor: '#08080a',
+    borderRadius: radii.md,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.bevelDark,
   },
   time: {
-    color: '#ffffff',
+    color: colors.textSecondary,
     fontVariant: ['tabular-nums'],
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
-    minWidth: 150,
     textAlign: 'center',
   },
+  timePlayed: {
+    color: colors.textPrimary,
+  },
   timeSep: {
-    color: '#5f5f63',
+    color: colors.textTertiary,
   },
   stopButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: '#2c2c2e',
+    width: 46,
+    height: 46,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    borderTopWidth: 1,
+    borderTopColor: colors.bevelLight,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.bevelDark,
   },
   stopIcon: {
     width: 15,
@@ -138,21 +161,36 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: '#ffffff',
   },
-  playButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#208AEF',
+  playButtonWrap: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  playGlow: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.accent,
+  },
+  playButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.5)',
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(0,0,0,0.3)',
   },
   playTriangle: {
     width: 0,
     height: 0,
     marginLeft: 4,
-    borderTopWidth: 10,
-    borderBottomWidth: 10,
-    borderLeftWidth: 17,
+    borderTopWidth: 11,
+    borderBottomWidth: 11,
+    borderLeftWidth: 18,
     borderTopColor: 'transparent',
     borderBottomColor: 'transparent',
     borderLeftColor: '#0a0a0a',
@@ -163,7 +201,7 @@ const styles = StyleSheet.create({
   },
   pauseBar: {
     width: 5,
-    height: 18,
+    height: 19,
     borderRadius: 1.5,
     backgroundColor: '#0a0a0a',
   },

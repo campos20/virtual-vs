@@ -48,7 +48,8 @@ describe('PlayerScreen', () => {
     await waitForMixerToLoad();
 
     expect(screen.getByText('Demo: Sync Test')).toBeTruthy();
-    expect(screen.getByText('120 BPM · A minor')).toBeTruthy();
+    expect(screen.getByText('120 BPM')).toBeTruthy();
+    expect(screen.getByText('A minor')).toBeTruthy();
     expect(screen.getByText('Bass')).toBeTruthy();
     expect(screen.getByText('Keys')).toBeTruthy();
     expect(screen.getByText('Guide Vocal')).toBeTruthy();

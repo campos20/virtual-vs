@@ -3,6 +3,7 @@ import { audioEngine } from '@/engine';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { trackBusSet, trackEntityId, trackMuteToggled, trackSoloToggled, trackVolumeCommitted } from '@/store/tracksSlice';
 import type { Bus, TrackManifest } from '@/types/project';
+import { colors, glow, radii } from '@/ui/theme';
 import { getTrackColor } from '../trackColors';
 import { VerticalFader } from './VerticalFader';
 
@@ -55,29 +56,38 @@ export function ChannelStrip({ projectId, track, index }: ChannelStripProps) {
 
   return (
     <View style={styles.strip}>
-      <View style={[styles.colorBar, { backgroundColor: accentColor }]} />
+      <View style={[styles.colorBar, { backgroundColor: accentColor }, committed.soloed && glow(accentColor, 8)]} />
 
       <Text style={styles.name} numberOfLines={2}>
         {track.name}
       </Text>
 
       <View style={styles.busRow}>
-        {BUS_OPTIONS.map(({ value, label }) => (
-          <Pressable
-            key={value}
-            onPress={() => setBus(value)}
-            style={[styles.busPill, committed.bus === value && { backgroundColor: accentColor }]}
-          >
-            <Text style={[styles.busPillText, committed.bus === value && styles.busPillTextActive]}>{label}</Text>
-          </Pressable>
-        ))}
+        {BUS_OPTIONS.map(({ value, label }) => {
+          const active = committed.bus === value;
+          return (
+            <Pressable
+              key={value}
+              onPress={() => setBus(value)}
+              style={[styles.busPill, active && { backgroundColor: accentColor }, active && glow(accentColor, 6)]}
+            >
+              <Text style={[styles.busPillText, active && styles.busPillTextActive]}>{label}</Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       <View style={styles.toggles}>
-        <Pressable onPress={toggleMute} style={[styles.pill, committed.muted && styles.pillMuteActive]}>
+        <Pressable
+          onPress={toggleMute}
+          style={[styles.pill, committed.muted && styles.pillMuteActive, committed.muted && glow(colors.danger, 8)]}
+        >
           <Text style={styles.pillText}>M</Text>
         </Pressable>
-        <Pressable onPress={toggleSolo} style={[styles.pill, committed.soloed && styles.pillSoloActive]}>
+        <Pressable
+          onPress={toggleSolo}
+          style={[styles.pill, committed.soloed && styles.pillSoloActive, committed.soloed && glow(colors.warning, 8)]}
+        >
           <Text style={styles.pillText}>S</Text>
         </Pressable>
       </View>
@@ -96,22 +106,28 @@ export function ChannelStrip({ projectId, track, index }: ChannelStripProps) {
 
 const styles = StyleSheet.create({
   strip: {
-    width: 96,
-    paddingBottom: 20,
+    width: 104,
+    marginVertical: 10,
+    marginHorizontal: 4,
+    paddingBottom: 16,
+    paddingTop: 8,
     paddingHorizontal: 8,
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: '#2c2c2e',
+    borderRadius: radii.lg,
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#0a0a0c',
+    backgroundColor: colors.panelRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
+    overflow: 'hidden',
   },
   colorBar: {
     height: 4,
     alignSelf: 'stretch',
     marginHorizontal: -8,
+    marginTop: -8,
   },
   name: {
-    color: '#ffffff',
+    color: colors.textPrimary,
     fontSize: 13,
     fontWeight: '700',
     textAlign: 'center',
@@ -123,15 +139,18 @@ const styles = StyleSheet.create({
   busRow: {
     flexDirection: 'row',
     gap: 4,
+    backgroundColor: '#08080a',
+    borderRadius: radii.sm,
+    padding: 3,
   },
   busPill: {
     paddingVertical: 3,
     paddingHorizontal: 6,
-    borderRadius: 6,
-    backgroundColor: '#1c1c1e',
+    borderRadius: 5,
+    backgroundColor: 'transparent',
   },
   busPillText: {
-    color: '#8e8e93',
+    color: colors.textSecondary,
     fontSize: 10,
     fontWeight: '700',
   },
@@ -145,19 +164,25 @@ const styles = StyleSheet.create({
   pill: {
     width: 30,
     height: 26,
-    borderRadius: 6,
+    borderRadius: radii.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1c1c1e',
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.bevelLight,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.bevelDark,
   },
   pillMuteActive: {
-    backgroundColor: '#ff453a',
+    backgroundColor: colors.danger,
+    borderTopColor: 'rgba(255,255,255,0.4)',
   },
   pillSoloActive: {
-    backgroundColor: '#ffd60a',
+    backgroundColor: colors.warning,
+    borderTopColor: 'rgba(255,255,255,0.4)',
   },
   pillText: {
-    color: '#ffffff',
+    color: colors.textPrimary,
     fontWeight: '700',
     fontSize: 12,
   },

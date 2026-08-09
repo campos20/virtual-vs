@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { colors, glow, radii } from '@/ui/theme';
 
 interface VerticalFaderProps {
   /** Committed value from the store; only reflected while not actively dragging. */
@@ -69,6 +70,7 @@ export function VerticalFader({ value, maxValue = 1.2, onLiveChange, onCommit, d
     heightRef.current = event.nativeEvent.layout.height;
   }
 
+  const dragging = liveValue !== null;
   const displayValue = liveValue ?? value;
   const ratio = Math.max(0, Math.min(1, displayValue / maxValue));
   const fillPercent = `${ratio * 100}%` as const;
@@ -76,14 +78,25 @@ export function VerticalFader({ value, maxValue = 1.2, onLiveChange, onCommit, d
 
   return (
     <View style={styles.wrapper}>
-      <Text style={styles.readout}>{Math.round(ratio * 100)}</Text>
+      <View style={[styles.readout, dragging && glow(accentColor, 6)]}>
+        <Text style={[styles.readoutText, dragging && { color: accentColor }]}>{Math.round(ratio * 100)}</Text>
+      </View>
       <GestureDetector gesture={pan}>
         <View style={styles.track} onLayout={handleLayout}>
           <View style={styles.groove} pointerEvents="none" />
           {/* Unity-gain (1.0) reference mark, like the 0 dB tick on a real fader. */}
           <View style={[styles.unityTick, { bottom: unityPercent }]} pointerEvents="none" />
           <View style={[styles.fill, { height: fillPercent, backgroundColor: accentColor }]} pointerEvents="none" />
-          <View style={[styles.cap, { bottom: fillPercent, borderColor: accentColor }]} pointerEvents="none" />
+          <View
+            style={[
+              styles.cap,
+              { bottom: fillPercent, borderColor: accentColor },
+              dragging && glow(accentColor, 8),
+            ]}
+            pointerEvents="none"
+          >
+            <View style={styles.capRidge} />
+          </View>
         </View>
       </GestureDetector>
     </View>
@@ -96,21 +109,31 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   readout: {
-    color: '#8e8e93',
-    fontSize: 10,
+    backgroundColor: '#08080a',
+    borderRadius: radii.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginBottom: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.bevelDark,
+  },
+  readoutText: {
+    color: colors.textSecondary,
+    fontSize: 11,
     fontVariant: ['tabular-nums'],
-    marginBottom: 4,
+    fontWeight: '700',
   },
   track: {
     // Fixed throw rather than flex: a fader that stretches to the full
     // screen height has a uselessly long travel distance and doesn't read
     // as a mixer fader.
     height: 260,
-    width: 34,
-    borderRadius: 5,
-    backgroundColor: '#0e0e10',
+    width: 36,
+    borderRadius: radii.sm,
+    backgroundColor: '#0a0a0c',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#2c2c2e',
+    borderColor: colors.border,
+    borderTopColor: colors.bevelDark,
   },
   groove: {
     position: 'absolute',
@@ -121,6 +144,8 @@ const styles = StyleSheet.create({
     width: 4,
     borderRadius: 2,
     backgroundColor: '#000000',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.8)',
   },
   unityTick: {
     position: 'absolute',
@@ -139,12 +164,20 @@ const styles = StyleSheet.create({
   },
   cap: {
     position: 'absolute',
-    left: -7,
-    right: -7,
-    height: 16,
-    marginBottom: -8,
-    borderRadius: 3,
+    left: -8,
+    right: -8,
+    height: 18,
+    marginBottom: -9,
+    borderRadius: 4,
     backgroundColor: '#e8e8ea',
     borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  capRidge: {
+    width: '60%',
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: 'rgba(0,0,0,0.25)',
   },
 });

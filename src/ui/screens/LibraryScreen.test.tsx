@@ -17,7 +17,9 @@ describe('LibraryScreen', () => {
     renderWithStore(<LibraryScreen />);
 
     expect(screen.getByText('Demo: Sync Test')).toBeTruthy();
-    expect(screen.getByText('120 bpm · A minor · 3 stems')).toBeTruthy();
+    expect(screen.getByText('120 BPM')).toBeTruthy();
+    expect(screen.getByText('A minor')).toBeTruthy();
+    expect(screen.getByText('3 stems')).toBeTruthy();
   });
 
   it('navigates to the player screen when a project row is pressed', () => {
