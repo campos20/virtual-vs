@@ -76,6 +76,21 @@ export function LibraryScreen() {
                       </View>
                     </View>
                   </View>
+                  {item.origin === "filesystem" && (
+                    <Pressable
+                      onPress={() =>
+                        router.push({
+                          pathname: "/edit-project/[projectId]",
+                          params: { projectId: item.id },
+                        })
+                      }
+                      hitSlop={8}
+                      style={styles.editButton}
+                      testID={`edit-project-${item.id}`}
+                    >
+                      <Text style={styles.editButtonText}>Edit</Text>
+                    </Pressable>
+                  )}
                   <Text style={styles.chevron}>›</Text>
                 </View>
               )}
@@ -181,6 +196,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 0.2,
+  },
+  editButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radii.pill,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    marginLeft: spacing.sm,
+  },
+  editButtonText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: "700",
   },
   chevron: {
     color: colors.textTertiary,

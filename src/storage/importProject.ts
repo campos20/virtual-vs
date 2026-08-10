@@ -1,8 +1,9 @@
-import { File } from 'expo-file-system';
+import { Directory, File } from 'expo-file-system';
 import type { DocumentPickerAsset } from 'expo-document-picker';
 import type { LibraryProjectEntry } from '@/store/projectsSlice';
 import type { ProjectManifest, TrackManifest } from '@/types/project';
 import { projectDirectory } from './paths';
+import { readProjectManifest } from './projectLoader';
 
 // Full zip project import/export (a pre-packaged manifest.json + stems,
 // picked and extracted as one archive) is still out of scope for phase 1 -
@@ -100,4 +101,29 @@ export async function createProjectFromStems({
   new File(directory, 'manifest.json').write(JSON.stringify(manifest, null, 2));
 
   return { ...manifest, origin: 'filesystem', sourceDir: directory.uri };
+}
+
+export interface ProjectMetadataEdits {
+  title: string;
+  bpm: number;
+  key: string;
+  countInBars: number;
+}
+
+/**
+ * Rewrites a filesystem project's manifest.json with edited top-level
+ * metadata (title/bpm/key/count-in), preserving its tracks/sections/pad.
+ * Bundled projects have no manifest.json to write back to and can't be
+ * edited this way - see LibraryScreen, which only offers editing for
+ * `origin: 'filesystem'` entries.
+ */
+export async function updateProjectMetadata(
+  sourceDir: string,
+  edits: ProjectMetadataEdits
+): Promise<ProjectManifest> {
+  const directory = new Directory(sourceDir);
+  const manifest = await readProjectManifest(directory);
+  const updated: ProjectManifest = { ...manifest, ...edits };
+  new File(directory, 'manifest.json').write(JSON.stringify(updated, null, 2));
+  return updated;
 }
