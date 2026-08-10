@@ -1,4 +1,3 @@
-import { GlassView } from "expo-glass-effect";
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
@@ -37,14 +36,9 @@ export function LibraryScreen() {
           testID="new-project-button"
         >
           {({ pressed }) => (
-            <GlassView
-              glassEffectStyle="regular"
-              tintColor={colors.accent}
-              isInteractive
-              style={[styles.newProjectButton, pressed && styles.pressed]}
-            >
+            <View style={[styles.newProjectButton, pressed && styles.pressed]}>
               <Text style={styles.newProjectText}>+ New</Text>
-            </GlassView>
+            </View>
           )}
         </Pressable>
       </View>
@@ -64,11 +58,7 @@ export function LibraryScreen() {
               }
             >
               {({ pressed }) => (
-                <GlassView
-                  glassEffectStyle="regular"
-                  isInteractive
-                  style={[styles.row, pressed && styles.pressed]}
-                >
+                <View style={[styles.row, pressed && styles.pressed]}>
                   <View style={[styles.colorBar, { backgroundColor: accentColor }]} />
                   <View style={styles.rowBody}>
                     <Text style={styles.title}>{item.title}</Text>
@@ -87,7 +77,7 @@ export function LibraryScreen() {
                     </View>
                   </View>
                   <Text style={styles.chevron}>›</Text>
-                </GlassView>
+                </View>
               )}
             </Pressable>
           );

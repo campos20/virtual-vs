@@ -20,7 +20,6 @@ import { ClickToggle } from "@/ui/components/ClickToggle";
 import { MonitorSplitSwitch } from "@/ui/components/MonitorSplitSwitch";
 import { TransportBar } from "@/ui/components/TransportBar";
 import { colors, elevation, radii, spacing } from "@/ui/theme";
-import { GlassView } from "expo-glass-effect";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -35,21 +34,26 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 function BackButton() {
   const router = useRouter();
+  function handleBack() {
+    // Stop transport (and therefore usePlayhead's rAF-driven re-renders)
+    // before navigating rather than waiting for this screen's unmount -
+    // react-native-screens keeps the screen mounted and rendering for the
+    // full pop transition, and a still-ticking playhead racing that native
+    // teardown is what causes Android's Fabric "already has a parent" crash.
+    audioEngine.stop();
+    router.back();
+  }
   return (
     <Pressable
-      onPress={() => router.back()}
+      onPress={handleBack}
       style={styles.backButton}
       hitSlop={8}
       testID="back-button"
     >
       {({ pressed }) => (
-        <GlassView
-          glassEffectStyle="regular"
-          isInteractive
-          style={[styles.backButtonGlass, pressed && styles.pressed]}
-        >
+        <View style={[styles.backButtonGlass, pressed && styles.pressed]}>
           <Text style={styles.backButtonText}>‹ Library</Text>
-        </GlassView>
+        </View>
       )}
     </Pressable>
   );
@@ -197,7 +201,7 @@ export function PlayerScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <GlassView glassEffectStyle="regular" style={styles.header}>
+      <View style={styles.header}>
         <BackButton />
         <Text style={styles.title}>{manifest.title}</Text>
         <View style={styles.subtitleRow}>
@@ -208,7 +212,7 @@ export function PlayerScreen() {
             <Text style={styles.subtitlePillText}>{manifest.key || "—"}</Text>
           </View>
         </View>
-      </GlassView>
+      </View>
 
       <View style={styles.mixer}>
         <FlatList
@@ -223,7 +227,7 @@ export function PlayerScreen() {
         />
       </View>
 
-      <GlassView glassEffectStyle="regular" style={styles.console}>
+      <View style={styles.console}>
         <View style={styles.rack}>
           <MonitorSplitSwitch
             mode={monitorMode}
@@ -240,7 +244,7 @@ export function PlayerScreen() {
           onStop={handleStop}
           onSeek={handleSeek}
         />
-      </GlassView>
+      </View>
     </SafeAreaView>
   );
 }
