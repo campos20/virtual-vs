@@ -3,8 +3,8 @@ import { getDocumentAsync, type DocumentPickerAsset } from 'expo-document-picker
 import { useRouter } from 'expo-router';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -94,22 +94,22 @@ export function NewProjectScreen() {
           <Text style={styles.pickButtonText}>Select Audio Files…</Text>
         </Pressable>
 
-        <FlatList
-          data={files}
-          keyExtractor={(f) => f.uri}
-          style={styles.fileList}
-          renderItem={({ item }) => (
-            <View style={styles.fileRow}>
-              <Text style={styles.fileName} numberOfLines={1}>
-                {item.name}
-              </Text>
-              <Pressable onPress={() => handleRemoveFile(item.uri)} hitSlop={8}>
-                <Text style={styles.removeText}>Remove</Text>
-              </Pressable>
-            </View>
+        <ScrollView style={styles.fileList}>
+          {files.length === 0 ? (
+            <Text style={styles.emptyText}>No files selected yet.</Text>
+          ) : (
+            files.map((item) => (
+              <View key={item.uri} style={styles.fileRow}>
+                <Text style={styles.fileName} numberOfLines={1}>
+                  {item.name}
+                </Text>
+                <Pressable onPress={() => handleRemoveFile(item.uri)} hitSlop={8}>
+                  <Text style={styles.removeText}>Remove</Text>
+                </Pressable>
+              </View>
+            ))
           )}
-          ListEmptyComponent={<Text style={styles.emptyText}>No files selected yet.</Text>}
-        />
+        </ScrollView>
 
         {error && <Text style={styles.error}>{error}</Text>}
 

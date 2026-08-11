@@ -1,6 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { PanResponder, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { colors, glow, radii } from '@/ui/theme';
 
 interface TransportBarProps {
@@ -38,23 +37,24 @@ export function TransportBar({ isPlaying, playheadSec, durationSec, onPlayPause,
   );
 
   /* eslint-disable react-hooks/refs -- these callbacks run on later native
-   * gesture events, never during render; see VerticalFader.tsx for the same pattern. */
-  const pan = Gesture.Pan()
-    .runOnJS(true)
-    .onBegin((event) => seekFromLocationX(event.x))
-    .onUpdate((event) => seekFromLocationX(event.x));
+   * touch responder events, never during render; see VerticalFader.tsx for
+   * the same pattern. */
+  const panResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: (event) => seekFromLocationX(event.nativeEvent.locationX),
+    onPanResponderMove: (event) => seekFromLocationX(event.nativeEvent.locationX),
+  });
   /* eslint-enable react-hooks/refs */
 
   const progressPercent = `${Math.max(0, Math.min(1, playheadSec / Math.max(durationSec, 1))) * 100}%` as const;
 
   return (
     <View style={styles.container}>
-      <GestureDetector gesture={pan}>
-        <View style={styles.scrubTrack} onLayout={handleLayout}>
-          <View style={[styles.scrubFill, { width: progressPercent }]} />
-          <View style={[styles.scrubHead, { left: progressPercent }, isPlaying && glow(colors.accent, 6)]} />
-        </View>
-      </GestureDetector>
+      <View style={styles.scrubTrack} onLayout={handleLayout} {...panResponder.panHandlers}>
+        <View style={[styles.scrubFill, { width: progressPercent }]} />
+        <View style={[styles.scrubHead, { left: progressPercent }, isPlaying && glow(colors.accent, 6)]} />
+      </View>
 
       <View style={styles.row}>
         <Pressable onPress={onStop} style={styles.stopButton} hitSlop={8} testID="stop-button">

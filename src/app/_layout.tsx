@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Provider } from 'react-redux';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { audioEngine } from '@/engine';
 import { store } from '@/store';
 
@@ -15,11 +15,14 @@ export default function RootLayout() {
   }, []);
 
   return (
-    // Required by react-native-gesture-handler (used by the Fader/TransportBar scrub gestures).
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <SafeAreaProvider>
       <Provider store={store}>
-        <Stack screenOptions={{ headerShown: false }} />
+        {/* No transition animation: simpler and more predictable than an
+            animated push/pop, and removes the window where two screens'
+            native view trees are both present/rendering at once during a
+            transition - see AGENTS.md "Stability over appearance". */}
+        <Stack screenOptions={{ headerShown: false, animation: 'none' }} />
       </Provider>
-    </GestureHandlerRootView>
+    </SafeAreaProvider>
   );
 }

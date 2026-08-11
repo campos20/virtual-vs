@@ -24,8 +24,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -215,16 +215,15 @@ export function PlayerScreen() {
       </View>
 
       <View style={styles.mixer}>
-        <FlatList
+        <ScrollView
           horizontal
-          data={manifest.tracks}
-          keyExtractor={(t) => t.id}
-          renderItem={({ item, index }) => (
-            <ChannelStrip projectId={manifest.id} track={item} index={index} />
-          )}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.mixerContent}
-        />
+        >
+          {manifest.tracks.map((item, index) => (
+            <ChannelStrip key={item.id} projectId={manifest.id} track={item} index={index} />
+          ))}
+        </ScrollView>
       </View>
 
       <View style={styles.console}>

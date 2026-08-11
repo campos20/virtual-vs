@@ -1,6 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { PanResponder, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { colors, glow, radii } from '@/ui/theme';
 
 interface VerticalFaderProps {
@@ -16,12 +15,13 @@ interface VerticalFaderProps {
 }
 
 /**
- * A vertical channel-strip fader (drag up = louder), built on
- * react-native-gesture-handler's Gesture API (`.runOnJS(true)` since
- * callbacks call plain JS - store dispatch, engine calls - not Reanimated
- * shared values). While dragging, the cap tracks touch position locally and
- * calls `onLiveChange` on every move; the store's committed `value` is only
- * re-applied once the drag ends, so it can't fight the live gesture.
+ * A vertical channel-strip fader (drag up = louder), built on React Native's
+ * core `PanResponder` rather than react-native-gesture-handler - no extra
+ * native view/handler registration, just this View's own touch responder
+ * (see AGENTS.md "Stability over appearance"). While dragging, the cap
+ * tracks touch position locally and calls `onLiveChange` on every move; the
+ * store's committed `value` is only re-applied once the drag ends, so it
+ * can't fight the live gesture.
  */
 export function VerticalFader({ value, maxValue = 1.2, onLiveChange, onCommit, disabled, accentColor }: VerticalFaderProps) {
   const heightRef = useRef(0);
@@ -46,24 +46,24 @@ export function VerticalFader({ value, maxValue = 1.2, onLiveChange, onCommit, d
   );
 
   /* eslint-disable react-hooks/refs -- these callbacks run on later native
-   * gesture events, never during render; reading refs synchronously here
-   * (not React state) is what guarantees onEnd/onFinalize see the very
-   * latest dragged value even if it fires faster than React re-renders. */
-  const pan = Gesture.Pan()
-    .enabled(!disabled)
-    .runOnJS(true)
-    .onBegin((event) => updateFromLocationY(event.y))
-    .onUpdate((event) => updateFromLocationY(event.y))
-    .onEnd(() => {
+   * touch responder events, never during render; reading refs synchronously
+   * here (not React state) is what guarantees onPanResponderRelease/
+   * Terminate see the very latest dragged value even if it fires faster
+   * than React re-renders. */
+  const panResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => !disabled,
+    onMoveShouldSetPanResponder: () => !disabled,
+    onPanResponderGrant: (event) => updateFromLocationY(event.nativeEvent.locationY),
+    onPanResponderMove: (event) => updateFromLocationY(event.nativeEvent.locationY),
+    onPanResponderRelease: () => {
       setLiveValue(null);
       onCommit(draggingValueRef.current);
-    })
-    .onFinalize((_event, success) => {
-      if (!success) {
-        setLiveValue(null);
-        onCommit(draggingValueRef.current);
-      }
-    });
+    },
+    onPanResponderTerminate: () => {
+      setLiveValue(null);
+      onCommit(draggingValueRef.current);
+    },
+  });
   /* eslint-enable react-hooks/refs */
 
   function handleLayout(event: LayoutChangeEvent) {
@@ -81,24 +81,22 @@ export function VerticalFader({ value, maxValue = 1.2, onLiveChange, onCommit, d
       <View style={[styles.readout, dragging && glow(accentColor, 6)]}>
         <Text style={[styles.readoutText, dragging && { color: accentColor }]}>{Math.round(ratio * 100)}</Text>
       </View>
-      <GestureDetector gesture={pan}>
-        <View style={styles.track} onLayout={handleLayout}>
-          <View style={styles.groove} pointerEvents="none" />
-          {/* Unity-gain (1.0) reference mark, like the 0 dB tick on a real fader. */}
-          <View style={[styles.unityTick, { bottom: unityPercent }]} pointerEvents="none" />
-          <View style={[styles.fill, { height: fillPercent, backgroundColor: accentColor }]} pointerEvents="none" />
-          <View
-            style={[
-              styles.cap,
-              { bottom: fillPercent, borderColor: accentColor },
-              dragging && glow(accentColor, 8),
-            ]}
-            pointerEvents="none"
-          >
-            <View style={styles.capRidge} />
-          </View>
+      <View style={styles.track} onLayout={handleLayout} {...panResponder.panHandlers}>
+        <View style={styles.groove} pointerEvents="none" />
+        {/* Unity-gain (1.0) reference mark, like the 0 dB tick on a real fader. */}
+        <View style={[styles.unityTick, { bottom: unityPercent }]} pointerEvents="none" />
+        <View style={[styles.fill, { height: fillPercent, backgroundColor: accentColor }]} pointerEvents="none" />
+        <View
+          style={[
+            styles.cap,
+            { bottom: fillPercent, borderColor: accentColor },
+            dragging && glow(accentColor, 8),
+          ]}
+          pointerEvents="none"
+        >
+          <View style={styles.capRidge} />
         </View>
-      </GestureDetector>
+      </View>
     </View>
   );
 }

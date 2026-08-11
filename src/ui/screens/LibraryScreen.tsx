@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getDemoLibraryEntry } from "@/storage";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -42,68 +42,67 @@ export function LibraryScreen() {
           )}
         </Pressable>
       </View>
-      <FlatList
-        data={projects}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        renderItem={({ item, index }) => {
-          const accentColor = getTrackColor(index);
-          return (
-            <Pressable
-              onPress={() =>
-                router.push({
-                  pathname: "/player/[projectId]",
-                  params: { projectId: item.id },
-                })
-              }
-            >
-              {({ pressed }) => (
-                <View style={[styles.row, pressed && styles.pressed]}>
-                  <View style={[styles.colorBar, { backgroundColor: accentColor }]} />
-                  <View style={styles.rowBody}>
-                    <Text style={styles.title}>{item.title}</Text>
-                    <View style={styles.metaRow}>
-                      <View style={styles.metaPill}>
-                        <Text style={styles.metaPillText}>{item.bpm} BPM</Text>
-                      </View>
-                      <View style={styles.metaPill}>
-                        <Text style={styles.metaPillText}>{item.key || "—"}</Text>
-                      </View>
-                      <View style={styles.metaPill}>
-                        <Text style={styles.metaPillText}>
-                          {item.tracks.length} stem{item.tracks.length === 1 ? "" : "s"}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                  {item.origin === "filesystem" && (
-                    <Pressable
-                      onPress={() =>
-                        router.push({
-                          pathname: "/edit-project/[projectId]",
-                          params: { projectId: item.id },
-                        })
-                      }
-                      hitSlop={8}
-                      style={styles.editButton}
-                      testID={`edit-project-${item.id}`}
-                    >
-                      <Text style={styles.editButtonText}>Edit</Text>
-                    </Pressable>
-                  )}
-                  <Text style={styles.chevron}>›</Text>
-                </View>
-              )}
-            </Pressable>
-          );
-        }}
-        ListEmptyComponent={
+      <ScrollView contentContainerStyle={styles.list}>
+        {projects.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>No projects yet</Text>
             <Text style={styles.emptyMeta}>Tap “+ New” to import stems and build one.</Text>
           </View>
-        }
-      />
+        ) : (
+          projects.map((item, index) => {
+            const accentColor = getTrackColor(index);
+            return (
+              <Pressable
+                key={item.id}
+                onPress={() =>
+                  router.push({
+                    pathname: "/player/[projectId]",
+                    params: { projectId: item.id },
+                  })
+                }
+              >
+                {({ pressed }) => (
+                  <View style={[styles.row, pressed && styles.pressed]}>
+                    <View style={[styles.colorBar, { backgroundColor: accentColor }]} />
+                    <View style={styles.rowBody}>
+                      <Text style={styles.title}>{item.title}</Text>
+                      <View style={styles.metaRow}>
+                        <View style={styles.metaPill}>
+                          <Text style={styles.metaPillText}>{item.bpm} BPM</Text>
+                        </View>
+                        <View style={styles.metaPill}>
+                          <Text style={styles.metaPillText}>{item.key || "—"}</Text>
+                        </View>
+                        <View style={styles.metaPill}>
+                          <Text style={styles.metaPillText}>
+                            {item.tracks.length} stem{item.tracks.length === 1 ? "" : "s"}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    {item.origin === "filesystem" && (
+                      <Pressable
+                        onPress={() =>
+                          router.push({
+                            pathname: "/edit-project/[projectId]",
+                            params: { projectId: item.id },
+                          })
+                        }
+                        hitSlop={8}
+                        style={styles.editButton}
+                        testID={`edit-project-${item.id}`}
+                      >
+                        <Text style={styles.editButtonText}>Edit</Text>
+                      </Pressable>
+                    )}
+                    <Text style={styles.chevron}>›</Text>
+                  </View>
+                )}
+              </Pressable>
+            );
+          })
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
