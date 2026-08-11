@@ -12,17 +12,18 @@ Software Mansion's native Web Audio API implementation for React Native.
 
 ## The name
 
-**VS** stands for *Virtual Sound*: the multitrack backing tracks a band plays
+**VS** stands for _Virtual Sound_: the multitrack backing tracks a band plays
 alongside live. It fills in the parts nobody on stage is playing - synths,
 pads, backing vocals - so a small band can sound like its studio recordings.
 The click is what holds it together: the band plays to the metronome so it
 stays locked to whatever the VS is playing.
 
 This app is a VS. Not a companion to one, not a way to prepare tracks for one
-- the thing itself, running on a phone instead of the usual laptop + audio
-interface + DAW rig.
 
-The name repeats itself: "Virtual VS" unpacks to "Virtual *Virtual Sound*".
+- the thing itself, running on a phone instead of the usual laptop + audio
+  interface + DAW rig.
+
+The name repeats itself: "Virtual VS" unpacks to "Virtual _Virtual Sound_".
 That's known. VS stopped being read as an acronym a long time ago and works as
 a term on its own, the way people say "ATM machine" or "PIN number".
 
@@ -42,7 +43,7 @@ control/    Stub - BLE-MIDI footswitch (TODO)
 The whole app shares **one `AudioContext`** - one sample clock - held by a
 single `AudioEngine` instance (`engine/index.ts`'s `audioEngine`). Sync
 across stems comes from scheduling every track's `AudioBufferSourceNode` to
-`start()` at the *same* future `context.currentTime` (a small lookahead),
+`start()` at the _same_ future `context.currentTime` (a small lookahead),
 not from any per-track timer.
 
 Signal graph per stem:
@@ -83,7 +84,7 @@ is a collection (projects, setlists, committed per-track mixer state, pedal
 mappings). There's no backend, so no RTK Query.
 
 What's **in** the store: the project library, setlists, app settings, pedal
-mappings, and each track's *committed* volume/mute/solo/bus routing
+mappings, and each track's _committed_ volume/mute/solo/bus routing
 (`tracksSlice.ts`, keyed by `${projectId}:${trackId}`).
 
 What's **not** in the store: the live playhead (see above) and in-progress
@@ -107,16 +108,33 @@ through the engine's `AudioContext.decodeAudioData()` once, up front.
 ```jsonc
 // manifest.json
 {
-  "id": "…", "title": "…", "bpm": 120, "key": "…", "countInBars": 1,
-  "tracks": [{ "id": "…", "name": "…", "file": "…", "gain": 0.85, "bus": "main|cue|both" }],
+  "id": "…",
+  "title": "…",
+  "bpm": 120,
+  "key": "…",
+  "countInBars": 1,
+  "tracks": [
+    {
+      "id": "…",
+      "name": "…",
+      "file": "…",
+      "gain": 0.85,
+      "bus": "main|cue|both",
+    },
+  ],
   "sections": [{ "name": "…", "startSec": 0 }],
-  "pad": { "file": "…", "loop": true, "bus": "cue|main|both" } // optional
+  "pad": { "file": "…", "loop": true, "bus": "cue|main|both" }, // optional
 }
 ```
 
 ```jsonc
 // setlist.json
-{ "name": "…", "songs": ["projectId", "…"], "advance": "manual|auto", "padBetween": true }
+{
+  "name": "…",
+  "songs": ["projectId", "…"],
+  "advance": "manual|auto",
+  "padBetween": true,
+}
 ```
 
 See `src/types/project.ts` and `src/types/setlist.ts`.
@@ -178,6 +196,84 @@ generated click, audible if you route a track to `cue` and are on a
 split/monitor setup) should play back perfectly in sync. Try dragging a
 fader, muting/soloing a track, changing its bus routing, and toggling
 monitor/split.
+
+## Building a release APK (Android)
+
+There's no EAS Build config in this project (no `eas.json`) - releases are
+built locally with the same native Android toolchain `expo run:android` uses
+under the hood.
+
+```bash
+npx expo run:android --variant release
+```
+
+This prebuilds `android/` if it doesn't already exist (see [Running the
+app](#running-the-app) - that folder is gitignored and regenerated on
+demand, not committed), then builds and installs onto whatever
+device/emulator you pick. The APK lands at
+`android/app/build/outputs/apk/release/app-release.apk` either way - grab it
+from there to hand out separately, or skip the install step entirely with
+`cd android && ./gradlew assembleRelease`.
+
+Release builds currently sign with the same debug keystore as debug builds
+(`signingConfigs.debug` in `android/app/build.gradle`, stock from `expo
+prebuild`) - fine for installing on your own devices, but **do not** ship
+that APK to the Play Store. Generate a real release keystore first; see
+[Signed APK (Android)](https://reactnative.dev/docs/signed-apk-android#generating-an-upload-key).
+
+## Building for iOS
+
+Same story - no EAS, no App Store Connect config here, just the local Xcode
+toolchain `expo run:ios` drives:
+
+```bash
+npx expo run:ios --configuration Release --device
+```
+
+`--device` on its own prompts you to pick a connected/paired device; pass a
+name to target one directly. This needs Xcode with an Apple ID signed in
+(Xcode > Settings > Accounts) and that account set as the Team - with
+"Automatically manage signing" checked - on the `virtualvs` target's Signing
+& Capabilities tab, in `ios/virtualvs.xcworkspace` (also gitignored/
+regenerated by prebuild, like `android/`).
+
+There's no App Store distribution path here since this project has no paid
+Apple Developer Program membership wired up - the section below covers
+on-device installs, which work with a free Apple ID.
+
+## Testing on a personal device
+
+### Android
+
+1. On the phone: Settings > About phone, tap "Build number" 7 times to
+   unlock Developer options, then Settings > Developer options > enable USB
+   debugging.
+2. Plug in via USB (or `adb connect <ip>` over the same network) and accept
+   the "Allow USB debugging?" prompt on the phone.
+3. `npx expo run:android --device` - builds a debug dev-client and installs
+   and launches it directly on the phone, same flow as targeting an
+   emulator.
+   - To install the release APK from above instead:
+     `adb install -r android/app/build/outputs/apk/release/app-release.apk`.
+     Android will prompt to allow installs from that source the first time.
+
+### iOS
+
+1. Cable-connect the iPhone/iPad to the Mac (or pair it wirelessly once via
+   Xcode > Window > Devices and Simulators) and tap "Trust This Computer" on
+   the device if prompted.
+2. In Xcode, sign in with an Apple ID (Xcode > Settings > Accounts) and set
+   that Team, as above, on the `virtualvs` target in
+   `ios/virtualvs.xcworkspace`.
+3. `npx expo run:ios --device` - builds and installs directly on the
+   selected device.
+
+A free Apple ID works, but the resulting build's provisioning profile
+expires after 7 days, after which the app stops opening on the phone until
+you rebuild and reinstall from Xcode/`expo run:ios` again. A paid Apple
+Developer Program membership ($99/year) removes that limit. In case you want
+to sponsor the project and help me get a paid membership, let me know.
+I'll set up sponsorship via GitHub Sponsors later.
 
 ## License
 
