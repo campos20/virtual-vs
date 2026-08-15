@@ -58,4 +58,15 @@ export const ptBR: TranslationDictionary = {
   click: {
     heading: 'CLICK',
   },
+  menu: {
+    moreOptions: 'Mais opções',
+    about: 'Sobre',
+  },
+  about: {
+    title: 'Sobre',
+    developedBy: (name: string) => `Desenvolvido por ${name}`,
+    version: (version: string) => `Versão ${version}`,
+    viewOnGithub: 'Ver no GitHub',
+    license: 'Licença',
+  },
 };

@@ -122,6 +122,15 @@ describe('LibraryScreen', () => {
     expect(screen.queryByTestId('edit-project-demo-sync-test')).toBeNull();
   });
 
+  it('opens the overflow menu and navigates to About', () => {
+    renderHydrated();
+
+    fireEvent.press(screen.getByTestId('library-menu'));
+    fireEvent.press(screen.getByTestId('menu-about'));
+
+    expect(mockPush).toHaveBeenCalledWith('/about');
+  });
+
   it('has no separate edit affordance - opening a project is how you edit it', () => {
     renderHydrated([
       {

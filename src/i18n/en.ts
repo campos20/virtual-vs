@@ -49,6 +49,17 @@ export const en = {
   click: {
     heading: 'CLICK',
   },
+  menu: {
+    moreOptions: 'More options',
+    about: 'About',
+  },
+  about: {
+    title: 'About',
+    developedBy: (name: string) => `Developed by ${name}`,
+    version: (version: string) => `Version ${version}`,
+    viewOnGithub: 'View on GitHub',
+    license: 'License',
+  },
 };
 
 export type TranslationDictionary = typeof en;

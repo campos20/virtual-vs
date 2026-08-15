@@ -6,6 +6,7 @@ import { useTranslation } from "@/i18n";
 import { createDraftProject } from "@/storage";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { projectAdded, projectsSelectors } from "@/store/projectsSlice";
+import { OverflowMenu } from "@/ui/components/OverflowMenu";
 import { colors, elevation, radii, spacing } from "@/ui/theme";
 import { getTrackColor } from "@/ui/trackColors";
 
@@ -43,6 +44,15 @@ export function LibraryScreen() {
     }
   }
 
+  const menuItems = [
+    {
+      key: "about",
+      label: t.menu.about,
+      onPress: () => router.push("/about"),
+      testID: "menu-about",
+    },
+  ];
+
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <View style={styles.headerRow}>
@@ -50,21 +60,24 @@ export function LibraryScreen() {
           <Text style={styles.eyebrow}>VIRTUAL VS</Text>
           <Text style={styles.header}>{t.library.title}</Text>
         </View>
-        {/* Press feedback via the `style` callback rather than a
-            function-as-child: see ProjectScreen's HeaderButton for why
-            re-creating children on press can crash Fabric mid-navigation. */}
-        <Pressable
-          onPress={handleNewProject}
-          disabled={creating}
-          hitSlop={8}
-          testID="new-project-button"
-          style={({ pressed }) => [
-            styles.newProjectButton,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={styles.newProjectText}>{t.library.newProject}</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          {/* Press feedback via the `style` callback rather than a
+              function-as-child: see ProjectScreen's HeaderButton for why
+              re-creating children on press can crash Fabric mid-navigation. */}
+          <Pressable
+            onPress={handleNewProject}
+            disabled={creating}
+            hitSlop={8}
+            testID="new-project-button"
+            style={({ pressed }) => [
+              styles.newProjectButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.newProjectText}>{t.library.newProject}</Text>
+          </Pressable>
+          <OverflowMenu items={menuItems} accessibilityLabel={t.menu.moreOptions} testID="library-menu" />
+        </View>
       </View>
       {error && <Text style={styles.error}>{error}</Text>}
       <ScrollView contentContainerStyle={styles.list}>
@@ -131,6 +144,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
   },
   eyebrow: {
     color: colors.textTertiary,

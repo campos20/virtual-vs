@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -37,39 +36,8 @@ import { ClickToggle } from "@/ui/components/ClickToggle";
 import { MonitorSplitSwitch } from "@/ui/components/MonitorSplitSwitch";
 import { ProjectForm, type ProjectFormValues } from "@/ui/components/ProjectForm";
 import { TransportBar } from "@/ui/components/TransportBar";
+import { HeaderButton } from "@/ui/components/HeaderButton";
 import { colors, elevation, radii, spacing } from "@/ui/theme";
-
-/**
- * Press feedback goes through Pressable's `style` callback, NOT a
- * function-as-child. A function child re-creates the child View/Text on every
- * press-state change, so releasing the button re-inserts a text view in the
- * same frame that `onPress` -> `router.back()` is tearing this screen down -
- * which is exactly Android's Fabric "addViewAt: ... already has a parent"
- * crash (see AGENTS.md). Styling the Pressable itself only updates props on
- * an already-mounted view and leaves the child tree structurally constant.
- */
-function HeaderButton({
-  label,
-  onPress,
-  testID,
-  style,
-}: {
-  label: string;
-  onPress: () => void;
-  testID: string;
-  style?: object;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.headerButton, style, pressed && styles.pressed]}
-      hitSlop={8}
-      testID={testID}
-    >
-      <Text style={styles.headerButtonText}>{label}</Text>
-    </Pressable>
-  );
-}
 
 /**
  * The one and only project view - play it, edit it, or fill in a brand-new
@@ -498,22 +466,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: spacing.sm,
-  },
-  headerButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radii.pill,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-  },
-  headerButtonText: {
-    color: colors.accent,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  pressed: {
-    opacity: 0.7,
   },
   title: {
     color: colors.textPrimary,
