@@ -52,7 +52,8 @@
     "lint": "expo lint",
     "test": "jest",
     "test:watch": "jest --watchAll",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "test:summary": "jest && node scripts/coverage-summary.mjs"
   },
   "private": true
 }

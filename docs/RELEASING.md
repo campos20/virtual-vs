@@ -79,8 +79,30 @@ The workflow refuses to build if the tag doesn't match `package.json` - so a
 mistyped tag fails loudly instead of publishing a mislabelled APK. Versions
 containing a `-` (`1.0.0-alpha.0`) are published as **pre-releases**.
 
-It then typechecks, lints and runs the test suite before building. A red build
-never becomes a release.
+### Release from main
+
+Tests don't run again during a release. CI ([`ci.yml`](../.github/workflows/ci.yml))
+already typechecks, lints and tests every push, so the release checks the
+*result* instead: the tagged commit has to be on `main` and have a successful
+CI run. Tagging a commit that never reached main, or whose CI is red, fails
+before anything is built.
+
+If you tag immediately after pushing the commit, the release waits (up to ~10
+minutes) for CI to finish rather than failing the race.
+
+## Continuous integration
+
+[`ci.yml`](../.github/workflows/ci.yml) runs on every push and pull request:
+typecheck, lint, tests. It also publishes a **coverage summary onto the run's
+own page** (Actions → the run → Summary) and uploads the browsable HTML report
+as an artifact. Nothing is sent to an external coverage service.
+
+Locally:
+
+```bash
+npm run test:summary   # runs the suite, then prints the same table
+open coverage/index.html
+```
 
 ## What it produces
 

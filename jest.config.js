@@ -24,5 +24,6 @@ module.exports = {
     '!src/test-utils/**',
   ],
   coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'html', 'lcov'],
+  // json-summary feeds the CI job summary table (scripts/coverage-summary.mjs).
+  coverageReporters: ['text', 'html', 'lcov', 'json-summary'],
 };

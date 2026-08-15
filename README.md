@@ -285,6 +285,18 @@ There's no App Store distribution path here since this project has no paid
 Apple Developer Program membership wired up - the section below covers
 on-device installs, which work with a free Apple ID.
 
+## Tests and coverage
+
+```bash
+npm test              # watch: npm run test:watch
+npm run test:summary  # suite + a coverage table
+open coverage/index.html
+```
+
+CI runs the same checks on every push and pull request, prints the coverage
+table on the run's summary page, and attaches the HTML report as an artifact -
+see [docs/RELEASING.md](docs/RELEASING.md#continuous-integration).
+
 ## Testing on a personal device
 
 ### Android

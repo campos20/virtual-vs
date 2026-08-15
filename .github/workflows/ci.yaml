@@ -1,0 +1,55 @@
+name: CI
+
+# Runs on every push and pull request. Until now the test suite only ran when
+# a release tag was pushed, which is the worst time to discover it's red.
+on:
+  push:
+    branches: ['**']
+    tags-ignore: ['**'] # release.yml already runs the same checks for tags
+  pull_request:
+
+# Superseded runs on the same branch are pointless once a newer commit lands.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck, lint and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx expo lint
+
+      - name: Test
+        run: npx jest --ci
+
+      # Rendered onto the run itself rather than sent to a coverage service:
+      # no third-party account, no token, and nothing else granted access to
+      # the repository.
+      - name: Publish coverage summary
+        if: always()
+        run: node scripts/coverage-summary.mjs >> "$GITHUB_STEP_SUMMARY"
+
+      # The browsable HTML report, for digging into which lines are missed.
+      - name: Upload the HTML coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14

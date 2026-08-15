@@ -46,13 +46,42 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # A release that ships a red build is worse than a release that doesn't
-      # happen, so the same checks that guard day-to-day work gate the tag too.
-      - name: Typecheck, lint and test
+      # CI (ci.yml) already typechecks, lints and tests every push, so this
+      # doesn't repeat that work. What it does check is that the tag actually
+      # points at a commit which passed - nothing stops someone tagging a
+      # commit that never reached main, or one whose CI went red.
+      - name: Require a green CI run on a main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          npx tsc --noEmit
-          npx expo lint
-          npx jest --coverage=false --ci
+          STATUS="$(gh api "repos/${GITHUB_REPOSITORY}/compare/main...${GITHUB_SHA}" --jq '.status')"
+          case "$STATUS" in
+            identical|behind) ;;
+            *)
+              echo "::error::Tagged commit ${GITHUB_SHA} is not on main (compare status: ${STATUS})."
+              echo "::error::Release from main so the commit has been through CI."
+              exit 1
+              ;;
+          esac
+
+          # A tag pushed straight after its commit can beat CI to the finish,
+          # so wait rather than failing a release that was about to be fine.
+          for _ in $(seq 1 40); do
+            RUNS="$(gh run list --commit "$GITHUB_SHA" --workflow ci.yml \
+                      --json status,conclusion --limit 20)"
+            PENDING="$(echo "$RUNS" | jq '[.[] | select(.status != "completed")] | length')"
+            [ "$PENDING" -eq 0 ] && break
+            echo "Waiting for ${PENDING} CI run(s) on ${GITHUB_SHA}..."
+            sleep 15
+          done
+
+          FAILED="$(echo "$RUNS" | jq '[.[] | select(.conclusion != "success")] | length')"
+          PASSED="$(echo "$RUNS" | jq '[.[] | select(.conclusion == "success")] | length')"
+          if [ "$PASSED" -eq 0 ] || [ "$FAILED" -gt 0 ]; then
+            echo "::error::No successful CI run for ${GITHUB_SHA}. Fix CI before tagging."
+            echo "$RUNS"
+            exit 1
+          fi
 
       - name: Set the app version
         run: node scripts/sync-app-version.mjs "$VERSION" "$GITHUB_RUN_NUMBER"
