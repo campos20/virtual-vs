@@ -196,6 +196,49 @@ split/monitor setup) should play back perfectly in sync. Try dragging a
 fader, muting/soloing a track, changing its bus routing, and toggling
 monitor/split.
 
+## Downloading a release
+
+Tagged releases publish a signed APK to the
+[Releases page](https://github.com/campos20/virtual-vs/releases). Download the
+`.apk` and open it on your Android device.
+
+### Verifying a download
+
+You should not have to trust a stranger's APK. Every release carries proof of
+where it came from, and all three checks below are things you run yourself.
+
+**1. Confirm GitHub built it, from this repo, at that commit:**
+
+```bash
+gh attestation verify virtual-vs-<version>.apk --repo campos20/virtual-vs
+```
+
+Each build records a signed
+[provenance attestation](https://docs.github.com/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds)
+in a public transparency log, tying the APK to the workflow run and commit that
+produced it. If someone modified the APK or built it somewhere else, this fails.
+This is the check that matters most - it covers the other two.
+
+**2. Confirm the file wasn't altered after upload:**
+
+```bash
+sha256sum -c SHA256SUMS.txt
+```
+
+**3. Confirm it was signed with the project's release key:**
+
+```bash
+apksigner verify --print-certs virtual-vs-<version>.apk
+```
+
+<!-- Once a release keystore is configured, paste its fingerprint here - see docs/RELEASING.md -->
+Each release publishes the signing certificate's SHA-256 in its notes. Step 1 is
+the check that actually ties the APK to its source commit; this one additionally
+confirms releases share a signing identity, which is also what lets Android
+upgrade an install in place.
+
+Releases are cut by pushing a tag - see [docs/RELEASING.md](docs/RELEASING.md).
+
 ## Building a release APK (Android)
 
 There's no EAS Build config in this project (no `eas.json`) - releases are
@@ -214,11 +257,13 @@ device/emulator you pick. The APK lands at
 from there to hand out separately, or skip the install step entirely with
 `cd android && ./gradlew assembleRelease`.
 
-Release builds currently sign with the same debug keystore as debug builds
-(`signingConfigs.debug` in `android/app/build.gradle`, stock from `expo
-prebuild`) - fine for installing on your own devices, but **do not** ship
-that APK to the Play Store. Generate a real release keystore first; see
-[Signed APK (Android)](https://reactnative.dev/docs/signed-apk-android#generating-an-upload-key).
+A *local* release build like this signs with Expo's stock debug keystore -
+fine for installing on your own devices, but not something to hand out.
+Published releases are different: CI signs them with the project's real
+release key via
+[`plugins/withAndroidSigning.js`](plugins/withAndroidSigning.js), which only
+activates when the signing properties are passed in. See
+[docs/RELEASING.md](docs/RELEASING.md).
 
 ## Building for iOS
 

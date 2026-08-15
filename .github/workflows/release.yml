@@ -1,0 +1,190 @@
+name: Release Android APK
+
+# Tag-triggered: `git tag v1.0.0-alpha.0 && git push origin v1.0.0-alpha.0`.
+# The tag must match the version in package.json, which is the single source
+# of truth - the build refuses to run otherwise rather than shipping an APK
+# whose version disagrees with the tag people downloaded it from.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # create the release
+  id-token: write # sign the build provenance attestation
+  attestations: write # record it against the repository
+
+jobs:
+  release:
+    name: Build, sign and publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Check the tag matches package.json
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${PKG_VERSION}."
+            echo "::error::Bump package.json (or retag) so the two agree, then push the tag again."
+            exit 1
+          fi
+          echo "VERSION=${PKG_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # A release that ships a red build is worse than a release that doesn't
+      # happen, so the same checks that guard day-to-day work gate the tag too.
+      - name: Typecheck, lint and test
+        run: |
+          npx tsc --noEmit
+          npx expo lint
+          npx jest --coverage=false --ci
+
+      - name: Set the app version
+        run: node scripts/sync-app-version.mjs "$VERSION" "$GITHUB_RUN_NUMBER"
+
+      # Optional. What proves the APK belongs to this commit is the provenance
+      # attestation further down, not the keystore. A release key only adds
+      # one thing on top: a stable identity across versions, which is what
+      # lets Android upgrade an install in place instead of making people
+      # uninstall first. Without the secret the build still ships, using
+      # Expo's default signing.
+      - name: Restore the signing keystore (if configured)
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "No ANDROID_KEYSTORE_BASE64 secret - building with Expo's default signing."
+            echo "SIGNED_WITH_RELEASE_KEY=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "SIGNED_WITH_RELEASE_KEY=true" >> "$GITHUB_ENV"
+
+      - name: Generate the native project
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Build the release APK
+        working-directory: android
+        env:
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ "$SIGNED_WITH_RELEASE_KEY" = "true" ]; then
+            ./gradlew assembleRelease --no-daemon \
+              -PVIRTUALVS_STORE_FILE="$RUNNER_TEMP/release.jks" \
+              -PVIRTUALVS_STORE_PASSWORD="$STORE_PASSWORD" \
+              -PVIRTUALVS_KEY_ALIAS="$KEY_ALIAS" \
+              -PVIRTUALVS_KEY_PASSWORD="$KEY_PASSWORD"
+          else
+            ./gradlew assembleRelease --no-daemon
+          fi
+
+      - name: Stage the APK
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk \
+             "dist/virtual-vs-${VERSION}.apk"
+
+      # Records which key actually signed the APK, and fails only if a release
+      # keystore was configured but didn't take effect - that would silently
+      # break in-place upgrades for everyone who already installed.
+      - name: Record the signing certificate
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)"
+          "$APKSIGNER" verify --print-certs --verbose "dist/virtual-vs-${VERSION}.apk" | tee signing.txt
+          if [ "$SIGNED_WITH_RELEASE_KEY" = "true" ] && grep -qi 'CN=Android Debug' signing.txt; then
+            echo "::error::A release keystore was provided but the APK is debug-signed - the signing plugin did not apply."
+            exit 1
+          fi
+          FINGERPRINT="$(grep -i 'certificate SHA-256 digest' signing.txt | head -n 1 | awk '{print $NF}')"
+          echo "FINGERPRINT=${FINGERPRINT}" >> "$GITHUB_ENV"
+
+      - name: Checksum
+        working-directory: dist
+        run: sha256sum "virtual-vs-${VERSION}.apk" > SHA256SUMS.txt
+
+      # Signed, transparency-logged proof that this exact APK was produced by
+      # this workflow, from this repository, at this commit. Anyone can check
+      # it with `gh attestation verify` - see the release notes.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/virtual-vs-${{ env.VERSION }}.apk
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "## Install"
+            echo
+            echo "Download \`virtual-vs-${VERSION}.apk\` below and open it on your Android device."
+            echo "You'll need to allow installing from your browser or file manager the first time."
+            echo
+            echo "## Verify this build before you install it"
+            echo
+            echo "You do not have to take my word for what is in this APK."
+            echo
+            echo "**1. Confirm GitHub built it, from this repo, at this commit:**"
+            echo
+            echo '```bash'
+            echo "gh attestation verify virtual-vs-${VERSION}.apk --repo ${GITHUB_REPOSITORY}"
+            echo '```'
+            echo
+            echo "This checks a signature recorded in a public transparency log when the"
+            echo "workflow ran. It proves the file came from [this workflow](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})"
+            echo "building commit \`${GITHUB_SHA}\` - not from someone reuploading a modified build."
+            echo
+            echo "**2. Confirm the file wasn't altered after upload:**"
+            echo
+            echo '```bash'
+            echo "sha256sum -c SHA256SUMS.txt"
+            echo '```'
+            echo
+            echo "**3. Signing certificate**"
+            echo
+            echo '```bash'
+            echo "apksigner verify --print-certs virtual-vs-${VERSION}.apk"
+            echo '```'
+            echo
+            echo "SHA-256 of the certificate that signed this APK:"
+            echo
+            echo '```'
+            echo "${FINGERPRINT}"
+            echo '```'
+            if [ "$SIGNED_WITH_RELEASE_KEY" = "true" ]; then
+              echo
+              echo "This is the project's release key and is the same for every release, so"
+              echo "an APK signed with a different certificate did not come from this project."
+            else
+              echo
+              echo "> **Note:** this build was signed with a generated key rather than a stable"
+              echo "> project release key, so this fingerprint may differ between releases and"
+              echo "> Android may ask you to uninstall before updating. Step 1 above is the check"
+              echo "> that actually ties this APK to its source commit."
+            fi
+          } > notes.md
+
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            --verify-tag \
+            $([ "${VERSION#*-}" != "$VERSION" ] && echo --prerelease) \
+            "dist/virtual-vs-${VERSION}.apk" \
+            "dist/SHA256SUMS.txt"
