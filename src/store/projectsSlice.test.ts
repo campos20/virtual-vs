@@ -15,7 +15,6 @@ function buildEntry(overrides: Partial<LibraryProjectEntry> = {}): LibraryProjec
     title: 'Demo Set',
     bpm: 120,
     key: 'C',
-    countInBars: 1,
     tracks: [],
     sections: [],
     origin: 'bundled',

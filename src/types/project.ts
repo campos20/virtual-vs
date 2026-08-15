@@ -24,9 +24,12 @@ export interface PadManifest {
 export interface ProjectManifest {
   id: string;
   title: string;
-  bpm: number;
+  /**
+   * Optional. Without a bpm there is no tempo to generate a metronome from,
+   * so the engine renders no click for the project at all (see AudioEngine).
+   */
+  bpm?: number;
   key: string;
-  countInBars: number;
   tracks: TrackManifest[];
   sections: SectionManifest[];
   pad?: PadManifest;

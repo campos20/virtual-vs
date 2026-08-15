@@ -1,4 +1,5 @@
-import { fireEvent, screen } from '@testing-library/react-native';
+import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { createDraftProject } from '@/storage';
 import { createStore } from '@/store';
 import { projectAdded } from '@/store/projectsSlice';
 import { renderWithStore } from '@/test-utils/renderWithStore';
@@ -8,6 +9,11 @@ const mockPush = jest.fn();
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
+}));
+
+jest.mock('@/storage', () => ({
+  ...jest.requireActual('@/storage'),
+  createDraftProject: jest.fn(),
 }));
 
 beforeEach(() => {
@@ -30,17 +36,54 @@ describe('LibraryScreen', () => {
     fireEvent.press(screen.getByText('Demo: Sync Test'));
 
     expect(mockPush).toHaveBeenCalledWith({
-      pathname: '/player/[projectId]',
+      pathname: '/project/[projectId]',
       params: { projectId: 'demo-sync-test' },
     });
   });
 
-  it('navigates to the new-project screen when "+ New" is pressed', () => {
-    renderWithStore(<LibraryScreen />);
+  // There is no new-project screen: "+ New" creates an empty project and
+  // opens it, so creating is just editing a project with no stems yet.
+  it('creates an empty project and opens it when "+ New" is pressed', async () => {
+    (createDraftProject as jest.Mock).mockResolvedValue({
+      id: 'untitled-abc',
+      title: 'Untitled',
+      key: '',
+      tracks: [],
+      sections: [],
+      origin: 'filesystem',
+      sourceDir: 'file:///mock/document/projects/untitled-abc',
+    });
+    const { store } = renderWithStore(<LibraryScreen />);
 
     fireEvent.press(screen.getByTestId('new-project-button'));
 
-    expect(mockPush).toHaveBeenCalledWith('/new-project');
+    await waitFor(() => expect(createDraftProject).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(store.getState().projects.entities['untitled-abc']).toBeTruthy()
+    );
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/project/[projectId]',
+      params: { projectId: 'untitled-abc' },
+    });
+  });
+
+  it('omits the tempo pill for a project with no bpm', () => {
+    const store = createStore();
+    store.dispatch(
+      projectAdded({
+        id: 'free-time',
+        title: 'Free Time',
+        key: '',
+        tracks: [],
+        sections: [],
+        origin: 'filesystem',
+        sourceDir: 'file:///mock/document/projects/free-time',
+      })
+    );
+    renderWithStore(<LibraryScreen />, store);
+
+    expect(screen.getByText('Free Time')).toBeTruthy();
+    expect(screen.queryByText(/BPM/)).toBeNull();
   });
 
   it('offers no edit affordance for the bundled demo project', () => {
@@ -49,7 +92,7 @@ describe('LibraryScreen', () => {
     expect(screen.queryByTestId('edit-project-demo-sync-test')).toBeNull();
   });
 
-  it('navigates to the edit-project screen for a filesystem project', () => {
+  it('has no separate edit affordance - opening a project is how you edit it', () => {
     const store = createStore();
     store.dispatch(
       projectAdded({
@@ -57,7 +100,6 @@ describe('LibraryScreen', () => {
         title: 'My Song',
         bpm: 100,
         key: 'C',
-        countInBars: 2,
         tracks: [],
         sections: [],
         origin: 'filesystem',
@@ -66,11 +108,6 @@ describe('LibraryScreen', () => {
     );
     renderWithStore(<LibraryScreen />, store);
 
-    fireEvent.press(screen.getByTestId('edit-project-my-song'));
-
-    expect(mockPush).toHaveBeenCalledWith({
-      pathname: '/edit-project/[projectId]',
-      params: { projectId: 'my-song' },
-    });
+    expect(screen.queryByTestId('edit-project-my-song')).toBeNull();
   });
 });

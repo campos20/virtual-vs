@@ -3,7 +3,6 @@
   "title": "Demo: Sync Test",
   "bpm": 120,
   "key": "A minor",
-  "countInBars": 1,
   "tracks": [
     { "id": "bass", "name": "Bass", "file": "bass.wav", "gain": 0.85, "bus": "main" },
     { "id": "keys", "name": "Keys", "file": "keys.wav", "gain": 0.85, "bus": "main" },

@@ -33,7 +33,7 @@ a term on its own, the way people say "ATM machine" or "PIN number".
 engine/     One shared AudioContext + transport + per-track/bus node graph
 store/      Redux Toolkit - committed mixer state, library, setlists, settings
 storage/    Loads a project's manifest.json and decodes its stems
-ui/         Library and Player screens
+ui/         Library and Project screens (play + edit + create)
 setlist/    Stub - multi-song controller, preload-next, pad crossfade (TODO)
 control/    Stub - BLE-MIDI footswitch (TODO)
 ```
@@ -88,7 +88,7 @@ mappings, and each track's _committed_ volume/mute/solo/bus routing
 (`tracksSlice.ts`, keyed by `${projectId}:${trackId}`).
 
 What's **not** in the store: the live playhead (see above) and in-progress
-fader drags. `ui/components/Fader.tsx` calls the engine directly on every
+fader drags. `ui/components/VerticalFader.tsx` calls the engine directly on every
 touch move and only dispatches to the store once, on release - dispatching
 a fader's value on every frame would cause a re-render storm and bloat
 devtools.
@@ -97,8 +97,8 @@ devtools.
 
 `ProjectSource` is a small abstraction over "where a project's manifest and
 stems came from" - a bundled demo project resolves its stems to `require()`
-asset module ids (`storage/demoProject.ts`); a filesystem project (imported
-by the user - see the `storage/importProject.ts` stub) resolves them to
+asset module ids (`storage/demoProject.ts`); a filesystem project (created
+by the user - see `storage/importProject.ts`) resolves them to
 `file://` URIs via `expo-file-system`'s v57 `File`/`Directory` API. Either
 way, `storage/projectLoader.ts`'s `decodeProjectAudio()` runs every stem
 through the engine's `AudioContext.decodeAudioData()` once, up front.
@@ -112,7 +112,6 @@ through the engine's `AudioContext.decodeAudioData()` once, up front.
   "title": "…",
   "bpm": 120,
   "key": "…",
-  "countInBars": 1,
   "tracks": [
     {
       "id": "…",
@@ -150,9 +149,9 @@ See `src/types/project.ts` and `src/types/setlist.ts`.
   install + Expo config-plugin steps, including the BLE-MIDI GATT
   service/characteristic UUIDs, so adding it later is a known quantity
   rather than a research project.
-- **Zip project import/export** - `storage/importProject.ts` is a stub
-  with the exact steps (pick a `.zip` via `expo-document-picker`, extract
-  into the app's document directory, validate against `ProjectManifest`).
+- **Zip project import/export** - projects are built by picking individual
+  audio files; importing a pre-packaged `.zip` of manifest + stems is still
+  TODO (see the notes at the top of `storage/importProject.ts`).
 
 ## Demo project
 

@@ -12,9 +12,9 @@ import { readProjectManifest } from './projectLoader';
 // user point straight at a folder of stems without packaging (at the cost of
 // the iOS access grant only lasting the current app session).
 //
-// What *is* implemented here: building a project directly from individually
-// (or multiply-) picked audio files, with no manifest.json of their own -
-// see createProjectFromStems() below.
+// What *is* implemented here: creating an empty project and adding/removing
+// individually-picked audio files to it, generating the manifest.json as we
+// go - see createDraftProject() and addStemsToProject() below.
 
 function slugify(value: string): string {
   const slug = value
@@ -42,43 +42,31 @@ function dedupe(candidate: string, used: Set<string>): string {
   return unique;
 }
 
-export interface NewProjectFromStemsOptions {
-  title: string;
-  bpm: number;
-  /** Files as returned by `expo-document-picker`'s `getDocumentAsync({ multiple: true })`. */
-  files: DocumentPickerAsset[];
+/** Title a freshly created draft carries until the user names it. */
+export const DRAFT_PROJECT_TITLE = 'Untitled';
+
+/** Names already taken inside a project folder, so added stems never collide with existing ones. */
+function existingNames(manifest: ProjectManifest): {
+  files: Set<string>;
+  trackIds: Set<string>;
+} {
+  return {
+    files: new Set(manifest.tracks.map((t) => t.file)),
+    trackIds: new Set(manifest.tracks.map((t) => t.id)),
+  };
 }
 
-/**
- * Builds a project directly from individually-picked audio files: no
- * pre-packaged manifest.json, no zip. Copies each file into its own project
- * folder under `projectsDirectory`, writes a generated manifest.json next to
- * them (one track per file, default `main` bus and unity gain), and returns
- * a filesystem-origin Library entry ready to `dispatch(projectAdded(...))`.
- */
-export async function createProjectFromStems({
-  title,
-  bpm,
-  files,
-}: NewProjectFromStemsOptions): Promise<LibraryProjectEntry> {
-  if (files.length === 0) {
-    throw new Error('Select at least one audio file.');
-  }
-
-  const id = `${slugify(title)}-${Date.now().toString(36)}`;
-  const directory = projectDirectory(id);
-  directory.create({ intermediates: true });
-
-  const usedFileNames = new Set<string>();
-  const usedTrackIds = new Set<string>();
+/** Copies `files` into `directory`, returning the track entries describing them. */
+async function copyStems(
+  directory: Directory,
+  files: DocumentPickerAsset[],
+  usedFileNames: Set<string>,
+  usedTrackIds: Set<string>
+): Promise<TrackManifest[]> {
   const tracks: TrackManifest[] = [];
-
   for (const asset of files) {
     const fileName = dedupe(asset.name, usedFileNames);
-    const destination = new File(directory, fileName);
-    const source = new File(asset.uri);
-    await source.copy(destination);
-
+    await new File(asset.uri).copy(new File(directory, fileName));
     tracks.push({
       id: dedupe(slugify(stripExtension(asset.name)), usedTrackIds),
       name: stripExtension(asset.name),
@@ -87,14 +75,27 @@ export async function createProjectFromStems({
       bus: 'main',
     });
   }
+  return tracks;
+}
+
+/**
+ * Creates an empty project folder + manifest and returns its Library entry.
+ *
+ * There is no separate "new project" flow: creating simply means opening a
+ * project that has no stems yet, which the project screen shows in edit mode.
+ * Stems are then added through `addStemsToProject`, exactly as they are for a
+ * project that already existed.
+ */
+export async function createDraftProject(): Promise<LibraryProjectEntry> {
+  const id = `${slugify(DRAFT_PROJECT_TITLE)}-${Date.now().toString(36)}`;
+  const directory = projectDirectory(id);
+  directory.create({ intermediates: true });
 
   const manifest: ProjectManifest = {
     id,
-    title,
-    bpm,
+    title: DRAFT_PROJECT_TITLE,
     key: '',
-    countInBars: 1,
-    tracks,
+    tracks: [],
     sections: [],
   };
 
@@ -103,16 +104,75 @@ export async function createProjectFromStems({
   return { ...manifest, origin: 'filesystem', sourceDir: directory.uri };
 }
 
+/**
+ * Deletes a project's folder outright. Used to discard a draft the user backed
+ * out of before adding any stems, so abandoning "+ New" doesn't leave empty
+ * projects piling up in the Library.
+ */
+export function deleteProjectDirectory(sourceDir: string): void {
+  const directory = new Directory(sourceDir);
+  if (directory.exists) directory.delete();
+}
+
+/**
+ * Copies additional stems into an existing project folder and appends them to
+ * its manifest, de-duplicating against the files/track ids already in there.
+ * Returns the rewritten manifest.
+ */
+export async function addStemsToProject(
+  sourceDir: string,
+  files: DocumentPickerAsset[]
+): Promise<ProjectManifest> {
+  const directory = new Directory(sourceDir);
+  const manifest = await readProjectManifest(directory);
+  const used = existingNames(manifest);
+
+  const added = await copyStems(directory, files, used.files, used.trackIds);
+  const updated: ProjectManifest = { ...manifest, tracks: [...manifest.tracks, ...added] };
+
+  new File(directory, 'manifest.json').write(JSON.stringify(updated, null, 2));
+  return updated;
+}
+
+/**
+ * Drops a stem from a project: removes it from the manifest and deletes the
+ * copy this app made inside the project folder. The user's original file
+ * elsewhere on the device is untouched - we only ever own our own copy.
+ */
+export async function removeStemFromProject(
+  sourceDir: string,
+  trackId: string
+): Promise<ProjectManifest> {
+  const directory = new Directory(sourceDir);
+  const manifest = await readProjectManifest(directory);
+
+  const track = manifest.tracks.find((t) => t.id === trackId);
+  if (!track) return manifest;
+
+  const updated: ProjectManifest = {
+    ...manifest,
+    tracks: manifest.tracks.filter((t) => t.id !== trackId),
+  };
+  new File(directory, 'manifest.json').write(JSON.stringify(updated, null, 2));
+
+  // Manifest first, file second: a stale file with no manifest entry is
+  // harmless, whereas a manifest pointing at a deleted file fails to load.
+  const stem = new File(directory, track.file);
+  if (stem.exists) stem.delete();
+
+  return updated;
+}
+
 export interface ProjectMetadataEdits {
   title: string;
-  bpm: number;
+  /** `undefined` clears the tempo, which removes the project's click entirely. */
+  bpm?: number;
   key: string;
-  countInBars: number;
 }
 
 /**
  * Rewrites a filesystem project's manifest.json with edited top-level
- * metadata (title/bpm/key/count-in), preserving its tracks/sections/pad.
+ * metadata (title/bpm/key), preserving its tracks/sections/pad.
  * Bundled projects have no manifest.json to write back to and can't be
  * edited this way - see LibraryScreen, which only offers editing for
  * `origin: 'filesystem'` entries.
@@ -124,6 +184,9 @@ export async function updateProjectMetadata(
   const directory = new Directory(sourceDir);
   const manifest = await readProjectManifest(directory);
   const updated: ProjectManifest = { ...manifest, ...edits };
+  // Clearing the tempo field has to actually drop it, otherwise the spread
+  // would leave the project's previous bpm (and its click) in place.
+  if (edits.bpm === undefined) delete updated.bpm;
   new File(directory, 'manifest.json').write(JSON.stringify(updated, null, 2));
   return updated;
 }

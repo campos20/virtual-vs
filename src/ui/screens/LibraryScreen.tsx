@@ -1,8 +1,8 @@
 import { useRouter } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getDemoLibraryEntry } from "@/storage";
+import { createDraftProject, getDemoLibraryEntry } from "@/storage";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { projectAdded, projectsSelectors } from "@/store/projectsSlice";
 import { colors, elevation, radii, spacing } from "@/ui/theme";
@@ -14,6 +14,31 @@ export function LibraryScreen() {
   const projects = useAppSelector((s) =>
     projectsSelectors.selectAll(s.projects),
   );
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  /**
+   * There is no "new project" screen. Creating one means making an empty
+   * project and opening it - the project screen shows a stemless project in
+   * edit mode, so creating and editing are literally the same view.
+   */
+  async function handleNewProject() {
+    if (creating) return;
+    setCreating(true);
+    setError(null);
+    try {
+      const draft = await createDraftProject();
+      dispatch(projectAdded(draft));
+      router.push({
+        pathname: "/project/[projectId]",
+        params: { projectId: draft.id },
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCreating(false);
+    }
+  }
 
   useEffect(() => {
     // Seed the bundled demo project on first launch so there's always
@@ -31,10 +56,11 @@ export function LibraryScreen() {
           <Text style={styles.header}>Library</Text>
         </View>
         {/* Press feedback via the `style` callback rather than a
-            function-as-child: see BackButton in PlayerScreen for why
+            function-as-child: see ProjectScreen's HeaderButton for why
             re-creating children on press can crash Fabric mid-navigation. */}
         <Pressable
-          onPress={() => router.push("/new-project")}
+          onPress={handleNewProject}
+          disabled={creating}
           hitSlop={8}
           testID="new-project-button"
           style={({ pressed }) => [
@@ -45,6 +71,7 @@ export function LibraryScreen() {
           <Text style={styles.newProjectText}>+ New</Text>
         </Pressable>
       </View>
+      {error && <Text style={styles.error}>{error}</Text>}
       <ScrollView contentContainerStyle={styles.list}>
         {projects.length === 0 ? (
           <View style={styles.empty}>
@@ -59,7 +86,7 @@ export function LibraryScreen() {
                 key={item.id}
                 onPress={() =>
                   router.push({
-                    pathname: "/player/[projectId]",
+                    pathname: "/project/[projectId]",
                     params: { projectId: item.id },
                   })
                 }
@@ -69,9 +96,11 @@ export function LibraryScreen() {
                 <View style={styles.rowBody}>
                   <Text style={styles.title}>{item.title}</Text>
                   <View style={styles.metaRow}>
-                    <View style={styles.metaPill}>
-                      <Text style={styles.metaPillText}>{item.bpm} BPM</Text>
-                    </View>
+                    {item.bpm !== undefined && (
+                      <View style={styles.metaPill}>
+                        <Text style={styles.metaPillText}>{item.bpm} BPM</Text>
+                      </View>
+                    )}
                     <View style={styles.metaPill}>
                       <Text style={styles.metaPillText}>{item.key || "—"}</Text>
                     </View>
@@ -82,21 +111,9 @@ export function LibraryScreen() {
                     </View>
                   </View>
                 </View>
-                {item.origin === "filesystem" && (
-                  <Pressable
-                    onPress={() =>
-                      router.push({
-                        pathname: "/edit-project/[projectId]",
-                        params: { projectId: item.id },
-                      })
-                    }
-                    hitSlop={8}
-                    style={styles.editButton}
-                    testID={`edit-project-${item.id}`}
-                  >
-                    <Text style={styles.editButtonText}>Edit</Text>
-                  </Pressable>
-                )}
+                {/* No Edit affordance here: opening a project *is* how you
+                    edit it now - the project screen carries its own Edit
+                    button next to the mixer. */}
                 <Text style={styles.chevron}>›</Text>
               </Pressable>
             );
@@ -227,5 +244,11 @@ const styles = StyleSheet.create({
   emptyMeta: {
     color: colors.textTertiary,
     fontSize: 13,
+  },
+  error: {
+    color: colors.danger,
+    fontSize: 13,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
   },
 });

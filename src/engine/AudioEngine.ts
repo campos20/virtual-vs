@@ -112,6 +112,14 @@ export class AudioEngine {
     return this.clickEnabled;
   }
 
+  /**
+   * Whether the loaded project has a click at all. Projects without a bpm
+   * have no tempo to synthesize one from, so there is nothing to toggle.
+   */
+  hasClick(): boolean {
+    return this.clickBuffer !== null;
+  }
+
   private applyClickGain(): void {
     if (!this.clickGain) return;
     const target = this.clickEnabled ? 1 : 0;
@@ -171,10 +179,16 @@ export class AudioEngine {
       }
     }
 
-    this.clickBuffer = generateClickBuffer(this.ctx, decoded.manifest.bpm, maxDurationSec);
-    this.clickGain = this.ctx.createGain();
-    this.clickGain.connect(this.cueBus.gain); // click is always cue-only
-    this.clickGain.gain.value = this.clickEnabled ? 1 : 0;
+    // bpm is optional: with no tempo there is nothing to synthesize a
+    // metronome from, so the project simply has no click and the transport
+    // schedules nothing for it.
+    const bpm = decoded.manifest.bpm;
+    if (bpm !== undefined && bpm > 0) {
+      this.clickBuffer = generateClickBuffer(this.ctx, bpm, maxDurationSec);
+      this.clickGain = this.ctx.createGain();
+      this.clickGain.connect(this.cueBus.gain); // click is always cue-only
+      this.clickGain.gain.value = this.clickEnabled ? 1 : 0;
+    }
 
     this.playheadOffsetSec = 0;
     this.pausedAtSec = 0;

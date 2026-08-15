@@ -1,8 +1,11 @@
 export { getDemoLibraryEntry, getDemoProjectSource } from './demoProject';
 export {
-  createProjectFromStems,
+  addStemsToProject,
+  createDraftProject,
+  deleteProjectDirectory,
+  removeStemFromProject,
   updateProjectMetadata,
-  type NewProjectFromStemsOptions,
+  DRAFT_PROJECT_TITLE,
   type ProjectMetadataEdits,
 } from './importProject';
 export {
