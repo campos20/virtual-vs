@@ -1,4 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 import { getDocumentAsync } from 'expo-document-picker';
 import { audioEngine } from '@/engine';
 import {
@@ -10,7 +11,7 @@ import {
 } from '@/storage';
 import { createStore } from '@/store';
 import { projectAdded } from '@/store/projectsSlice';
-import { trackEntityId } from '@/store/tracksSlice';
+import { trackEntityId, tracksInitializedForProject } from '@/store/tracksSlice';
 import { renderWithStore } from '@/test-utils/renderWithStore';
 import { ProjectScreen } from './ProjectScreen';
 
@@ -312,5 +313,87 @@ describe('ProjectScreen - a brand-new (stemless) project', () => {
 
     expect(deleteProjectDirectory).not.toHaveBeenCalled();
     expect(store.getState().projects.entities['my-song']).toBeTruthy();
+  });
+});
+
+describe('ProjectScreen - deleting', () => {
+  function renderEditableInEditMode() {
+    mockParams = { projectId: 'my-song' };
+    const store = createStore();
+    store.dispatch(projectAdded(filesystemProject));
+    store.dispatch(
+      tracksInitializedForProject({
+        projectId: filesystemProject.id,
+        tracks: filesystemProject.tracks,
+      })
+    );
+    const rendered = renderWithStore(<ProjectScreen />, store);
+    fireEvent.press(screen.getByTestId('edit-button'));
+    return rendered;
+  }
+
+  /** Drives Alert.alert by invoking the button matching `label`. */
+  function answerAlertWith(label: string) {
+    return jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+      buttons?.find((button) => button.text === label)?.onPress?.();
+    });
+  }
+
+  it('is not offered for the bundled demo project', async () => {
+    renderDemo();
+    await waitForMixer();
+
+    expect(screen.queryByTestId('delete-project-button')).toBeNull();
+  });
+
+  // Deleting destroys the audio files, so it must never happen on one tap.
+  it('asks before deleting anything', () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    renderEditableInEditMode();
+
+    fireEvent.press(screen.getByTestId('delete-project-button'));
+
+    expect(alertSpy).toHaveBeenCalled();
+    expect(deleteProjectDirectory).not.toHaveBeenCalled();
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+
+  it('deletes the folder, the entry and its mixer state once confirmed', () => {
+    answerAlertWith('Delete');
+    const { store } = renderEditableInEditMode();
+
+    fireEvent.press(screen.getByTestId('delete-project-button'));
+
+    expect(deleteProjectDirectory).toHaveBeenCalledWith(filesystemProject.sourceDir);
+    expect(store.getState().projects.entities['my-song']).toBeUndefined();
+    expect(
+      store.getState().tracks.entities[trackEntityId('my-song', 'bass')]
+    ).toBeUndefined();
+    expect(mockBack).toHaveBeenCalled();
+  });
+
+  it('leaves everything alone when the confirmation is dismissed', () => {
+    answerAlertWith('Cancel');
+    const { store } = renderEditableInEditMode();
+
+    fireEvent.press(screen.getByTestId('delete-project-button'));
+
+    expect(deleteProjectDirectory).not.toHaveBeenCalled();
+    expect(store.getState().projects.entities['my-song']).toBeTruthy();
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+
+  it('keeps the project if deleting the folder fails', () => {
+    answerAlertWith('Delete');
+    (deleteProjectDirectory as jest.Mock).mockImplementationOnce(() => {
+      throw new Error('disk busy');
+    });
+    const { store } = renderEditableInEditMode();
+
+    fireEvent.press(screen.getByTestId('delete-project-button'));
+
+    expect(store.getState().projects.entities['my-song']).toBeTruthy();
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(screen.getByText('disk busy')).toBeTruthy();
   });
 });

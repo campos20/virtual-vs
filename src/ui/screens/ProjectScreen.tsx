@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -31,6 +32,7 @@ import { clickEnabledSet, monitorModeSet } from "@/store/settingsSlice";
 import {
   trackEntityId,
   tracksInitializedForProject,
+  tracksRemovedForProject,
   tracksSelectors,
 } from "@/store/tracksSlice";
 import type { ProjectManifest } from "@/types/project";
@@ -310,6 +312,36 @@ export function ProjectScreen() {
     handleBack();
   }
 
+  /**
+   * Deleting takes the project folder and its audio with it, so it asks
+   * first. The engine is torn down before the files disappear underneath it.
+   */
+  function handleDelete() {
+    if (!entry?.sourceDir) return;
+    Alert.alert(
+      "Delete project?",
+      `"${entry.title}" and its ${entry.tracks.length} stem${entry.tracks.length === 1 ? "" : "s"} will be permanently deleted from this device.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            try {
+              deleteProjectDirectory(entry.sourceDir!);
+            } catch (e) {
+              setFormError(e instanceof Error ? e.message : String(e));
+              return;
+            }
+            dispatch(projectRemoved(entry.id));
+            dispatch(tracksRemovedForProject(entry.id));
+            teardownAndNavigate(() => router.back());
+          },
+        },
+      ],
+    );
+  }
+
   function handleCancelEditing() {
     // With no stems there is no mixer to fall back to, so cancelling is the
     // same as abandoning the draft.
@@ -378,6 +410,7 @@ export function ProjectScreen() {
           onRemoveStem={handleRemoveStem}
           onSubmit={handleSubmit}
           onCancel={handleCancelEditing}
+          onDelete={entry?.sourceDir ? handleDelete : undefined}
         />
       </SafeAreaView>
     );

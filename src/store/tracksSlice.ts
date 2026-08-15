@@ -67,6 +67,13 @@ const tracksSlice = createSlice({
       const entity = state.entities[trackEntityId(projectId, trackId)];
       if (entity) entity.soloed = !entity.soloed;
     },
+    /** Drops every committed mixer entry for a project, so deleting one leaves nothing behind. */
+    tracksRemovedForProject(state, action: PayloadAction<string>) {
+      const stale = Object.values(state.entities)
+        .filter((entity) => entity?.projectId === action.payload)
+        .map((entity) => entity!.id);
+      tracksAdapter.removeMany(state, stale);
+    },
     trackBusSet(state, action: PayloadAction<{ projectId: string; trackId: string; bus: Bus }>) {
       const { projectId, trackId, bus } = action.payload;
       tracksAdapter.updateOne(state, { id: trackEntityId(projectId, trackId), changes: { bus } });
@@ -76,6 +83,7 @@ const tracksSlice = createSlice({
 
 export const {
   tracksInitializedForProject,
+  tracksRemovedForProject,
   trackVolumeCommitted,
   trackMuteToggled,
   trackSoloToggled,

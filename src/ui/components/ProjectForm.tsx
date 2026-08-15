@@ -31,6 +31,8 @@ interface ProjectFormProps {
   onRemoveStem: (stemId: string) => void;
   onSubmit: (values: ProjectFormValues) => void;
   onCancel: () => void;
+  /** Omitted for projects that can't be deleted (the bundled demo). */
+  onDelete?: () => void;
 }
 
 /**
@@ -51,6 +53,7 @@ export function ProjectForm({
   onRemoveStem,
   onSubmit,
   onCancel,
+  onDelete,
 }: ProjectFormProps) {
   const [title, setTitle] = useState(initial.title);
   const [bpmText, setBpmText] = useState(initial.bpm === undefined ? '' : String(initial.bpm));
@@ -160,6 +163,17 @@ export function ProjectForm({
       >
         <Text style={styles.cancelText}>Cancel</Text>
       </Pressable>
+
+      {onDelete && (
+        <Pressable
+          onPress={onDelete}
+          disabled={busy}
+          testID="delete-project-button"
+          style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}
+        >
+          <Text style={styles.deleteText}>Delete Project</Text>
+        </Pressable>
+      )}
     </ScrollView>
   );
 }
@@ -258,5 +272,18 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 15,
     fontWeight: '600',
+  },
+  deleteButton: {
+    marginTop: 32,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: radii.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.danger,
+  },
+  deleteText: {
+    color: colors.danger,
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
