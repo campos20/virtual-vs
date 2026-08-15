@@ -59,6 +59,8 @@ export const en = {
     version: (version: string) => `Version ${version}`,
     viewOnGithub: 'View on GitHub',
     license: 'License',
+    language: 'Language',
+    languageSystem: 'System',
   },
 };
 

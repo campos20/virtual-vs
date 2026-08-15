@@ -1,5 +1,7 @@
 import { fireEvent, screen } from '@testing-library/react-native';
 import { openBrowserAsync } from 'expo-web-browser';
+import { createStore } from '@/store';
+import { languageOverrideSet } from '@/store/settingsSlice';
 import { renderWithStore } from '@/test-utils/renderWithStore';
 import { AboutScreen } from './AboutScreen';
 
@@ -42,5 +44,25 @@ describe('AboutScreen', () => {
     fireEvent.press(screen.getByTestId('about-back-button'));
 
     expect(mockBack).toHaveBeenCalled();
+  });
+
+  it('selects a language override, persisting it and re-rendering in that language', () => {
+    const store = createStore();
+    renderWithStore(<AboutScreen />, store);
+
+    fireEvent.press(screen.getByTestId('language-option-pt-BR'));
+
+    expect(store.getState().settings.languageOverride).toBe('pt-BR');
+    expect(screen.getByText('Sobre')).toBeTruthy();
+  });
+
+  it('clears the language override by selecting System', () => {
+    const store = createStore();
+    store.dispatch(languageOverrideSet('pt-BR'));
+    renderWithStore(<AboutScreen />, store);
+
+    fireEvent.press(screen.getByTestId('language-option-system'));
+
+    expect(store.getState().settings.languageOverride).toBeNull();
   });
 });

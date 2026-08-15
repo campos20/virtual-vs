@@ -68,5 +68,7 @@ export const ptBR: TranslationDictionary = {
     version: (version: string) => `Versão ${version}`,
     viewOnGithub: 'Ver no GitHub',
     license: 'Licença',
+    language: 'Idioma',
+    languageSystem: 'Sistema',
   },
 };
