@@ -5,7 +5,7 @@ name: CI
 on:
   push:
     branches: ['**']
-    tags-ignore: ['**'] # release.yml already runs the same checks for tags
+    tags-ignore: ['**'] # release.yaml already runs the same checks for tags
   pull_request:
 
 # Superseded runs on the same branch are pointless once a newer commit lands.

@@ -1,5 +1,15 @@
 # Virtual VS
 
+[![CI](https://img.shields.io/github/actions/workflow/status/campos20/virtual-vs/ci.yaml?branch=main&label=CI)](https://github.com/campos20/virtual-vs/actions/workflows/ci.yaml)
+[![Release](https://img.shields.io/github/v/release/campos20/virtual-vs?include_prereleases&sort=semver&label=release)](https://github.com/campos20/virtual-vs/releases/latest)
+[![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Android%20%7C%20iOS-lightgrey)](#running-the-app)
+[![Expo SDK](https://img.shields.io/badge/Expo-SDK%2057-000020?logo=expo&logoColor=white)](https://docs.expo.dev/versions/v57.0.0/)
+
+<!-- The CI and release badges read live GitHub state, so until the first
+     workflow run and the first tagged release they read "no status" and "no
+     releases found". Both fill themselves in - nothing to change here. -->
+
 An open-source multitrack backing-track player for live musicians - a phone
 replacing the laptop + audio interface + DAW rig (a "VS"/Playback-style
 setup). Load a project of audio stems and it plays them all sample-locked,

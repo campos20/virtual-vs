@@ -46,7 +46,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # CI (ci.yml) already typechecks, lints and tests every push, so this
+      # CI (ci.yaml) already typechecks, lints and tests every push, so this
       # doesn't repeat that work. What it does check is that the tag actually
       # points at a commit which passed - nothing stops someone tagging a
       # commit that never reached main, or one whose CI went red.
@@ -67,7 +67,7 @@ jobs:
           # A tag pushed straight after its commit can beat CI to the finish,
           # so wait rather than failing a release that was about to be fine.
           for _ in $(seq 1 40); do
-            RUNS="$(gh run list --commit "$GITHUB_SHA" --workflow ci.yml \
+            RUNS="$(gh run list --commit "$GITHUB_SHA" --workflow ci.yaml \
                       --json status,conclusion --limit 20)"
             PENDING="$(echo "$RUNS" | jq '[.[] | select(.status != "completed")] | length')"
             [ "$PENDING" -eq 0 ] && break
