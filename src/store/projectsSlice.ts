@@ -12,8 +12,15 @@ const projectsAdapter = createEntityAdapter<LibraryProjectEntry>();
 
 const projectsSlice = createSlice({
   name: 'projects',
-  initialState: projectsAdapter.getInitialState(),
+  // `hydrated` distinguishes "no projects on disk" from "haven't looked yet",
+  // so the Library can wait instead of flashing its empty state on launch.
+  initialState: projectsAdapter.getInitialState({ hydrated: false }),
   reducers: {
+    /** Replaces the library with what was just read off disk (plus the bundled demo). */
+    projectsHydrated(state, action: PayloadAction<LibraryProjectEntry[]>) {
+      projectsAdapter.setAll(state, action.payload);
+      state.hydrated = true;
+    },
     projectAdded: projectsAdapter.addOne,
     projectUpserted: projectsAdapter.upsertOne,
     projectRemoved: projectsAdapter.removeOne,
@@ -26,6 +33,7 @@ const projectsSlice = createSlice({
   },
 });
 
-export const { projectAdded, projectUpserted, projectRemoved, projectUpdated } = projectsSlice.actions;
+export const { projectsHydrated, projectAdded, projectUpserted, projectRemoved, projectUpdated } =
+  projectsSlice.actions;
 export const projectsSelectors = projectsAdapter.getSelectors();
 export default projectsSlice.reducer;

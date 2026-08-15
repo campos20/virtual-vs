@@ -1,4 +1,5 @@
 export { getDemoLibraryEntry, getDemoProjectSource } from './demoProject';
+export { listFilesystemProjects, loadProjectLibrary } from './projectLibrary';
 export {
   addStemsToProject,
   createDraftProject,

@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
-import { createDraftProject } from '@/storage';
+import { createDraftProject, getDemoLibraryEntry } from '@/storage';
 import { createStore } from '@/store';
-import { projectAdded } from '@/store/projectsSlice';
+import { projectsHydrated, type LibraryProjectEntry } from '@/store/projectsSlice';
 import { renderWithStore } from '@/test-utils/renderWithStore';
 import { LibraryScreen } from './LibraryScreen';
 
@@ -20,9 +20,20 @@ beforeEach(() => {
   mockPush.mockClear();
 });
 
+/**
+ * The Library no longer seeds itself - ProjectLibraryGate reads the library
+ * off disk at app start and dispatches it - so these tests hand it an
+ * already-hydrated store.
+ */
+function renderHydrated(extra: LibraryProjectEntry[] = []) {
+  const store = createStore();
+  store.dispatch(projectsHydrated([getDemoLibraryEntry(), ...extra]));
+  return renderWithStore(<LibraryScreen />, store);
+}
+
 describe('LibraryScreen', () => {
-  it('seeds and shows the bundled demo project on first launch', () => {
-    renderWithStore(<LibraryScreen />);
+  it('shows the bundled demo project once the library is hydrated', () => {
+    renderHydrated();
 
     expect(screen.getByText('Demo: Sync Test')).toBeTruthy();
     expect(screen.getByText('120 BPM')).toBeTruthy();
@@ -30,8 +41,8 @@ describe('LibraryScreen', () => {
     expect(screen.getByText('3 stems')).toBeTruthy();
   });
 
-  it('navigates to the player screen when a project row is pressed', () => {
-    renderWithStore(<LibraryScreen />);
+  it('navigates to the project screen when a row is pressed', () => {
+    renderHydrated();
 
     fireEvent.press(screen.getByText('Demo: Sync Test'));
 
@@ -53,7 +64,7 @@ describe('LibraryScreen', () => {
       origin: 'filesystem',
       sourceDir: 'file:///mock/document/projects/untitled-abc',
     });
-    const { store } = renderWithStore(<LibraryScreen />);
+    const { store } = renderHydrated();
 
     fireEvent.press(screen.getByTestId('new-project-button'));
 
@@ -70,15 +81,17 @@ describe('LibraryScreen', () => {
   it('omits the tempo pill for a project with no bpm', () => {
     const store = createStore();
     store.dispatch(
-      projectAdded({
-        id: 'free-time',
-        title: 'Free Time',
-        key: '',
-        tracks: [],
-        sections: [],
-        origin: 'filesystem',
-        sourceDir: 'file:///mock/document/projects/free-time',
-      })
+      projectsHydrated([
+        {
+          id: 'free-time',
+          title: 'Free Time',
+          key: '',
+          tracks: [],
+          sections: [],
+          origin: 'filesystem',
+          sourceDir: 'file:///mock/document/projects/free-time',
+        },
+      ])
     );
     renderWithStore(<LibraryScreen />, store);
 
@@ -86,16 +99,32 @@ describe('LibraryScreen', () => {
     expect(screen.queryByText(/BPM/)).toBeNull();
   });
 
+  // Without this the Library flashes "No projects yet" on every launch
+  // before the disk scan comes back.
+  it('waits for hydration instead of claiming the library is empty', () => {
+    renderWithStore(<LibraryScreen />, createStore());
+
+    expect(screen.queryByText('No projects yet')).toBeNull();
+    expect(screen.queryByText('Demo: Sync Test')).toBeNull();
+  });
+
+  it('shows the empty state once hydration finds nothing', () => {
+    const store = createStore();
+    store.dispatch(projectsHydrated([]));
+    renderWithStore(<LibraryScreen />, store);
+
+    expect(screen.getByText('No projects yet')).toBeTruthy();
+  });
+
   it('offers no edit affordance for the bundled demo project', () => {
-    renderWithStore(<LibraryScreen />);
+    renderHydrated();
 
     expect(screen.queryByTestId('edit-project-demo-sync-test')).toBeNull();
   });
 
   it('has no separate edit affordance - opening a project is how you edit it', () => {
-    const store = createStore();
-    store.dispatch(
-      projectAdded({
+    renderHydrated([
+      {
         id: 'my-song',
         title: 'My Song',
         bpm: 100,
@@ -104,9 +133,8 @@ describe('LibraryScreen', () => {
         sections: [],
         origin: 'filesystem',
         sourceDir: 'file:///mock/document/projects/my-song',
-      })
-    );
-    renderWithStore(<LibraryScreen />, store);
+      },
+    ]);
 
     expect(screen.queryByTestId('edit-project-my-song')).toBeNull();
   });

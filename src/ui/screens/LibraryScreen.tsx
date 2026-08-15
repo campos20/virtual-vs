@@ -1,8 +1,8 @@
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { createDraftProject, getDemoLibraryEntry } from "@/storage";
+import { createDraftProject } from "@/storage";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { projectAdded, projectsSelectors } from "@/store/projectsSlice";
 import { colors, elevation, radii, spacing } from "@/ui/theme";
@@ -14,6 +14,7 @@ export function LibraryScreen() {
   const projects = useAppSelector((s) =>
     projectsSelectors.selectAll(s.projects),
   );
+  const hydrated = useAppSelector((s) => s.projects.hydrated);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,14 +41,6 @@ export function LibraryScreen() {
     }
   }
 
-  useEffect(() => {
-    // Seed the bundled demo project on first launch so there's always
-    // something to open - see AGENTS.md phase 1 requirements.
-    if (projects.length === 0) {
-      dispatch(projectAdded(getDemoLibraryEntry()));
-    }
-  }, [projects.length, dispatch]);
-
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.headerRow}>
@@ -73,7 +66,9 @@ export function LibraryScreen() {
       </View>
       {error && <Text style={styles.error}>{error}</Text>}
       <ScrollView contentContainerStyle={styles.list}>
-        {projects.length === 0 ? (
+        {!hydrated ? (
+          <ActivityIndicator color={colors.accent} style={styles.loading} />
+        ) : projects.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>No projects yet</Text>
             <Text style={styles.emptyMeta}>Tap “+ New” to import stems and build one.</Text>
@@ -244,6 +239,9 @@ const styles = StyleSheet.create({
   emptyMeta: {
     color: colors.textTertiary,
     fontSize: 13,
+  },
+  loading: {
+    marginTop: 60,
   },
   error: {
     color: colors.danger,
