@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { audioEngine, type EngineTransportState } from "@/engine";
+import { useTranslation } from "@/i18n";
 import { trackRuntimeStatesFromManifest } from "@/engine/trackRuntimeState";
 import { usePlayhead } from "@/hooks/usePlayhead";
 import {
@@ -81,6 +82,7 @@ export function ProjectScreen() {
   const { projectId } = useLocalSearchParams<{ projectId?: string }>();
   const dispatch = useAppDispatch();
   const router = useRouter();
+  const { t } = useTranslation();
 
   const entry = useAppSelector((s) =>
     projectId ? projectsSelectors.selectById(s.projects, projectId) : undefined,
@@ -307,12 +309,12 @@ export function ProjectScreen() {
   function handleDelete() {
     if (!entry?.sourceDir) return;
     Alert.alert(
-      "Delete project?",
-      `"${entry.title}" and its ${entry.tracks.length} stem${entry.tracks.length === 1 ? "" : "s"} will be permanently deleted from this device.`,
+      t.project.deleteConfirmTitle,
+      t.project.deleteConfirmBody(entry.title, entry.tracks.length),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t.common.cancel, style: "cancel" },
         {
-          text: "Delete",
+          text: t.project.deleteConfirmConfirm,
           style: "destructive",
           onPress: () => {
             try {
@@ -349,9 +351,9 @@ export function ProjectScreen() {
     return (
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
-          <HeaderButton label="‹ Library" onPress={handleBackFromProject} testID="back-button" />
+          <HeaderButton label={t.project.backToLibrary} onPress={handleBackFromProject} testID="back-button" />
           {canEdit && !editing && (
-            <HeaderButton label="Edit" onPress={handleStartEditing} testID="edit-button" />
+            <HeaderButton label={t.project.edit} onPress={handleStartEditing} testID="edit-button" />
           )}
         </View>
         <Text style={styles.title}>{headerTitle}</Text>
@@ -377,7 +379,7 @@ export function ProjectScreen() {
       return (
         <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
           {renderHeader()}
-          <Text style={styles.notice}>The bundled demo project can&apos;t be edited.</Text>
+          <Text style={styles.notice}>{t.project.bundledNotice}</Text>
         </SafeAreaView>
       );
     }
@@ -408,7 +410,7 @@ export function ProjectScreen() {
     return (
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
         {renderHeader()}
-        <Text style={styles.error}>Project not found.</Text>
+        <Text style={styles.error}>{t.project.notFound}</Text>
       </SafeAreaView>
     );
   }
@@ -428,7 +430,7 @@ export function ProjectScreen() {
     return (
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
         {renderHeader()}
-        <Text style={styles.error}>{error ?? "Failed to load project."}</Text>
+        <Text style={styles.error}>{error ?? t.project.loadFailed}</Text>
       </SafeAreaView>
     );
   }

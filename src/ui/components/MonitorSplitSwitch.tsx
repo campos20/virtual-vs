@@ -1,5 +1,6 @@
 import { StyleSheet, Switch, Text, View } from 'react-native';
 import type { MonitorMode } from '@/engine';
+import { useTranslation } from '@/i18n';
 import { colors } from '@/ui/theme';
 
 interface MonitorSplitSwitchProps {
@@ -13,17 +14,18 @@ interface MonitorSplitSwitchProps {
  * both buses to both channels for rehearsing on normal headphones.
  */
 export function MonitorSplitSwitch({ mode, onChange }: MonitorSplitSwitchProps) {
+  const { t } = useTranslation();
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>OUTPUT</Text>
+      <Text style={styles.heading}>{t.monitorSplit.heading}</Text>
       <View style={styles.row}>
-        <Text style={[styles.label, mode === 'split' && styles.labelActive]}>Split</Text>
+        <Text style={[styles.label, mode === 'split' && styles.labelActive]}>{t.monitorSplit.split}</Text>
         <Switch
           value={mode === 'monitor'}
           onValueChange={(isMonitor) => onChange(isMonitor ? 'monitor' : 'split')}
           trackColor={{ false: '#3a3a3c', true: colors.accent }}
         />
-        <Text style={[styles.label, mode === 'monitor' && styles.labelActive]}>Sum</Text>
+        <Text style={[styles.label, mode === 'monitor' && styles.labelActive]}>{t.monitorSplit.sum}</Text>
       </View>
     </View>
   );

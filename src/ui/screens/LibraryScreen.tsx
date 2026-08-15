@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTranslation } from "@/i18n";
 import { createDraftProject } from "@/storage";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { projectAdded, projectsSelectors } from "@/store/projectsSlice";
@@ -11,6 +12,7 @@ import { getTrackColor } from "@/ui/trackColors";
 export function LibraryScreen() {
   const dispatch = useAppDispatch();
   const router = useRouter();
+  const { t } = useTranslation();
   const projects = useAppSelector((s) =>
     projectsSelectors.selectAll(s.projects),
   );
@@ -46,7 +48,7 @@ export function LibraryScreen() {
       <View style={styles.headerRow}>
         <View>
           <Text style={styles.eyebrow}>VIRTUAL VS</Text>
-          <Text style={styles.header}>Library</Text>
+          <Text style={styles.header}>{t.library.title}</Text>
         </View>
         {/* Press feedback via the `style` callback rather than a
             function-as-child: see ProjectScreen's HeaderButton for why
@@ -61,7 +63,7 @@ export function LibraryScreen() {
             pressed && styles.pressed,
           ]}
         >
-          <Text style={styles.newProjectText}>+ New</Text>
+          <Text style={styles.newProjectText}>{t.library.newProject}</Text>
         </Pressable>
       </View>
       {error && <Text style={styles.error}>{error}</Text>}
@@ -70,8 +72,8 @@ export function LibraryScreen() {
           <ActivityIndicator color={colors.accent} style={styles.loading} />
         ) : projects.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>No projects yet</Text>
-            <Text style={styles.emptyMeta}>Tap “+ New” to import stems and build one.</Text>
+            <Text style={styles.emptyTitle}>{t.library.emptyTitle}</Text>
+            <Text style={styles.emptyMeta}>{t.library.emptyMeta}</Text>
           </View>
         ) : (
           projects.map((item, index) => {
@@ -100,9 +102,7 @@ export function LibraryScreen() {
                       <Text style={styles.metaPillText}>{item.key || "—"}</Text>
                     </View>
                     <View style={styles.metaPill}>
-                      <Text style={styles.metaPillText}>
-                        {item.tracks.length} stem{item.tracks.length === 1 ? "" : "s"}
-                      </Text>
+                      <Text style={styles.metaPillText}>{t.library.stemsCount(item.tracks.length)}</Text>
                     </View>
                   </View>
                 </View>
