@@ -2,8 +2,11 @@ import { Directory, File } from 'expo-file-system';
 import type { DocumentPickerAsset } from 'expo-document-picker';
 import type { LibraryProjectEntry } from '@/store/projectsSlice';
 import type { ProjectManifest, TrackManifest } from '@/types/project';
+import { mixChannelsToStereo } from './downmix';
 import { projectDirectory } from './paths';
 import { readProjectManifest } from './projectLoader';
+import type { BaseAudioContext } from './types';
+import { encodeStereoWav, readWavChannelCount } from './wav';
 
 // Full zip project import/export (a pre-packaged manifest.json + stems,
 // picked and extracted as one archive) is still out of scope for phase 1 -
@@ -56,17 +59,52 @@ function existingNames(manifest: ProjectManifest): {
   };
 }
 
+/**
+ * Folds a just-copied stem down to stereo if it has more channels than the
+ * engine can use, rewriting it in place as 16-bit PCM.
+ *
+ * Doing this once, here, keeps it off the critical path: opening a project
+ * has to be fast enough to do between songs, and a multi-channel file
+ * otherwise costs a full fold *and* several times the decode work on every
+ * single load. The channel count comes from the WAV header, so ordinary
+ * stereo files are never decoded just to be checked.
+ */
+async function foldStemToStereoInPlace(
+  context: BaseAudioContext,
+  file: File
+): Promise<void> {
+  const channels = readWavChannelCount(file);
+  if (channels === null || channels <= 2) return;
+
+  const decoded = await context.decodeAudioData(file.uri);
+  const sources = Array.from({ length: decoded.numberOfChannels }, (_, channel) =>
+    decoded.getChannelData(channel)
+  );
+  const { left, right } = mixChannelsToStereo(sources, decoded.length);
+  file.write(encodeStereoWav(left, right, decoded.sampleRate));
+}
+
 /** Copies `files` into `directory`, returning the track entries describing them. */
 async function copyStems(
   directory: Directory,
   files: DocumentPickerAsset[],
   usedFileNames: Set<string>,
-  usedTrackIds: Set<string>
+  usedTrackIds: Set<string>,
+  context?: BaseAudioContext
 ): Promise<TrackManifest[]> {
   const tracks: TrackManifest[] = [];
   for (const asset of files) {
     const fileName = dedupe(asset.name, usedFileNames);
-    await new File(asset.uri).copy(new File(directory, fileName));
+    const destination = new File(directory, fileName);
+    await new File(asset.uri).copy(destination);
+    if (context) {
+      try {
+        await foldStemToStereoInPlace(context, destination);
+      } catch (error) {
+        // Keep the original file: it still plays, just slower to load.
+        console.warn(`Could not fold ${fileName} to stereo on import`, error);
+      }
+    }
     tracks.push({
       id: dedupe(slugify(stripExtension(asset.name)), usedTrackIds),
       name: stripExtension(asset.name),
@@ -121,13 +159,15 @@ export function deleteProjectDirectory(sourceDir: string): void {
  */
 export async function addStemsToProject(
   sourceDir: string,
-  files: DocumentPickerAsset[]
+  files: DocumentPickerAsset[],
+  /** When given, multi-channel stems are folded to stereo on the way in. */
+  context?: BaseAudioContext
 ): Promise<ProjectManifest> {
   const directory = new Directory(sourceDir);
   const manifest = await readProjectManifest(directory);
   const used = existingNames(manifest);
 
-  const added = await copyStems(directory, files, used.files, used.trackIds);
+  const added = await copyStems(directory, files, used.files, used.trackIds, context);
   const updated: ProjectManifest = { ...manifest, tracks: [...manifest.tracks, ...added] };
 
   new File(directory, 'manifest.json').write(JSON.stringify(updated, null, 2));

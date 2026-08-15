@@ -253,7 +253,7 @@ export function ProjectScreen() {
       if (!assets || !entry?.sourceDir) return;
 
       setBusy(true);
-      const updated = await addStemsToProject(entry.sourceDir, assets);
+      const updated = await addStemsToProject(entry.sourceDir, assets, audioEngine.context);
       dispatch(projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }));
       setReloadToken((n) => n + 1);
     } catch (e) {
