@@ -49,6 +49,32 @@ Concretely:
   1378, 1694) rather than a one-shot race, and step 4 is the most likely of
   the four to be load-bearing, but this was never isolated with a minimal
   repro.
+
+  UPDATE - it did resurface, and the cause was finally isolated with a
+  minimal repro. **Never give a `Pressable` that triggers navigation a
+  function-as-child (`{({ pressed }) => ...}`).** Put press feedback in
+  `Pressable`'s `style` callback instead and keep the children static.
+
+  A function child re-creates the child `View`/`Text` elements on every
+  press-state change. Releasing the button sets `pressed` back to `false`,
+  so those children are re-created in the *same frame* that the `onPress`
+  handler's `router.back()` is tearing the screen's native views down, and
+  Fabric tries to insert a `ReactTextView` that still belongs to the
+  outgoing parent. Styling the `Pressable` itself only updates props on an
+  already-mounted view, so the tree stays structurally constant.
+
+  How it was isolated, if it ever comes back again:
+  - Reproduced deterministically on round 1 - it does NOT need repeated
+    mount/unmount cycles, and playback being active is irrelevant (the
+    earlier "accumulation" theory and "stop the track before going back"
+    hypothesis were both wrong).
+  - Android's **hardware** back button never reproduced it (5/5 clean),
+    while the on-screen back `Pressable` reproduced it immediately. That
+    asymmetry is the tell: same navigation, same screens, only difference
+    is the `Pressable` press-state re-render. Test both before blaming a
+    screen or the navigator.
+  - Note a redbox does NOT kill the process, so "is the pid still alive?"
+    is not a valid health check - grep logcat for `already has a parent`.
 - Before adding a new dependency (especially anything touching rendering,
   native views, audio, or navigation), weigh whether it's well-established
   and battle-tested for this use case, not just whether it looks nice or is

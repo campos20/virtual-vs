@@ -138,6 +138,55 @@ describe('PlayerScreen', () => {
     expect(mockBack).toHaveBeenCalledTimes(1);
   });
 
+  // Regression guard for the Android Fabric "already has a parent" crash on
+  // the Player -> Library transition (see AGENTS.md). Anything that can push
+  // engine state into setState has to be detached *before* the transport is
+  // stopped and before we navigate, or a re-render commits into the frame
+  // where Fabric is removing this screen's views.
+  it('stops playback and navigates only after detaching the engine listener', async () => {
+    const detach = jest.fn();
+    jest.spyOn(audioEngine, 'onTransportStateChange').mockReturnValue(detach);
+    const stopSpy = jest.spyOn(audioEngine, 'stop');
+
+    renderPlayerScreen();
+    await waitForMixerToLoad();
+    stopSpy.mockClear();
+
+    fireEvent.press(screen.getByTestId('back-button'));
+
+    expect(detach).toHaveBeenCalled();
+    expect(stopSpy).toHaveBeenCalled();
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(detach.mock.invocationCallOrder[0]).toBeLessThan(
+      stopSpy.mock.invocationCallOrder[0]
+    );
+    expect(stopSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      mockBack.mock.invocationCallOrder[0]
+    );
+  });
+
+  // Covers the Android hardware back button and back gesture, which never run
+  // handleBack - only the unmount cleanups. React runs those in declaration
+  // order, so the transport listener effect must be declared before the
+  // loader effect whose cleanup calls stop().
+  it('detaches the engine listener before stopping it on unmount', async () => {
+    const detach = jest.fn();
+    jest.spyOn(audioEngine, 'onTransportStateChange').mockReturnValue(detach);
+    const stopSpy = jest.spyOn(audioEngine, 'stop');
+
+    const { unmount } = renderPlayerScreen();
+    await waitForMixerToLoad();
+    stopSpy.mockClear();
+
+    unmount();
+
+    expect(detach).toHaveBeenCalled();
+    expect(stopSpy).toHaveBeenCalled();
+    expect(detach.mock.invocationCallOrder[0]).toBeLessThan(
+      stopSpy.mock.invocationCallOrder[0]
+    );
+  });
+
   it('flipping the monitor switch updates the engine and the settings store', async () => {
     const { store } = renderPlayerScreen();
     await waitForMixerToLoad();

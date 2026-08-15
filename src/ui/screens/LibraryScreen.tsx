@@ -30,16 +30,19 @@ export function LibraryScreen() {
           <Text style={styles.eyebrow}>VIRTUAL VS</Text>
           <Text style={styles.header}>Library</Text>
         </View>
+        {/* Press feedback via the `style` callback rather than a
+            function-as-child: see BackButton in PlayerScreen for why
+            re-creating children on press can crash Fabric mid-navigation. */}
         <Pressable
           onPress={() => router.push("/new-project")}
           hitSlop={8}
           testID="new-project-button"
+          style={({ pressed }) => [
+            styles.newProjectButton,
+            pressed && styles.pressed,
+          ]}
         >
-          {({ pressed }) => (
-            <View style={[styles.newProjectButton, pressed && styles.pressed]}>
-              <Text style={styles.newProjectText}>+ New</Text>
-            </View>
-          )}
+          <Text style={styles.newProjectText}>+ New</Text>
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.list}>
@@ -60,44 +63,41 @@ export function LibraryScreen() {
                     params: { projectId: item.id },
                   })
                 }
+                style={({ pressed }) => [styles.row, pressed && styles.pressed]}
               >
-                {({ pressed }) => (
-                  <View style={[styles.row, pressed && styles.pressed]}>
-                    <View style={[styles.colorBar, { backgroundColor: accentColor }]} />
-                    <View style={styles.rowBody}>
-                      <Text style={styles.title}>{item.title}</Text>
-                      <View style={styles.metaRow}>
-                        <View style={styles.metaPill}>
-                          <Text style={styles.metaPillText}>{item.bpm} BPM</Text>
-                        </View>
-                        <View style={styles.metaPill}>
-                          <Text style={styles.metaPillText}>{item.key || "—"}</Text>
-                        </View>
-                        <View style={styles.metaPill}>
-                          <Text style={styles.metaPillText}>
-                            {item.tracks.length} stem{item.tracks.length === 1 ? "" : "s"}
-                          </Text>
-                        </View>
-                      </View>
+                <View style={[styles.colorBar, { backgroundColor: accentColor }]} />
+                <View style={styles.rowBody}>
+                  <Text style={styles.title}>{item.title}</Text>
+                  <View style={styles.metaRow}>
+                    <View style={styles.metaPill}>
+                      <Text style={styles.metaPillText}>{item.bpm} BPM</Text>
                     </View>
-                    {item.origin === "filesystem" && (
-                      <Pressable
-                        onPress={() =>
-                          router.push({
-                            pathname: "/edit-project/[projectId]",
-                            params: { projectId: item.id },
-                          })
-                        }
-                        hitSlop={8}
-                        style={styles.editButton}
-                        testID={`edit-project-${item.id}`}
-                      >
-                        <Text style={styles.editButtonText}>Edit</Text>
-                      </Pressable>
-                    )}
-                    <Text style={styles.chevron}>›</Text>
+                    <View style={styles.metaPill}>
+                      <Text style={styles.metaPillText}>{item.key || "—"}</Text>
+                    </View>
+                    <View style={styles.metaPill}>
+                      <Text style={styles.metaPillText}>
+                        {item.tracks.length} stem{item.tracks.length === 1 ? "" : "s"}
+                      </Text>
+                    </View>
                   </View>
+                </View>
+                {item.origin === "filesystem" && (
+                  <Pressable
+                    onPress={() =>
+                      router.push({
+                        pathname: "/edit-project/[projectId]",
+                        params: { projectId: item.id },
+                      })
+                    }
+                    hitSlop={8}
+                    style={styles.editButton}
+                    testID={`edit-project-${item.id}`}
+                  >
+                    <Text style={styles.editButtonText}>Edit</Text>
+                  </Pressable>
                 )}
+                <Text style={styles.chevron}>›</Text>
               </Pressable>
             );
           })

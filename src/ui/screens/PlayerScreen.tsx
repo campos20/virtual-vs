@@ -21,7 +21,7 @@ import { MonitorSplitSwitch } from "@/ui/components/MonitorSplitSwitch";
 import { TransportBar } from "@/ui/components/TransportBar";
 import { colors, elevation, radii, spacing } from "@/ui/theme";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -32,29 +32,28 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-function BackButton() {
-  const router = useRouter();
-  function handleBack() {
-    // Stop transport (and therefore usePlayhead's rAF-driven re-renders)
-    // before navigating rather than waiting for this screen's unmount -
-    // react-native-screens keeps the screen mounted and rendering for the
-    // full pop transition, and a still-ticking playhead racing that native
-    // teardown is what causes Android's Fabric "already has a parent" crash.
-    audioEngine.stop();
-    router.back();
-  }
+/**
+ * Press feedback goes through Pressable's `style` callback, NOT a
+ * function-as-child. A function child re-creates the child View/Text on every
+ * press-state change, so releasing the button re-inserts a text view in the
+ * same frame that `onPress` -> `router.back()` is tearing this screen down -
+ * which is exactly Android's Fabric "addViewAt: ... already has a parent"
+ * crash (see AGENTS.md). Styling the Pressable itself only updates props on
+ * an already-mounted view and leaves the child tree structurally constant.
+ */
+function BackButton({ onPress }: { onPress: () => void }) {
   return (
     <Pressable
-      onPress={handleBack}
-      style={styles.backButton}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.backButton,
+        styles.backButtonGlass,
+        pressed && styles.pressed,
+      ]}
       hitSlop={8}
       testID="back-button"
     >
-      {({ pressed }) => (
-        <View style={[styles.backButtonGlass, pressed && styles.pressed]}>
-          <Text style={styles.backButtonText}>‹ Library</Text>
-        </View>
-      )}
+      <Text style={styles.backButtonText}>‹ Library</Text>
     </Pressable>
   );
 }
@@ -75,7 +74,25 @@ export function PlayerScreen() {
   const [transportState, setTransportState] =
     useState<EngineTransportState>("stopped");
 
-  const { seconds: playheadSec } = usePlayhead();
+  const router = useRouter();
+  const { seconds: playheadSec, stop: stopPlayhead } = usePlayhead();
+  const detachTransportRef = useRef<(() => void) | null>(null);
+
+  // Declared *before* the loader effect on purpose. React runs cleanups in
+  // declaration order, so on unmount this one detaches the engine from React
+  // state before the loader's cleanup calls audioEngine.stop(). Otherwise
+  // that stop() would push a transport change into setState while the
+  // navigator is tearing this screen's native views down - the "already has
+  // a parent" Fabric crash in AGENTS.md. This ordering is what covers the
+  // Android hardware back button and the back gesture, neither of which goes
+  // through handleBack below.
+  useEffect(() => {
+    detachTransportRef.current = audioEngine.onTransportStateChange(setTransportState);
+    return () => {
+      detachTransportRef.current?.();
+      detachTransportRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -140,11 +157,18 @@ export function PlayerScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- monitorMode/clickEnabled intentionally only applied on (re)load
   }, [entry?.id, dispatch]);
 
-  // The engine drives natural end-of-playback itself (see AudioEngine.handlePlaybackEndedNaturally)
-  // and notifies us here, rather than this component polling playheadSec against durationSec.
-  useEffect(() => {
-    return audioEngine.onTransportStateChange(setTransportState);
-  }, []);
+  // Silence every path that can schedule a React render *before* handing
+  // control to the navigator: detach the engine listener, kill the playhead
+  // rAF loop, then stop audio (which can no longer reach setState), and only
+  // then navigate. Leaving any of these live means a render can commit into
+  // the frame where Fabric is removing this screen's views.
+  function handleBack() {
+    detachTransportRef.current?.();
+    detachTransportRef.current = null;
+    stopPlayhead();
+    audioEngine.stop();
+    router.back();
+  }
 
   function handlePlayPause() {
     if (audioEngine.getTransportState() === "playing") {
@@ -175,7 +199,7 @@ export function PlayerScreen() {
   if (!entry) {
     return (
       <SafeAreaView style={styles.centered}>
-        <BackButton />
+        <BackButton onPress={handleBack} />
         <Text style={styles.error}>Project not found.</Text>
       </SafeAreaView>
     );
@@ -184,7 +208,7 @@ export function PlayerScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.centered}>
-        <BackButton />
+        <BackButton onPress={handleBack} />
         <ActivityIndicator color={colors.accent} />
       </SafeAreaView>
     );
@@ -193,7 +217,7 @@ export function PlayerScreen() {
   if (error || !manifest) {
     return (
       <SafeAreaView style={styles.centered}>
-        <BackButton />
+        <BackButton onPress={handleBack} />
         <Text style={styles.error}>{error ?? "Failed to load project."}</Text>
       </SafeAreaView>
     );
@@ -202,7 +226,7 @@ export function PlayerScreen() {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
-        <BackButton />
+        <BackButton onPress={handleBack} />
         <Text style={styles.title}>{manifest.title}</Text>
         <View style={styles.subtitleRow}>
           <View style={styles.subtitlePill}>
