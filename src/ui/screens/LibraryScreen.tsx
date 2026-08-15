@@ -42,7 +42,7 @@ export function LibraryScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <View style={styles.headerRow}>
         <View>
           <Text style={styles.eyebrow}>VIRTUAL VS</Text>

@@ -375,7 +375,7 @@ export function ProjectScreen() {
     // Bundled projects live in the app bundle with no writable manifest.
     if (entry?.origin === "bundled") {
       return (
-        <SafeAreaView style={styles.container} edges={["top"]}>
+        <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
           {renderHeader()}
           <Text style={styles.notice}>The bundled demo project can&apos;t be edited.</Text>
         </SafeAreaView>
@@ -383,7 +383,7 @@ export function ProjectScreen() {
     }
 
     return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
+      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
         {renderHeader()}
         <ProjectForm
           initial={{
@@ -406,7 +406,7 @@ export function ProjectScreen() {
 
   if (!entry) {
     return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
+      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
         {renderHeader()}
         <Text style={styles.error}>Project not found.</Text>
       </SafeAreaView>
@@ -415,7 +415,7 @@ export function ProjectScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
+      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
         {renderHeader()}
         <View style={styles.centeredBody}>
           <ActivityIndicator color={colors.accent} />
@@ -426,7 +426,7 @@ export function ProjectScreen() {
 
   if (error || !manifest) {
     return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
+      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
         {renderHeader()}
         <Text style={styles.error}>{error ?? "Failed to load project."}</Text>
       </SafeAreaView>
@@ -434,7 +434,7 @@ export function ProjectScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       {renderHeader()}
 
       <View style={styles.mixer}>
