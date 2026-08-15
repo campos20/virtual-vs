@@ -28,7 +28,8 @@ import {
 import { store } from "@/store";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { projectRemoved, projectUpdated, projectsSelectors } from "@/store/projectsSlice";
-import { clickEnabledSet, monitorModeSet } from "@/store/settingsSlice";
+import { persistProjectClick } from "@/store/persistProject";
+import { monitorModeSet } from "@/store/settingsSlice";
 import {
   trackEntityId,
   tracksInitializedForProject,
@@ -91,7 +92,10 @@ export function ProjectScreen() {
     projectId ? projectsSelectors.selectById(s.projects, projectId) : undefined,
   );
   const monitorMode = useAppSelector((s) => s.settings.monitorMode);
-  const clickEnabled = useAppSelector((s) => s.settings.clickEnabled);
+  // Per-project, and stored in its manifest - a song either runs to a click
+  // or it doesn't. Monitor/split stays global: that describes how the
+  // headphone splitter is wired, which is the same for every song at a gig.
+  const clickEnabled = entry?.clickEnabled ?? true;
 
   const [manifest, setManifest] = useState<ProjectManifest | null>(null);
   const [durationSec, setDurationSec] = useState(0);
@@ -222,7 +226,7 @@ export function ProjectScreen() {
 
   function handleClickEnabledChange(enabled: boolean) {
     audioEngine.setClickEnabled(enabled);
-    dispatch(clickEnabledSet(enabled));
+    if (entry) dispatch(persistProjectClick(entry.id, enabled));
   }
 
   function handleStartEditing() {

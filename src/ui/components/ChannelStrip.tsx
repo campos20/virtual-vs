@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { audioEngine } from '@/engine';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { persistProjectMixer } from '@/store/persistProject';
 import { trackBusSet, trackEntityId, trackMuteToggled, trackSoloToggled, trackVolumeCommitted } from '@/store/tracksSlice';
 import type { Bus, TrackManifest } from '@/types/project';
 import { colors, glow, radii } from '@/ui/theme';
@@ -35,23 +36,29 @@ export function ChannelStrip({ projectId, track, index }: ChannelStripProps) {
     audioEngine.setTrackVolume(track.id, volume);
   }
 
+  // Each of these commits to the store and then writes the whole mixer back
+  // to the project's manifest, so the mix is still there next time it opens.
   function handleCommitVolume(volume: number) {
     dispatch(trackVolumeCommitted({ projectId, trackId: track.id, volume }));
+    dispatch(persistProjectMixer(projectId));
   }
 
   function toggleMute() {
     audioEngine.setTrackMuted(track.id, !committed!.muted);
     dispatch(trackMuteToggled({ projectId, trackId: track.id }));
+    dispatch(persistProjectMixer(projectId));
   }
 
   function toggleSolo() {
     audioEngine.setTrackSoloed(track.id, !committed!.soloed);
     dispatch(trackSoloToggled({ projectId, trackId: track.id }));
+    dispatch(persistProjectMixer(projectId));
   }
 
   function setBus(bus: Bus) {
     audioEngine.setTrackBus(track.id, bus);
     dispatch(trackBusSet({ projectId, trackId: track.id, bus }));
+    dispatch(persistProjectMixer(projectId));
   }
 
   return (

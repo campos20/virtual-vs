@@ -4,6 +4,7 @@ export {
   addStemsToProject,
   createDraftProject,
   deleteProjectDirectory,
+  patchProjectManifest,
   removeStemFromProject,
   updateProjectMetadata,
   DRAFT_PROJECT_TITLE,

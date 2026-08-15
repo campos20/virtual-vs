@@ -163,6 +163,25 @@ export async function removeStemFromProject(
   return updated;
 }
 
+/**
+ * Merges `changes` into a project's manifest.json on disk.
+ *
+ * This is how mixer state survives the app closing: the manifest is the
+ * project's configuration file, so committed volume/bus/mute/solo and the
+ * click toggle live there next to the stems they describe, rather than in a
+ * separate database that could drift out of sync with them.
+ */
+export async function patchProjectManifest(
+  sourceDir: string,
+  changes: Partial<ProjectManifest>
+): Promise<ProjectManifest> {
+  const directory = new Directory(sourceDir);
+  const manifest = await readProjectManifest(directory);
+  const updated: ProjectManifest = { ...manifest, ...changes };
+  new File(directory, 'manifest.json').write(JSON.stringify(updated, null, 2));
+  return updated;
+}
+
 export interface ProjectMetadataEdits {
   title: string;
   /** `undefined` clears the tempo, which removes the project's click entirely. */

@@ -42,7 +42,10 @@ describe('tracksSlice', () => {
       expect(tracksSelectors.selectIds(state)).toHaveLength(2);
     });
 
-    it('does not clobber already-committed state for a re-opened project', () => {
+    // The manifest is the source of truth: every committed change is written
+    // straight back to it, so on load it is always at least as fresh as the
+    // store and should win.
+    it('reloads committed state from the manifest', () => {
       const seeded = reducer(
         initialState,
         tracksInitializedForProject({ projectId: 'proj1', tracks: manifestTracks })
@@ -54,10 +57,28 @@ describe('tracksSlice', () => {
 
       const reopened = reducer(
         edited,
+        tracksInitializedForProject({
+          projectId: 'proj1',
+          tracks: manifestTracks.map((t) =>
+            t.id === 'bass' ? { ...t, gain: 0.55, muted: true, soloed: true } : t
+          ),
+        })
+      );
+
+      const bass = tracksSelectors.selectById(reopened, 'proj1:bass');
+      expect(bass?.volume).toBe(0.55);
+      expect(bass?.muted).toBe(true);
+      expect(bass?.soloed).toBe(true);
+    });
+
+    it('treats absent mute/solo in a manifest as off', () => {
+      const state = reducer(
+        initialState,
         tracksInitializedForProject({ projectId: 'proj1', tracks: manifestTracks })
       );
 
-      expect(tracksSelectors.selectById(reopened, 'proj1:bass')?.volume).toBe(0.2);
+      expect(tracksSelectors.selectById(state, 'proj1:bass')?.muted).toBe(false);
+      expect(tracksSelectors.selectById(state, 'proj1:bass')?.soloed).toBe(false);
     });
   });
 

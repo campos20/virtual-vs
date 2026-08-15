@@ -29,26 +29,32 @@ const tracksSlice = createSlice({
   name: 'tracks',
   initialState: tracksAdapter.getInitialState(),
   reducers: {
-    /** Seeds committed state for a project's tracks from its manifest, without clobbering state that's already there (e.g. re-opening a project). */
+    /**
+     * Loads a project's committed mixer state from its manifest.
+     *
+     * This overwrites whatever was in the store, because the manifest is the
+     * source of truth: every committed change is written straight back to it,
+     * so it is always at least as fresh as the store.
+     */
     tracksInitializedForProject(
       state,
       action: PayloadAction<{ projectId: string; tracks: TrackManifest[] }>
     ) {
       const { projectId, tracks } = action.payload;
-      const missing = tracks
-        .filter((t) => !state.entities[trackEntityId(projectId, t.id)])
-        .map(
+      tracksAdapter.upsertMany(
+        state,
+        tracks.map(
           (t): TrackCommittedState => ({
             id: trackEntityId(projectId, t.id),
             projectId,
             trackId: t.id,
             volume: t.gain,
-            muted: false,
-            soloed: false,
+            muted: t.muted ?? false,
+            soloed: t.soloed ?? false,
             bus: t.bus,
           })
-        );
-      if (missing.length > 0) tracksAdapter.addMany(state, missing);
+        )
+      );
     },
     trackVolumeCommitted(
       state,

@@ -5,9 +5,12 @@ export interface TrackManifest {
   name: string;
   /** Filename relative to the project's folder (or a require() asset key for bundled projects). */
   file: string;
-  /** Default linear gain (0-1+) applied before mute/solo. */
+  /** Committed linear gain (0-1+) applied before mute/solo. */
   gain: number;
   bus: Bus;
+  /** Committed mixer state, so a soundchecked mix survives closing the app. */
+  muted?: boolean;
+  soloed?: boolean;
 }
 
 export interface SectionManifest {
@@ -30,6 +33,8 @@ export interface ProjectManifest {
    */
   bpm?: number;
   key: string;
+  /** Whether the generated click is audible. Per-project, like the rest of the mix. */
+  clickEnabled?: boolean;
   tracks: TrackManifest[];
   sections: SectionManifest[];
   pad?: PadManifest;
