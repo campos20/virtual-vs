@@ -2,6 +2,7 @@ import { Directory, File } from 'expo-file-system';
 import type { LibraryProjectEntry } from '@/store/projectsSlice';
 import type { ProjectManifest } from '@/types/project';
 import { getDemoProjectSource } from './demoProject';
+import { foldToStereo } from './downmix';
 import type { BaseAudioContext, DecodedProject, ProjectSource } from './types';
 
 export async function readProjectManifest(directory: Directory): Promise<ProjectManifest> {
@@ -44,12 +45,12 @@ export async function decodeProjectAudio(
   const trackEntries = await Promise.all(
     manifest.tracks.map(async (track) => {
       const buffer = await context.decodeAudioData(source.resolveFile(track.file));
-      return [track.id, buffer] as const;
+      return [track.id, foldToStereo(context, buffer)] as const;
     })
   );
 
   const padBuffer = manifest.pad
-    ? await context.decodeAudioData(source.resolveFile(manifest.pad.file))
+    ? foldToStereo(context, await context.decodeAudioData(source.resolveFile(manifest.pad.file)))
     : undefined;
 
   return {
