@@ -6,6 +6,8 @@ import {
   addStemsToProject,
   deleteProjectDirectory,
   getDemoLibraryEntry,
+  getDemoProjectSource,
+  getProjectSourceForEntry,
   removeStemFromProject,
   updateProjectMetadata,
 } from '@/storage';
@@ -32,6 +34,7 @@ jest.mock('@/storage', () => ({
   addStemsToProject: jest.fn(),
   removeStemFromProject: jest.fn(),
   deleteProjectDirectory: jest.fn(),
+  getProjectSourceForEntry: jest.fn(),
 }));
 
 const pickerMock = getDocumentAsync as jest.Mock;
@@ -51,6 +54,10 @@ afterEach(() => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockParams = {};
+  // Real behaviour by default; individual tests override it.
+  (getProjectSourceForEntry as jest.Mock).mockImplementation(
+    jest.requireActual('@/storage').getProjectSourceForEntry
+  );
 });
 
 function asset(name: string, uri: string) {
@@ -116,6 +123,35 @@ describe('ProjectScreen - playing', () => {
     expect(
       store.getState().tracks.entities[trackEntityId('demo-sync-test', 'bass')]?.muted
     ).toBe(true);
+  });
+
+  // Guards the wiring a module-level `store.getState()` used to hide. Mute and
+  // solo are the tell: AudioEngine's fallback for a track it wasn't given
+  // state for hardcodes them off, so a screen that fails to pass the manifest
+  // mix through would show a muted channel while playing it at full level.
+  it('seeds the engine with the mix stored in the project manifest', async () => {
+    const demo = getDemoProjectSource();
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      ...demo,
+      manifest: {
+        ...demo.manifest,
+        tracks: demo.manifest.tracks.map((track) =>
+          track.id === 'bass'
+            ? { ...track, gain: 0.25, bus: 'both' as const, muted: true }
+            : track.id === 'keys'
+              ? { ...track, soloed: true }
+              : track
+        ),
+      },
+    });
+
+    renderDemo();
+    await waitForMixer();
+
+    expect(audioEngine.getTrackState('bass')?.muted).toBe(true);
+    expect(audioEngine.getTrackState('bass')?.volume).toBeCloseTo(0.25, 5);
+    expect(audioEngine.getTrackState('bass')?.bus).toBe('both');
+    expect(audioEngine.getTrackState('keys')?.soloed).toBe(true);
   });
 
   it('detaches the engine listener before stopping it on unmount', async () => {

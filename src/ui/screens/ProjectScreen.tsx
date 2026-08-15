@@ -11,11 +11,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  audioEngine,
-  type EngineTransportState,
-  type TrackRuntimeState,
-} from "@/engine";
+import { audioEngine, type EngineTransportState } from "@/engine";
+import { trackRuntimeStatesFromManifest } from "@/engine/trackRuntimeState";
 import { usePlayhead } from "@/hooks/usePlayhead";
 import {
   addStemsToProject,
@@ -25,16 +22,13 @@ import {
   removeStemFromProject,
   updateProjectMetadata,
 } from "@/storage";
-import { store } from "@/store";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { projectRemoved, projectUpdated, projectsSelectors } from "@/store/projectsSlice";
 import { persistProjectClick } from "@/store/persistProject";
 import { monitorModeSet } from "@/store/settingsSlice";
 import {
-  trackEntityId,
   tracksInitializedForProject,
   tracksRemovedForProject,
-  tracksSelectors,
 } from "@/store/tracksSlice";
 import type { ProjectManifest } from "@/types/project";
 import { ChannelStrip } from "@/ui/components/ChannelStrip";
@@ -148,25 +142,15 @@ export function ProjectScreen() {
           }),
         );
 
-        const tracksState = store.getState().tracks;
-        const initialTrackStates: Record<string, TrackRuntimeState> = {};
-        for (const track of source.manifest.tracks) {
-          const committed = tracksSelectors.selectById(
-            tracksState,
-            trackEntityId(entry.id, track.id),
-          );
-          if (committed) {
-            initialTrackStates[track.id] = {
-              id: track.id,
-              bus: committed.bus,
-              volume: committed.volume,
-              muted: committed.muted,
-              soloed: committed.soloed,
-            };
-          }
-        }
-
-        audioEngine.loadProject(decoded, initialTrackStates);
+        // Derived from the manifest rather than read back out of the store:
+        // the dispatch above seeds the store from this same data, so going
+        // through Redux would just be a round-trip - and reading the module's
+        // store singleton would ignore whichever store the screen is actually
+        // rendered under.
+        audioEngine.loadProject(
+          decoded,
+          trackRuntimeStatesFromManifest(source.manifest.tracks),
+        );
         audioEngine.setMonitorMode(monitorMode);
         audioEngine.setClickEnabled(clickEnabled);
 
