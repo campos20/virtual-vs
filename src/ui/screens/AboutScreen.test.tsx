@@ -46,14 +46,24 @@ describe('AboutScreen', () => {
     expect(mockBack).toHaveBeenCalled();
   });
 
-  it('selects a language override, persisting it and re-rendering in that language', () => {
+  it('shows the current language collapsed behind a single row, not an open list', () => {
+    renderWithStore(<AboutScreen />);
+
+    expect(screen.getByText('🌐 System')).toBeTruthy();
+    expect(screen.queryByTestId('language-option-en')).toBeNull();
+    expect(screen.queryByTestId('language-option-pt-BR')).toBeNull();
+  });
+
+  it('opens the language picker and selects an override, persisting it and re-rendering in that language', () => {
     const store = createStore();
     renderWithStore(<AboutScreen />, store);
 
+    fireEvent.press(screen.getByTestId('about-language-menu'));
     fireEvent.press(screen.getByTestId('language-option-pt-BR'));
 
     expect(store.getState().settings.languageOverride).toBe('pt-BR');
     expect(screen.getByText('Sobre')).toBeTruthy();
+    expect(screen.getByText('🇧🇷 Português (Brasil)')).toBeTruthy();
   });
 
   it('clears the language override by selecting System', () => {
@@ -61,6 +71,7 @@ describe('AboutScreen', () => {
     store.dispatch(languageOverrideSet('pt-BR'));
     renderWithStore(<AboutScreen />, store);
 
+    fireEvent.press(screen.getByTestId('about-language-menu'));
     fireEvent.press(screen.getByTestId('language-option-system'));
 
     expect(store.getState().settings.languageOverride).toBeNull();

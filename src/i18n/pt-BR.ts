@@ -25,7 +25,7 @@ export const ptBR: TranslationDictionary = {
     stemsCount: (count: number) => `${count} ${count === 1 ? 'faixa' : 'faixas'}`,
   },
   project: {
-    backToLibrary: '‹ Biblioteca',
+    backToLibrary: 'Biblioteca',
     edit: 'Editar',
     bundledNotice: 'O projeto de demonstração não pode ser editado.',
     notFound: 'Projeto não encontrado.',

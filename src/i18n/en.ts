@@ -16,7 +16,7 @@ export const en = {
     stemsCount: (count: number) => `${count} stem${count === 1 ? '' : 's'}`,
   },
   project: {
-    backToLibrary: '‹ Library',
+    backToLibrary: 'Library',
     edit: 'Edit',
     bundledNotice: "The bundled demo project can't be edited.",
     notFound: 'Project not found.',

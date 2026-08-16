@@ -6,7 +6,7 @@ import { useTranslation } from "@/i18n";
 import { createDraftProject } from "@/storage";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { projectAdded, projectsSelectors } from "@/store/projectsSlice";
-import { OverflowMenu } from "@/ui/components/OverflowMenu";
+import { KebabIcon, OverflowMenu } from "@/ui/components/OverflowMenu";
 import { colors, elevation, radii, spacing } from "@/ui/theme";
 import { getTrackColor } from "@/ui/trackColors";
 
@@ -76,7 +76,9 @@ export function LibraryScreen() {
           >
             <Text style={styles.newProjectText}>{t.library.newProject}</Text>
           </Pressable>
-          <OverflowMenu items={menuItems} accessibilityLabel={t.menu.moreOptions} testID="library-menu" />
+          <OverflowMenu items={menuItems} accessibilityLabel={t.menu.moreOptions} testID="library-menu">
+            <KebabIcon />
+          </OverflowMenu>
         </View>
       </View>
       {error && <Text style={styles.error}>{error}</Text>}

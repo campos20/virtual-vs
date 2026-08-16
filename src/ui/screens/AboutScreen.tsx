@@ -6,12 +6,31 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { type Locale, useTranslation } from '@/i18n';
 import { persistLanguageOverride } from '@/store/persistSettings';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { HeaderButton } from '@/ui/components/HeaderButton';
+import { BackButton } from '@/ui/components/BackButton';
+import { Chevron } from '@/ui/components/Chevron';
+import { OverflowMenu, type OverflowMenuItem } from '@/ui/components/OverflowMenu';
 import { colors, radii, spacing } from '@/ui/theme';
 
 const DEVELOPER = 'campos20';
 const GITHUB_URL = 'https://github.com/campos20/virtual-vs';
 const LICENSE = 'GPL-3.0-or-later';
+
+type LanguageKey = 'system' | Locale;
+
+const LANGUAGE_FLAGS: Record<LanguageKey, string> = {
+  system: '🌐',
+  en: '🇺🇸',
+  'pt-BR': '🇧🇷',
+};
+
+// Named in their own language, regardless of the app's current language -
+// the standard convention (iOS/Android system pickers, most apps) is that
+// "Português (Brasil)" reads the same whether browsing from English or
+// Portuguese, so a reader can always find their own language.
+const LANGUAGE_NAMES: Record<Locale, string> = {
+  en: 'English',
+  'pt-BR': 'Português (Brasil)',
+};
 
 export function AboutScreen() {
   const router = useRouter();
@@ -20,20 +39,21 @@ export function AboutScreen() {
   const languageOverride = useAppSelector((s) => s.settings.languageOverride);
   const version = Constants.expoConfig?.version;
 
-  // Each language names itself, regardless of the app's current language -
-  // the standard convention (iOS/Android system pickers, most apps) is that
-  // "Português (Brasil)" reads the same whether you're browsing from English
-  // or Portuguese, so a translator/reader can always find their own language.
-  const languageOptions: { value: Locale | null; label: string }[] = [
-    { value: null, label: t.about.languageSystem },
-    { value: 'en', label: 'English' },
-    { value: 'pt-BR', label: 'Português (Brasil)' },
-  ];
+  const currentKey: LanguageKey = languageOverride ?? 'system';
+  const currentLabel = currentKey === 'system' ? t.about.languageSystem : LANGUAGE_NAMES[currentKey];
+
+  const languageMenuItems: OverflowMenuItem[] = (['system', 'en', 'pt-BR'] as const).map((key) => ({
+    key,
+    label: `${LANGUAGE_FLAGS[key]} ${key === 'system' ? t.about.languageSystem : LANGUAGE_NAMES[key]}`,
+    onPress: () => dispatch(persistLanguageOverride(key === 'system' ? null : key)),
+    testID: `language-option-${key}`,
+    active: key === currentKey,
+  }));
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <HeaderButton label={t.project.backToLibrary} onPress={() => router.back()} testID="about-back-button" />
+        <BackButton label={t.project.backToLibrary} onPress={() => router.back()} testID="about-back-button" />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -55,29 +75,19 @@ export function AboutScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionHeading}>{t.about.language}</Text>
-          <View style={styles.languageList}>
-            {languageOptions.map((option, index) => {
-              const active = option.value === languageOverride;
-              return (
-                <Pressable
-                  key={option.value ?? 'system'}
-                  onPress={() => dispatch(persistLanguageOverride(option.value))}
-                  testID={`language-option-${option.value ?? 'system'}`}
-                  style={({ pressed }) => [
-                    styles.languageRow,
-                    index < languageOptions.length - 1 && styles.languageRowDivider,
-                    active && styles.languageRowActive,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={[styles.languageRowText, active && styles.languageRowTextActive]}>
-                    {option.label}
-                  </Text>
-                  {active && <View style={styles.languageCheck} />}
-                </Pressable>
-              );
-            })}
-          </View>
+          <OverflowMenu
+            items={languageMenuItems}
+            align="start"
+            accessibilityLabel={t.about.language}
+            testID="about-language-menu"
+          >
+            <View style={styles.languageTrigger}>
+              <Text style={styles.languageTriggerValue}>
+                {LANGUAGE_FLAGS[currentKey]} {currentLabel}
+              </Text>
+              <Chevron direction="right" size={8} color={colors.textTertiary} />
+            </View>
+          </OverflowMenu>
         </View>
 
         <Text style={styles.license}>
@@ -158,41 +168,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1,
   },
-  languageList: {
+  languageTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     borderRadius: radii.lg,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
-    overflow: 'hidden',
-  },
-  languageRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingVertical: 14,
     paddingHorizontal: spacing.lg,
   },
-  languageRowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  languageRowActive: {
-    backgroundColor: 'rgba(32,138,239,0.12)',
-  },
-  languageRowText: {
+  languageTriggerValue: {
     color: colors.textPrimary,
     fontSize: 15,
     fontWeight: '600',
-  },
-  languageRowTextActive: {
-    color: colors.accent,
-    fontWeight: '700',
-  },
-  languageCheck: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.accent,
   },
   license: {
     color: colors.textTertiary,

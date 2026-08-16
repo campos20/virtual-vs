@@ -36,6 +36,7 @@ import { ClickToggle } from "@/ui/components/ClickToggle";
 import { MonitorSplitSwitch } from "@/ui/components/MonitorSplitSwitch";
 import { ProjectForm, type ProjectFormValues } from "@/ui/components/ProjectForm";
 import { TransportBar } from "@/ui/components/TransportBar";
+import { BackButton } from "@/ui/components/BackButton";
 import { HeaderButton } from "@/ui/components/HeaderButton";
 import { colors, elevation, radii, spacing } from "@/ui/theme";
 
@@ -319,7 +320,7 @@ export function ProjectScreen() {
     return (
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
-          <HeaderButton label={t.project.backToLibrary} onPress={handleBackFromProject} testID="back-button" />
+          <BackButton label={t.project.backToLibrary} onPress={handleBackFromProject} testID="back-button" />
           {canEdit && !editing && (
             <HeaderButton label={t.project.edit} onPress={handleStartEditing} testID="edit-button" />
           )}

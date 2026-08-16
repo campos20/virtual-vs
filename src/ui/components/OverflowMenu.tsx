@@ -1,40 +1,75 @@
-import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radii, spacing } from '@/ui/theme';
+import { useRef, useState, type ReactNode } from 'react';
+import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors, elevation, radii, spacing } from '@/ui/theme';
 
 export interface OverflowMenuItem {
   key: string;
   label: string;
   onPress: () => void;
   testID?: string;
+  /** Highlights this item as the currently-selected one - for a menu that represents a choice (e.g. a language picker), not just a list of actions. */
+  active?: boolean;
+}
+
+interface Anchor {
+  top: number;
+  left?: number;
+  right?: number;
 }
 
 interface OverflowMenuProps {
   items: OverflowMenuItem[];
-  /** Read by screen readers for the trigger button - this app has no visible label on it. */
+  /** The trigger's visual content - press feedback (dimming) is applied around it automatically. */
+  children: ReactNode;
+  /** Which edge the dropdown hangs from - 'end' (right) suits a trailing icon, 'start' (left) suits a full-width row. */
+  align?: 'start' | 'end';
+  /** Read by screen readers for the trigger; this app never gives it its own visible label. */
   accessibilityLabel: string;
   testID?: string;
 }
 
 /**
- * A "..." trigger that opens a bottom sheet of options - built once here so
- * every future menu (this screen's, another screen's, a per-row menu) reuses
- * the same trigger, sheet, and dismiss behavior instead of each screen
- * rolling its own.
+ * A small dropdown anchored near whatever trigger it wraps - tap an icon or
+ * a row, a short list appears right under it (Android's Material menu, iOS's
+ * context menu), not a full-width bottom sheet. Built once here so every
+ * menu-like control (a header's "...", a settings row that opens a picker)
+ * reuses the same trigger/dropdown/dismiss behavior.
  *
- * Plain core RN (Modal + View), no gesture-handler/reanimated and no
- * anchored-dropdown positioning math - see AGENTS.md "Stability over
- * appearance". The backdrop and the sheet are siblings, not nested Pressables
- * - tapping an item or the sheet's own background never also fires the
- * backdrop's dismiss, since only the topmost view under the touch responds.
+ * Rendered through a Modal so it's guaranteed to paint above every other
+ * screen element on both platforms without manual zIndex/elevation tuning -
+ * that cross-platform stacking behavior is the one genuinely fragile part of
+ * a hand-rolled popover, and Modal sidesteps it entirely. Position comes
+ * from View.measureInWindow() on the trigger, a long-standing core RN API
+ * (not experimental) - no gesture-handler/reanimated/third-party popover
+ * library, see AGENTS.md "Stability over appearance". Opening the menu and
+ * measuring the trigger are independent on purpose: the Modal opens
+ * immediately at a reasonable default position and snaps to the exact spot
+ * once the (effectively instant, on a real device) measurement resolves,
+ * rather than the menu failing to open at all in an environment where a
+ * measurement never comes back (e.g. it doesn't under react-test-renderer,
+ * which never fires layout/measurement callbacks - the reason this isn't
+ * simply "measure, then open").
  */
-export function OverflowMenu({ items, accessibilityLabel, testID }: OverflowMenuProps) {
-  const [open, setOpen] = useState(false);
-  const insets = useSafeAreaInsets();
+export function OverflowMenu({ items, children, align = 'end', accessibilityLabel, testID }: OverflowMenuProps) {
+  const triggerRef = useRef<View>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [anchor, setAnchor] = useState<Anchor>(() =>
+    align === 'end' ? { top: 80, right: spacing.lg } : { top: 80, left: spacing.lg }
+  );
+
+  function open() {
+    setIsOpen(true);
+    triggerRef.current?.measureInWindow((x, y, width, height) => {
+      setAnchor(
+        align === 'end'
+          ? { top: y + height + 6, right: Math.max(spacing.sm, Dimensions.get('window').width - (x + width)) }
+          : { top: y + height + 6, left: x }
+      );
+    });
+  }
 
   function close() {
-    setOpen(false);
+    setIsOpen(false);
   }
 
   function handleSelect(item: OverflowMenuItem) {
@@ -45,50 +80,62 @@ export function OverflowMenu({ items, accessibilityLabel, testID }: OverflowMenu
   return (
     <>
       <Pressable
-        onPress={() => setOpen(true)}
+        ref={triggerRef}
+        onPress={open}
         hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         testID={testID}
-        style={({ pressed }) => [styles.trigger, pressed && styles.pressed]}
+        style={({ pressed }) => [pressed && styles.pressed]}
       >
-        <View style={styles.dot} />
-        <View style={styles.dot} />
-        <View style={styles.dot} />
+        {children}
       </Pressable>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
-        <View style={styles.overlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={close}
-            accessibilityLabel={accessibilityLabel}
-            testID={testID ? `${testID}-backdrop` : undefined}
-          />
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.sm }]}>
-            {items.map((item, index) => (
-              <Pressable
-                key={item.key}
-                onPress={() => handleSelect(item)}
-                testID={item.testID}
-                style={({ pressed }) => [
-                  styles.item,
-                  index < items.length - 1 && styles.itemDivider,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={styles.itemText}>{item.label}</Text>
-              </Pressable>
-            ))}
-          </View>
+      <Modal visible={isOpen} transparent animationType="fade" onRequestClose={close}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={close}
+          accessibilityLabel={accessibilityLabel}
+          testID={testID ? `${testID}-backdrop` : undefined}
+        />
+        <View style={[styles.menu, anchor]}>
+          {items.map((item, index) => (
+            <Pressable
+              key={item.key}
+              onPress={() => handleSelect(item)}
+              testID={item.testID}
+              style={({ pressed }) => [
+                styles.item,
+                index < items.length - 1 && styles.itemDivider,
+                item.active && styles.itemActive,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={[styles.itemText, item.active && styles.itemTextActive]}>{item.label}</Text>
+            </Pressable>
+          ))}
         </View>
       </Modal>
     </>
   );
 }
 
+/** The "..." trigger icon - three dots, drawn with Views rather than a glyph/icon font (see TransportBar for the same convention). */
+export function KebabIcon() {
+  return (
+    <View style={styles.kebab}>
+      <View style={styles.kebabDot} />
+      <View style={styles.kebabDot} />
+      <View style={styles.kebabDot} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  trigger: {
+  pressed: {
+    opacity: 0.6,
+  },
+  kebab: {
     width: 36,
     height: 36,
     borderRadius: radii.pill,
@@ -99,31 +146,25 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
   },
-  dot: {
+  kebabDot: {
     width: 4,
     height: 4,
     borderRadius: 2,
     backgroundColor: colors.textSecondary,
   },
-  pressed: {
-    opacity: 0.7,
-  },
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  sheet: {
-    backgroundColor: colors.panel,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
-    borderTopWidth: StyleSheet.hairlineWidth,
+  menu: {
+    position: 'absolute',
+    minWidth: 180,
+    maxWidth: 300,
+    borderRadius: radii.lg,
+    backgroundColor: colors.panelRaised,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    paddingTop: spacing.sm,
     overflow: 'hidden',
+    ...elevation,
   },
   item: {
-    paddingVertical: 16,
+    paddingVertical: 14,
     paddingHorizontal: spacing.lg,
   },
   itemDivider: {
@@ -132,7 +173,14 @@ const styles = StyleSheet.create({
   },
   itemText: {
     color: colors.textPrimary,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
+  },
+  itemActive: {
+    backgroundColor: 'rgba(32,138,239,0.12)',
+  },
+  itemTextActive: {
+    color: colors.accent,
+    fontWeight: '700',
   },
 });
