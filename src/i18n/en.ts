@@ -14,6 +14,8 @@ export const en = {
     emptyTitle: 'No projects yet',
     emptyMeta: 'Tap "+ New" to import stems and build one.',
     stemsCount: (count: number) => `${count} stem${count === 1 ? '' : 's'}`,
+    moveUp: 'Move up',
+    moveDown: 'Move down',
   },
   project: {
     backToLibrary: 'Library',

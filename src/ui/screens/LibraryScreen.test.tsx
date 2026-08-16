@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { createDraftProject, getDemoLibraryEntry } from '@/storage';
 import { createStore } from '@/store';
-import { projectsHydrated, type LibraryProjectEntry } from '@/store/projectsSlice';
+import { projectsHydrated, projectsSelectors, type LibraryProjectEntry } from '@/store/projectsSlice';
 import { renderWithStore } from '@/test-utils/renderWithStore';
 import { LibraryScreen } from './LibraryScreen';
 
@@ -129,6 +129,35 @@ describe('LibraryScreen', () => {
     fireEvent.press(screen.getByTestId('menu-about'));
 
     expect(mockPush).toHaveBeenCalledWith('/about');
+  });
+
+  it('reorders projects with the move up/down buttons and persists it, without navigating', () => {
+    const store = createStore();
+    store.dispatch(
+      projectsHydrated([
+        getDemoLibraryEntry(),
+        {
+          id: 'second-song',
+          title: 'Second Song',
+          key: '',
+          tracks: [],
+          sections: [],
+          origin: 'filesystem',
+          sourceDir: 'file:///mock/document/projects/second-song',
+        },
+      ])
+    );
+    renderWithStore(<LibraryScreen />, store);
+
+    // The first row can't move further up, the second can't move further down.
+    expect(screen.getByTestId('project-row-demo-sync-test-move-up').props.accessibilityState?.disabled).toBe(true);
+    expect(screen.getByTestId('project-row-second-song-move-down').props.accessibilityState?.disabled).toBe(true);
+
+    fireEvent.press(screen.getByTestId('project-row-second-song-move-up'));
+
+    expect(projectsSelectors.selectIds(store.getState().projects)).toEqual(['second-song', 'demo-sync-test']);
+    // Reordering must never also trigger the row's own tap-to-open handler.
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it('has no separate edit affordance - opening a project is how you edit it', () => {

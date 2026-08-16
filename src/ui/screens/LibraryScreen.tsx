@@ -5,9 +5,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "@/i18n";
 import { createDraftProject } from "@/storage";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { persistProjectsReordered } from "@/store/persistProjectOrder";
 import { projectAdded, projectsSelectors } from "@/store/projectsSlice";
 import { KebabIcon, OverflowMenu } from "@/ui/components/OverflowMenu";
-import { colors, elevation, radii, spacing } from "@/ui/theme";
+import { ProjectRow } from "@/ui/components/ProjectRow";
+import { moveId } from "@/ui/reorder";
+import { colors, radii, spacing } from "@/ui/theme";
 import { getTrackColor } from "@/ui/trackColors";
 
 export function LibraryScreen() {
@@ -20,6 +23,12 @@ export function LibraryScreen() {
   const hydrated = useAppSelector((s) => s.projects.hydrated);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function handleMove(index: number, direction: "up" | "down") {
+    const ids = projects.map((p) => p.id);
+    const reordered = moveId(ids, index, direction);
+    if (reordered !== ids) dispatch(persistProjectsReordered(reordered));
+  }
 
   /**
    * There is no "new project" screen. Creating one means making an empty
@@ -94,38 +103,27 @@ export function LibraryScreen() {
           projects.map((item, index) => {
             const accentColor = getTrackColor(index);
             return (
-              <Pressable
+              <ProjectRow
                 key={item.id}
+                testID={`project-row-${item.id}`}
+                title={item.title}
+                bpm={item.bpm}
+                musicalKey={item.key}
+                accentColor={accentColor}
+                stemsLabel={t.library.stemsCount(item.tracks.length)}
+                canMoveUp={index > 0}
+                canMoveDown={index < projects.length - 1}
+                moveUpAccessibilityLabel={t.library.moveUp}
+                moveDownAccessibilityLabel={t.library.moveDown}
                 onPress={() =>
                   router.push({
                     pathname: "/project/[projectId]",
                     params: { projectId: item.id },
                   })
                 }
-                style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-              >
-                <View style={[styles.colorBar, { backgroundColor: accentColor }]} />
-                <View style={styles.rowBody}>
-                  <Text style={styles.title}>{item.title}</Text>
-                  <View style={styles.metaRow}>
-                    {item.bpm !== undefined && (
-                      <View style={styles.metaPill}>
-                        <Text style={styles.metaPillText}>{item.bpm} BPM</Text>
-                      </View>
-                    )}
-                    <View style={styles.metaPill}>
-                      <Text style={styles.metaPillText}>{item.key || "—"}</Text>
-                    </View>
-                    <View style={styles.metaPill}>
-                      <Text style={styles.metaPillText}>{t.library.stemsCount(item.tracks.length)}</Text>
-                    </View>
-                  </View>
-                </View>
-                {/* No Edit affordance here: opening a project *is* how you
-                    edit it now - the project screen carries its own Edit
-                    button next to the mixer. */}
-                <Text style={styles.chevron}>›</Text>
-              </Pressable>
+                onMoveUp={() => handleMove(index, "up")}
+                onMoveDown={() => handleMove(index, "down")}
+              />
             );
           })
         )}
@@ -185,66 +183,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
     gap: spacing.md,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacing.md,
-    borderRadius: radii.lg,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-    overflow: "hidden",
-    ...elevation,
-  },
-  colorBar: {
-    width: 4,
-    alignSelf: "stretch",
-    borderRadius: 2,
-    marginRight: spacing.md,
-  },
-  rowBody: {
-    flex: 1,
-    gap: 8,
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: 17,
-    fontWeight: "700",
-  },
-  metaRow: {
-    flexDirection: "row",
-    gap: 6,
-  },
-  metaPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radii.pill,
-    backgroundColor: "rgba(255,255,255,0.06)",
-  },
-  metaPillText: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.2,
-  },
-  editButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: radii.pill,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    marginLeft: spacing.sm,
-  },
-  editButtonText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  chevron: {
-    color: colors.textTertiary,
-    fontSize: 22,
-    fontWeight: "600",
-    marginLeft: spacing.sm,
   },
   empty: {
     alignItems: "center",

@@ -4,6 +4,13 @@ import type { Locale } from '@/i18n';
 export interface PersistedAppSettings {
   /** Manually chosen language, overriding the device locale. Absent means "follow the device". */
   languageOverride?: Locale;
+  /**
+   * Project ids in the user's chosen Library order. Lives here rather than
+   * on each project's own manifest.json because it has to cover the bundled
+   * demo project too, which has no writable manifest - see
+   * storage/projectLibrary.ts for how a fresh scan is reconciled against it.
+   */
+  projectOrder?: string[];
 }
 
 const settingsFile = new File(Paths.document, 'settings.json');

@@ -38,4 +38,11 @@ describe('appSettings', () => {
 
     expect(readAppSettings()).toEqual({});
   });
+
+  it('round-trips a saved project order alongside other settings', () => {
+    writeAppSettings({ languageOverride: 'pt-BR' });
+    writeAppSettings({ projectOrder: ['c', 'a', 'b'] });
+
+    expect(readAppSettings()).toEqual({ languageOverride: 'pt-BR', projectOrder: ['c', 'a', 'b'] });
+  });
 });

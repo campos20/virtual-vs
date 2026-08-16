@@ -1,5 +1,6 @@
 import { Directory } from 'expo-file-system';
 import type { LibraryProjectEntry } from '@/store/projectsSlice';
+import { readAppSettings } from './appSettings';
 import { getDemoLibraryEntry } from './demoProject';
 import { ensureProjectsDirectoryExists, projectsDirectory } from './paths';
 import { readProjectManifest } from './projectLoader';
@@ -37,7 +38,29 @@ export async function listFilesystemProjects(): Promise<LibraryProjectEntry[]> {
   return entries.filter((entry): entry is LibraryProjectEntry => entry !== null);
 }
 
+/**
+ * Reconciles a freshly-scanned entry list against the user's saved drag
+ * order (see appSettings.ts's `projectOrder`): entries the user has ordered
+ * before keep that relative order; anything not in the saved order (a new
+ * project, or the very first launch with no saved order at all) keeps its
+ * scan-order position, appended after the ones that were placed explicitly.
+ */
+export function applyPersistedOrder(
+  entries: LibraryProjectEntry[],
+  order: string[] | undefined
+): LibraryProjectEntry[] {
+  if (!order || order.length === 0) return entries;
+
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  const ordered = order.map((id) => byId.get(id)).filter((entry): entry is LibraryProjectEntry => entry !== undefined);
+  const orderedIds = new Set(ordered.map((entry) => entry.id));
+  const remaining = entries.filter((entry) => !orderedIds.has(entry.id));
+
+  return [...ordered, ...remaining];
+}
+
 /** The bundled demo plus everything found on disk, in the order the Library shows them. */
 export async function loadProjectLibrary(): Promise<LibraryProjectEntry[]> {
-  return [getDemoLibraryEntry(), ...(await listFilesystemProjects())];
+  const entries = [getDemoLibraryEntry(), ...(await listFilesystemProjects())];
+  return applyPersistedOrder(entries, readAppSettings().projectOrder);
 }

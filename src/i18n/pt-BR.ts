@@ -23,6 +23,8 @@ export const ptBR: TranslationDictionary = {
     emptyTitle: 'Nenhum projeto ainda',
     emptyMeta: 'Toque em "+ Novo" para importar faixas e criar um.',
     stemsCount: (count: number) => `${count} ${count === 1 ? 'faixa' : 'faixas'}`,
+    moveUp: 'Mover para cima',
+    moveDown: 'Mover para baixo',
   },
   project: {
     backToLibrary: 'Biblioteca',
