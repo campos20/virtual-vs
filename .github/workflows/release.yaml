@@ -1,26 +1,111 @@
 name: Release Android APK
 
-# Tag-triggered: `git tag v1.0.0-alpha.0 && git push origin v1.0.0-alpha.0`.
-# The tag must match the version in package.json, which is the single source
-# of truth - the build refuses to run otherwise rather than shipping an APK
-# whose version disagrees with the tag people downloaded it from.
+# Two ways in:
+#
+# 1. Tag push: `git tag v1.0.0-alpha.0 && git push origin v1.0.0-alpha.0`.
+#    The tag must match the version in package.json, which is the single
+#    source of truth - the build refuses to run otherwise rather than
+#    shipping an APK whose version disagrees with the tag people downloaded
+#    it from.
+# 2. Manual dispatch: give it a version and the `prepare` job below does the
+#    tag push above for you - bumps package.json, commits and pushes it to
+#    main, then creates and pushes the tag - before handing off to the same
+#    build job.
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, without the leading v (e.g. 1.2.0 or 1.2.0-alpha.1)'
+        required: true
+        type: string
 
 permissions:
-  contents: write # create the release
+  contents: write # create the version-bump commit, tag and release
+  actions: write # dispatch ci.yaml for the version-bump commit (see prepare job)
   id-token: write # sign the build provenance attestation
   attestations: write # record it against the repository
 
 jobs:
-  release:
-    name: Build, sign and publish
+  # Only runs for manual dispatch (the `if:` below) - a tag push arrives with
+  # this already done by hand. Cuts from main's tip regardless of which
+  # branch the dispatch form was opened against, so a release always starts
+  # from a commit that's actually reachable from main.
+  prepare:
+    name: Bump version and tag
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+
+    outputs:
+      tag: ${{ steps.bump.outputs.tag }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Validate the requested version
+        run: |
+          VERSION="${{ inputs.version }}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'${VERSION}' is not a valid semver version (expected e.g. 1.2.0 or 1.2.0-alpha.1)."
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" >/dev/null 2>&1; then
+            echo "::error::Tag v${VERSION} already exists."
+            exit 1
+          fi
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Bump package.json
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Commit, tag and push
+        id: bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -am "Update version to ${VERSION}"
+          git tag -a "v${VERSION}" -m "v${VERSION}"
+          git push origin HEAD:main
+          git push origin "v${VERSION}"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+
+      # The push above uses the default GITHUB_TOKEN, which by design does
+      # not trigger other workflows' `push` triggers - otherwise a workflow
+      # pushing a commit could recursively trigger itself. The `release`
+      # job's "require a green CI run" step below still expects to find a
+      # ci.yaml run for this commit, so ask for one explicitly. This is the
+      # one documented exception to that rule: an explicit workflow_dispatch
+      # call is allowed to start a run even from GITHUB_TOKEN.
+      - name: Kick off CI for the version-bump commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ci.yaml --ref main
+
+  release:
+    name: Build, sign and publish
+    needs: [prepare]
+    if: always() && (needs.prepare.result == 'success' || needs.prepare.result == 'skipped')
+    runs-on: ubuntu-latest
+
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag || github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Resolve the release commit
+        run: echo "RELEASE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@v4
         with:
@@ -34,10 +119,10 @@ jobs:
 
       - name: Check the tag matches package.json
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          TAG_VERSION="${RELEASE_TAG#v}"
           PKG_VERSION="$(node -p "require('./package.json').version")"
           if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${PKG_VERSION}."
+            echo "::error::Tag ${RELEASE_TAG} does not match package.json version ${PKG_VERSION}."
             echo "::error::Bump package.json (or retag) so the two agree, then push the tag again."
             exit 1
           fi
@@ -54,31 +139,35 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          STATUS="$(gh api "repos/${GITHUB_REPOSITORY}/compare/main...${GITHUB_SHA}" --jq '.status')"
+          STATUS="$(gh api "repos/${GITHUB_REPOSITORY}/compare/main...${RELEASE_SHA}" --jq '.status')"
           case "$STATUS" in
             identical|behind) ;;
             *)
-              echo "::error::Tagged commit ${GITHUB_SHA} is not on main (compare status: ${STATUS})."
+              echo "::error::Tagged commit ${RELEASE_SHA} is not on main (compare status: ${STATUS})."
               echo "::error::Release from main so the commit has been through CI."
               exit 1
               ;;
           esac
 
-          # A tag pushed straight after its commit can beat CI to the finish,
-          # so wait rather than failing a release that was about to be fine.
+          # A tag pushed straight after its commit can beat CI to the finish
+          # - and the `prepare` job's explicit `gh workflow run` dispatch is
+          # asynchronous too - so wait for a run to even exist, then for it
+          # to finish, rather than failing a release that was about to be
+          # fine.
           for _ in $(seq 1 40); do
-            RUNS="$(gh run list --commit "$GITHUB_SHA" --workflow ci.yaml \
+            RUNS="$(gh run list --commit "$RELEASE_SHA" --workflow ci.yaml \
                       --json status,conclusion --limit 20)"
+            TOTAL="$(echo "$RUNS" | jq 'length')"
             PENDING="$(echo "$RUNS" | jq '[.[] | select(.status != "completed")] | length')"
-            [ "$PENDING" -eq 0 ] && break
-            echo "Waiting for ${PENDING} CI run(s) on ${GITHUB_SHA}..."
+            [ "$TOTAL" -gt 0 ] && [ "$PENDING" -eq 0 ] && break
+            echo "Waiting for CI run(s) on ${RELEASE_SHA} (found ${TOTAL}, ${PENDING} pending)..."
             sleep 15
           done
 
           FAILED="$(echo "$RUNS" | jq '[.[] | select(.conclusion != "success")] | length')"
           PASSED="$(echo "$RUNS" | jq '[.[] | select(.conclusion == "success")] | length')"
           if [ "$PASSED" -eq 0 ] || [ "$FAILED" -gt 0 ]; then
-            echo "::error::No successful CI run for ${GITHUB_SHA}. Fix CI before tagging."
+            echo "::error::No successful CI run for ${RELEASE_SHA}. Fix CI before tagging."
             echo "$RUNS"
             exit 1
           fi
@@ -178,7 +267,7 @@ jobs:
             echo
             echo "This checks a signature recorded in a public transparency log when the"
             echo "workflow ran. It proves the file came from [this workflow](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})"
-            echo "building commit \`${GITHUB_SHA}\` - not from someone reuploading a modified build."
+            echo "building commit \`${RELEASE_SHA}\` - not from someone reuploading a modified build."
             echo
             echo "**2. Confirm the file wasn't altered after upload:**"
             echo
@@ -210,10 +299,18 @@ jobs:
             fi
           } > notes.md
 
-          gh release create "$GITHUB_REF_NAME" \
-            --title "$GITHUB_REF_NAME" \
+          # --generate-notes appends GitHub's own "What's Changed" section
+          # (the PRs merged since the last release) and a full-changelog
+          # compare link after the hand-written notes above. --latest is set
+          # explicitly rather than left to GitHub's date/semver heuristic,
+          # so a prerelease never displaces the actual latest stable release
+          # (or vice versa) on the repo's releases page.
+          gh release create "$RELEASE_TAG" \
+            --title "$RELEASE_TAG" \
             --notes-file notes.md \
+            --generate-notes \
             --verify-tag \
             $([ "${VERSION#*-}" != "$VERSION" ] && echo --prerelease) \
+            $([ "${VERSION#*-}" != "$VERSION" ] && echo --latest=false || echo --latest) \
             "dist/virtual-vs-${VERSION}.apk" \
             "dist/SHA256SUMS.txt"
