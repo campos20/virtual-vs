@@ -72,7 +72,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit -am "Update version to ${VERSION}"
+          git diff --quiet || git commit -am "Update version to ${VERSION}"
           git tag -a "v${VERSION}" -m "v${VERSION}"
           git push origin HEAD:main
           git push origin "v${VERSION}"
@@ -88,7 +88,7 @@ jobs:
       - name: Kick off CI for the version-bump commit
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run ci.yaml --ref main
+        run: gh workflow run ci.yaml --ref "v${VERSION}"
 
   release:
     name: Build, sign and publish
