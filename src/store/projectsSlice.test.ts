@@ -3,6 +3,8 @@ import reducer, {
   projectRemoved,
   projectUpdated,
   projectUpserted,
+  projectsHydrated,
+  projectsReordered,
   projectsSelectors,
   type LibraryProjectEntry,
 } from './projectsSlice';
@@ -51,5 +53,21 @@ describe('projectsSlice', () => {
     const entry = buildEntry({ id: 'proj2', origin: 'filesystem', sourceDir: 'file:///projects/proj2' });
     const state = reducer(initialState, projectAdded(entry));
     expect(projectsSelectors.selectById(state, 'proj2')?.sourceDir).toBe('file:///projects/proj2');
+  });
+
+  it('reorders the library by id without touching any entity data', () => {
+    const hydrated = reducer(
+      initialState,
+      projectsHydrated([
+        buildEntry({ id: 'a' }),
+        buildEntry({ id: 'b' }),
+        buildEntry({ id: 'c' }),
+      ])
+    );
+
+    const reordered = reducer(hydrated, projectsReordered(['c', 'a', 'b']));
+
+    expect(projectsSelectors.selectIds(reordered)).toEqual(['c', 'a', 'b']);
+    expect(projectsSelectors.selectById(reordered, 'a')).toMatchObject({ id: 'a', title: 'Demo Set' });
   });
 });

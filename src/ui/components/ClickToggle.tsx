@@ -1,4 +1,5 @@
 import { StyleSheet, Switch, Text, View } from 'react-native';
+import { useTranslation } from '@/i18n';
 import { colors } from '@/ui/theme';
 
 interface ClickToggleProps {
@@ -8,9 +9,10 @@ interface ClickToggleProps {
 
 /** Mutes/unmutes the synthesized metronome click without touching any track's volume. */
 export function ClickToggle({ enabled, onChange }: ClickToggleProps) {
+  const { t } = useTranslation();
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>CLICK</Text>
+      <Text style={styles.heading}>{t.click.heading}</Text>
       <Switch value={enabled} onValueChange={onChange} trackColor={{ false: '#3a3a3c', true: colors.accent }} />
     </View>
   );

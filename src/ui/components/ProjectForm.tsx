@@ -8,6 +8,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useTranslation } from '@/i18n';
 import { colors, radii, spacing } from '@/ui/theme';
 
 export interface ProjectFormValues {
@@ -55,6 +56,7 @@ export function ProjectForm({
   onCancel,
   onDelete,
 }: ProjectFormProps) {
+  const { t } = useTranslation();
   const [title, setTitle] = useState(initial.title);
   const [bpmText, setBpmText] = useState(initial.bpm === undefined ? '' : String(initial.bpm));
   const [key, setKey] = useState(initial.key);
@@ -69,54 +71,52 @@ export function ProjectForm({
 
   return (
     <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-      <Text style={styles.label}>TITLE</Text>
+      <Text style={styles.label}>{t.projectForm.titleLabel}</Text>
       <TextInput
         value={title}
         onChangeText={setTitle}
-        placeholder="Project title"
+        placeholder={t.projectForm.titlePlaceholder}
         placeholderTextColor={colors.textTertiary}
         style={styles.input}
         testID="title-input"
       />
 
-      <Text style={styles.label}>TEMPO (BPM)</Text>
+      <Text style={styles.label}>{t.projectForm.tempoLabel}</Text>
       <TextInput
         value={bpmText}
         onChangeText={setBpmText}
         keyboardType="number-pad"
-        placeholder="Optional — leave empty for no click"
+        placeholder={t.projectForm.tempoPlaceholder}
         placeholderTextColor={colors.textTertiary}
         style={styles.input}
         testID="bpm-input"
       />
       <Text style={styles.hint}>
-        {bpm === undefined
-          ? 'No tempo set, so this project plays without a metronome click.'
-          : 'The click is generated from this tempo and sent to the cue (L) bus.'}
+        {bpm === undefined ? t.projectForm.tempoHintNone : t.projectForm.tempoHintSet}
       </Text>
 
-      <Text style={styles.label}>KEY</Text>
+      <Text style={styles.label}>{t.projectForm.keyLabel}</Text>
       <TextInput
         value={key}
         onChangeText={setKey}
-        placeholder="e.g. A minor"
+        placeholder={t.projectForm.keyPlaceholder}
         placeholderTextColor={colors.textTertiary}
         style={styles.input}
         testID="key-input"
       />
 
-      <Text style={styles.label}>STEMS</Text>
+      <Text style={styles.label}>{t.projectForm.stemsLabel}</Text>
       <Pressable
         style={({ pressed }) => [styles.pickButton, pressed && styles.pressed]}
         onPress={onAddStems}
         disabled={busy}
         testID="pick-files-button"
       >
-        <Text style={styles.pickButtonText}>Add Audio Files…</Text>
+        <Text style={styles.pickButtonText}>{t.projectForm.addAudioFiles}</Text>
       </Pressable>
 
       {stems.length === 0 ? (
-        <Text style={styles.emptyText}>No stems yet.</Text>
+        <Text style={styles.emptyText}>{t.projectForm.noStemsYet}</Text>
       ) : (
         stems.map((stem) => (
           <View key={stem.id} style={styles.fileRow}>
@@ -130,7 +130,7 @@ export function ProjectForm({
               testID={`remove-stem-${stem.id}`}
               style={({ pressed }) => pressed && styles.pressed}
             >
-              <Text style={styles.removeText}>Remove</Text>
+              <Text style={styles.removeText}>{t.projectForm.remove}</Text>
             </Pressable>
           </View>
         ))
@@ -151,7 +151,7 @@ export function ProjectForm({
         {busy ? (
           <ActivityIndicator color="#0a0a0a" />
         ) : (
-          <Text style={styles.submitButtonText}>Save</Text>
+          <Text style={styles.submitButtonText}>{t.common.save}</Text>
         )}
       </Pressable>
 
@@ -161,7 +161,7 @@ export function ProjectForm({
         testID="cancel-button"
         style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}
       >
-        <Text style={styles.cancelText}>Cancel</Text>
+        <Text style={styles.cancelText}>{t.common.cancel}</Text>
       </Pressable>
 
       {onDelete && (
@@ -171,7 +171,7 @@ export function ProjectForm({
           testID="delete-project-button"
           style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}
         >
-          <Text style={styles.deleteText}>Delete Project</Text>
+          <Text style={styles.deleteText}>{t.projectForm.deleteProject}</Text>
         </Pressable>
       )}
     </ScrollView>

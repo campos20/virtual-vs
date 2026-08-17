@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { audioEngine, type EngineTransportState } from "@/engine";
+import { useTranslation } from "@/i18n";
 import { trackRuntimeStatesFromManifest } from "@/engine/trackRuntimeState";
 import { usePlayhead } from "@/hooks/usePlayhead";
 import {
@@ -36,39 +36,9 @@ import { ClickToggle } from "@/ui/components/ClickToggle";
 import { MonitorSplitSwitch } from "@/ui/components/MonitorSplitSwitch";
 import { ProjectForm, type ProjectFormValues } from "@/ui/components/ProjectForm";
 import { TransportBar } from "@/ui/components/TransportBar";
+import { BackButton } from "@/ui/components/BackButton";
+import { HeaderButton } from "@/ui/components/HeaderButton";
 import { colors, elevation, radii, spacing } from "@/ui/theme";
-
-/**
- * Press feedback goes through Pressable's `style` callback, NOT a
- * function-as-child. A function child re-creates the child View/Text on every
- * press-state change, so releasing the button re-inserts a text view in the
- * same frame that `onPress` -> `router.back()` is tearing this screen down -
- * which is exactly Android's Fabric "addViewAt: ... already has a parent"
- * crash (see AGENTS.md). Styling the Pressable itself only updates props on
- * an already-mounted view and leaves the child tree structurally constant.
- */
-function HeaderButton({
-  label,
-  onPress,
-  testID,
-  style,
-}: {
-  label: string;
-  onPress: () => void;
-  testID: string;
-  style?: object;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.headerButton, style, pressed && styles.pressed]}
-      hitSlop={8}
-      testID={testID}
-    >
-      <Text style={styles.headerButtonText}>{label}</Text>
-    </Pressable>
-  );
-}
 
 /**
  * The one and only project view - play it, edit it, or fill in a brand-new
@@ -81,6 +51,7 @@ export function ProjectScreen() {
   const { projectId } = useLocalSearchParams<{ projectId?: string }>();
   const dispatch = useAppDispatch();
   const router = useRouter();
+  const { t } = useTranslation();
 
   const entry = useAppSelector((s) =>
     projectId ? projectsSelectors.selectById(s.projects, projectId) : undefined,
@@ -307,12 +278,12 @@ export function ProjectScreen() {
   function handleDelete() {
     if (!entry?.sourceDir) return;
     Alert.alert(
-      "Delete project?",
-      `"${entry.title}" and its ${entry.tracks.length} stem${entry.tracks.length === 1 ? "" : "s"} will be permanently deleted from this device.`,
+      t.project.deleteConfirmTitle,
+      t.project.deleteConfirmBody(entry.title, entry.tracks.length),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t.common.cancel, style: "cancel" },
         {
-          text: "Delete",
+          text: t.project.deleteConfirmConfirm,
           style: "destructive",
           onPress: () => {
             try {
@@ -349,9 +320,9 @@ export function ProjectScreen() {
     return (
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
-          <HeaderButton label="‹ Library" onPress={handleBackFromProject} testID="back-button" />
+          <BackButton label={t.project.backToLibrary} onPress={handleBackFromProject} testID="back-button" />
           {canEdit && !editing && (
-            <HeaderButton label="Edit" onPress={handleStartEditing} testID="edit-button" />
+            <HeaderButton label={t.project.edit} onPress={handleStartEditing} testID="edit-button" />
           )}
         </View>
         <Text style={styles.title}>{headerTitle}</Text>
@@ -375,15 +346,15 @@ export function ProjectScreen() {
     // Bundled projects live in the app bundle with no writable manifest.
     if (entry?.origin === "bundled") {
       return (
-        <SafeAreaView style={styles.container} edges={["top"]}>
+        <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
           {renderHeader()}
-          <Text style={styles.notice}>The bundled demo project can&apos;t be edited.</Text>
+          <Text style={styles.notice}>{t.project.bundledNotice}</Text>
         </SafeAreaView>
       );
     }
 
     return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
+      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
         {renderHeader()}
         <ProjectForm
           initial={{
@@ -406,16 +377,16 @@ export function ProjectScreen() {
 
   if (!entry) {
     return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
+      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
         {renderHeader()}
-        <Text style={styles.error}>Project not found.</Text>
+        <Text style={styles.error}>{t.project.notFound}</Text>
       </SafeAreaView>
     );
   }
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
+      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
         {renderHeader()}
         <View style={styles.centeredBody}>
           <ActivityIndicator color={colors.accent} />
@@ -426,15 +397,15 @@ export function ProjectScreen() {
 
   if (error || !manifest) {
     return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
+      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
         {renderHeader()}
-        <Text style={styles.error}>{error ?? "Failed to load project."}</Text>
+        <Text style={styles.error}>{error ?? t.project.loadFailed}</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       {renderHeader()}
 
       <View style={styles.mixer}>
@@ -496,22 +467,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: spacing.sm,
-  },
-  headerButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radii.pill,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-  },
-  headerButtonText: {
-    color: colors.accent,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  pressed: {
-    opacity: 0.7,
   },
   title: {
     color: colors.textPrimary,

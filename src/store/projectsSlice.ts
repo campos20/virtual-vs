@@ -30,10 +30,26 @@ const projectsSlice = createSlice({
     ) {
       projectsAdapter.updateOne(state, { id: action.payload.id, changes: action.payload.changes });
     },
+    /**
+     * State-only, like languageOverrideSet - disk persistence is a side
+     * effect handled by the persistProjectsReordered thunk
+     * (store/persistProjectOrder.ts) that dispatches this, not by callers
+     * directly. There's no dedicated adapter method for reordering; setting
+     * `ids` directly is RTK's documented way to do it.
+     */
+    projectsReordered(state, action: PayloadAction<string[]>) {
+      state.ids = action.payload;
+    },
   },
 });
 
-export const { projectsHydrated, projectAdded, projectUpserted, projectRemoved, projectUpdated } =
-  projectsSlice.actions;
+export const {
+  projectsHydrated,
+  projectAdded,
+  projectUpserted,
+  projectRemoved,
+  projectUpdated,
+  projectsReordered,
+} = projectsSlice.actions;
 export const projectsSelectors = projectsAdapter.getSelectors();
 export default projectsSlice.reducer;

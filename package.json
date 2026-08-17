@@ -1,7 +1,7 @@
 {
   "name": "virtual-vs",
   "main": "expo-router/entry",
-  "version": "1.0.0-alpha.0",
+  "version": "1.1.0-alpha",
   "license": "GPL-3.0-or-later",
   "dependencies": {
     "@expo/ui": "~57.0.9",
@@ -14,6 +14,7 @@
     "expo-font": "~57.0.1",
     "expo-image": "~57.0.2",
     "expo-linking": "~57.0.5",
+    "expo-localization": "~57.0.1",
     "expo-router": "~57.0.11",
     "expo-splash-screen": "~57.0.5",
     "expo-status-bar": "~57.0.1",
