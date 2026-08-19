@@ -366,9 +366,22 @@ export function ProjectScreen() {
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
           <BackButton label={t.project.backToLibrary} onPress={handleBackFromProject} testID="back-button" />
-          {canEdit && !editing && (
-            <HeaderButton label={t.project.edit} onPress={handleStartEditing} testID="edit-button" />
-          )}
+          <View style={styles.headerActions}>
+            {manifest && !editing && (
+              <Pressable
+                onPress={() => setMixerOpen(true)}
+                style={({ pressed }) => [styles.mixerButton, pressed && styles.mixerButtonPressed]}
+                hitSlop={8}
+                testID="mixer-menu-button"
+                accessibilityLabel={t.project.mixer}
+              >
+                <HamburgerIcon />
+              </Pressable>
+            )}
+            {canEdit && !editing && (
+              <HeaderButton label={t.project.edit} onPress={handleStartEditing} testID="edit-button" />
+            )}
+          </View>
         </View>
         <Text style={styles.title}>{headerTitle}</Text>
         {manifest && !editing && (
@@ -459,18 +472,6 @@ export function ProjectScreen() {
       </View>
 
       <View style={styles.console}>
-        <View style={styles.rack}>
-          <Pressable
-            onPress={() => setMixerOpen(true)}
-            style={({ pressed }) => [styles.mixerButton, pressed && styles.mixerButtonPressed]}
-            hitSlop={8}
-            testID="mixer-menu-button"
-            accessibilityLabel={t.project.mixer}
-          >
-            <HamburgerIcon />
-            <Text style={styles.mixerButtonText}>{t.project.mixer}</Text>
-          </Pressable>
-        </View>
         <TransportBar
           isPlaying={transportState === "playing"}
           playheadSec={playheadSec}
@@ -518,6 +519,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: spacing.sm,
   },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
   title: {
     color: colors.textPrimary,
     fontSize: 24,
@@ -559,32 +565,18 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     ...elevation,
   },
-  rack: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-    paddingHorizontal: spacing.lg,
-  },
   mixerButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
+    width: 36,
+    height: 36,
     borderRadius: radii.pill,
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
   },
   mixerButtonPressed: {
     opacity: 0.7,
-  },
-  mixerButtonText: {
-    color: colors.textPrimary,
-    fontSize: 13,
-    fontWeight: "700",
-    letterSpacing: 0.3,
   },
   error: {
     color: colors.danger,
