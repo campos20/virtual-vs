@@ -86,7 +86,12 @@ function renderDemo() {
 }
 
 async function waitForMixer() {
-  await waitFor(() => expect(screen.getByText('Bass')).toBeTruthy());
+  await waitFor(() => expect(screen.getByTestId('play-pause-button')).toBeTruthy());
+}
+
+/** Volume/output/click controls live behind the hamburger drawer now - open it before touching them. */
+function openMixer() {
+  fireEvent.press(screen.getByTestId('mixer-menu-button'));
 }
 
 describe('ProjectScreen - playing', () => {
@@ -96,8 +101,13 @@ describe('ProjectScreen - playing', () => {
 
     expect(screen.getByText('Demo: Sync Test')).toBeTruthy();
     expect(screen.getByText('120 BPM')).toBeTruthy();
+    // The waveform view labels each stem's lane too, so "Keys" is already on screen.
     expect(screen.getByText('Keys')).toBeTruthy();
-    expect(screen.getByText('Guide Vocal')).toBeTruthy();
+
+    openMixer();
+    // Now it appears twice: once for its waveform lane, once for its channel strip.
+    expect(screen.getAllByText('Keys')).toHaveLength(2);
+    expect(screen.getAllByText('Guide Vocal')).toHaveLength(2);
   });
 
   it('play/pause drives the real audio engine transport', async () => {
@@ -115,6 +125,7 @@ describe('ProjectScreen - playing', () => {
   it('toggling mute commits to the engine and the store', async () => {
     const { store } = renderDemo();
     await waitForMixer();
+    openMixer();
 
     const [bassMute] = screen.getAllByText('M');
     fireEvent.press(bassMute);

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  ScrollView,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { audioEngine, type EngineTransportState } from "@/engine";
 import { useTranslation } from "@/i18n";
 import { trackRuntimeStatesFromManifest } from "@/engine/trackRuntimeState";
+import { computeWaveformPeaks, waveformBarCount } from "@/engine/waveform";
 import { usePlayhead } from "@/hooks/usePlayhead";
 import {
   addStemsToProject,
@@ -31,14 +32,18 @@ import {
   tracksRemovedForProject,
 } from "@/store/tracksSlice";
 import type { ProjectManifest } from "@/types/project";
-import { ChannelStrip } from "@/ui/components/ChannelStrip";
-import { ClickToggle } from "@/ui/components/ClickToggle";
-import { MonitorSplitSwitch } from "@/ui/components/MonitorSplitSwitch";
+import { HamburgerIcon } from "@/ui/components/HamburgerIcon";
+import { MixerDrawer } from "@/ui/components/MixerDrawer";
 import { ProjectForm, type ProjectFormValues } from "@/ui/components/ProjectForm";
 import { TransportBar } from "@/ui/components/TransportBar";
+import { WaveformView, type StemWaveform } from "@/ui/components/WaveformView";
 import { BackButton } from "@/ui/components/BackButton";
 import { HeaderButton } from "@/ui/components/HeaderButton";
 import { colors, elevation, radii, spacing } from "@/ui/theme";
+import { getTrackColor } from "@/ui/trackColors";
+
+/** Bounds the number of stem waveform lanes rendered - past this, only the mixer's per-track strips show the rest. */
+const MAX_WAVEFORM_STEMS = 16;
 
 /**
  * The one and only project view - play it, edit it, or fill in a brand-new
@@ -64,9 +69,11 @@ export function ProjectScreen() {
 
   const [manifest, setManifest] = useState<ProjectManifest | null>(null);
   const [durationSec, setDurationSec] = useState(0);
+  const [waveformTracks, setWaveformTracks] = useState<StemWaveform[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [transportState, setTransportState] = useState<EngineTransportState>("stopped");
+  const [mixerOpen, setMixerOpen] = useState(false);
   // A project with no stems can't be played, so it opens straight in edit
   // mode - that is all "creating a project" means here.
   const [editing, setEditing] = useState((entry?.tracks.length ?? 0) === 0);
@@ -131,6 +138,20 @@ export function ProjectScreen() {
         );
 
         setDurationSec(longestBufferSec);
+
+        const waveformStems = source.manifest.tracks.slice(0, MAX_WAVEFORM_STEMS);
+        const laneBarCount = waveformBarCount(longestBufferSec, waveformStems.length);
+        setWaveformTracks(
+          waveformStems.map((track, index) => ({
+            id: track.id,
+            name: track.name,
+            color: getTrackColor(index),
+            peaks: decoded.trackBuffers[track.id]
+              ? computeWaveformPeaks([decoded.trackBuffers[track.id]], longestBufferSec, laneBarCount)
+              : new Float32Array(laneBarCount),
+          })),
+        );
+
         setManifest(source.manifest);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
@@ -408,28 +429,22 @@ export function ProjectScreen() {
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       {renderHeader()}
 
-      <View style={styles.mixer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.mixerContent}
-        >
-          {manifest.tracks.map((item, index) => (
-            <ChannelStrip key={item.id} projectId={manifest.id} track={item} index={index} />
-          ))}
-        </ScrollView>
+      <View style={styles.waveformArea}>
+        <WaveformView tracks={waveformTracks} durationSec={durationSec} playheadSec={playheadSec} />
       </View>
 
       <View style={styles.console}>
         <View style={styles.rack}>
-          <MonitorSplitSwitch mode={monitorMode} onChange={handleMonitorModeChange} />
-          {/* No bpm means no synthesized click, so there is nothing to toggle. */}
-          {manifest.bpm !== undefined && (
-            <>
-              <View style={styles.rackDivider} />
-              <ClickToggle enabled={clickEnabled} onChange={handleClickEnabledChange} />
-            </>
-          )}
+          <Pressable
+            onPress={() => setMixerOpen(true)}
+            style={({ pressed }) => [styles.mixerButton, pressed && styles.mixerButtonPressed]}
+            hitSlop={8}
+            testID="mixer-menu-button"
+            accessibilityLabel={t.project.mixer}
+          >
+            <HamburgerIcon />
+            <Text style={styles.mixerButtonText}>{t.project.mixer}</Text>
+          </Pressable>
         </View>
         <TransportBar
           isPlaying={transportState === "playing"}
@@ -440,6 +455,16 @@ export function ProjectScreen() {
           onSeek={(seconds) => audioEngine.seek(seconds)}
         />
       </View>
+
+      <MixerDrawer
+        visible={mixerOpen}
+        onClose={() => setMixerOpen(false)}
+        manifest={manifest}
+        monitorMode={monitorMode}
+        onMonitorModeChange={handleMonitorModeChange}
+        clickEnabled={clickEnabled}
+        onClickEnabledChange={handleClickEnabledChange}
+      />
     </SafeAreaView>
   );
 }
@@ -498,15 +523,10 @@ const styles = StyleSheet.create({
     marginTop: 40,
     paddingHorizontal: 24,
   },
-  mixer: {
+  waveformArea: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  mixerContent: {
-    // Strips stretch to fill the mixer area so the console reads as one
-    // continuous surface instead of floating above empty space.
-    alignItems: "stretch",
-    paddingHorizontal: 6,
+    justifyContent: "center",
   },
   console: {
     backgroundColor: colors.panel,
@@ -521,11 +541,25 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     paddingHorizontal: spacing.lg,
   },
-  rackDivider: {
-    width: StyleSheet.hairlineWidth,
-    alignSelf: "stretch",
-    backgroundColor: colors.border,
-    marginVertical: 4,
+  mixerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: radii.pill,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
+  },
+  mixerButtonPressed: {
+    opacity: 0.7,
+  },
+  mixerButtonText: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.3,
   },
   error: {
     color: colors.danger,
