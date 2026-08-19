@@ -2,11 +2,18 @@ name: CI
 
 # Runs on every push and pull request. Until now the test suite only ran when
 # a release tag was pushed, which is the worst time to discover it's red.
+#
+# Also dispatchable directly: release.yaml's workflow_dispatch path pushes
+# the version-bump commit with the default GITHUB_TOKEN, which - by
+# GitHub's own loop-prevention rule - does not trigger this workflow's
+# `push` trigger. It explicitly dispatches this workflow instead so the
+# release-time "require a green CI run" gate has something to find.
 on:
   push:
     branches: ['**']
     tags-ignore: ['**'] # release.yaml already runs the same checks for tags
   pull_request:
+  workflow_dispatch:
 
 # Superseded runs on the same branch are pointless once a newer commit lands.
 concurrency:
