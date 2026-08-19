@@ -265,10 +265,14 @@ export function ProjectScreen() {
    * also call `audioEngine.loadProject()` again, a needless stop of a graph
    * that was never playing anyway since editing already stopped it). Patch
    * the already-loaded `manifest`/`waveformTracks` state directly instead.
+   *
+   * Returns whether the write actually persisted - StemNameField shows the
+   * new name optimistically and needs to revert it if this resolves false,
+   * rather than drifting out of sync with what's actually on disk.
    */
-  async function handleRenameStem(stemId: string, name: string) {
+  async function handleRenameStem(stemId: string, name: string): Promise<boolean> {
     setFormError(null);
-    if (!entry?.sourceDir) return;
+    if (!entry?.sourceDir) return false;
     try {
       const updated = await renameStemInProject(entry.sourceDir, stemId, name);
       dispatch(projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }));
@@ -276,8 +280,10 @@ export function ProjectScreen() {
       setWaveformTracks((prev) =>
         prev.map((track) => (track.id === stemId ? { ...track, name } : track)),
       );
+      return true;
     } catch (e) {
       setFormError(e instanceof Error ? e.message : String(e));
+      return false;
     }
   }
 

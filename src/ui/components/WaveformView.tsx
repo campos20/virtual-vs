@@ -18,8 +18,8 @@ interface WaveformViewProps {
 /**
  * One DAW-style timeline lane per stem, stacked and vertically scrollable so
  * a project with many stems doesn't run out of screen height (see
- * ChannelStrip's `waveformBarCount` caller in ProjectScreen for the 16-stem
- * cap this is built to fit). Every lane scrolls horizontally in lockstep
+ * ProjectScreen's `waveformBarCount` call, which caps this at 16 stems).
+ * Every lane scrolls horizontally in lockstep
  * because they all share the same duration/bar count and each just follows
  * `playheadSec` independently - see StemWaveformLane. The playhead itself is
  * drawn once here, as a line spanning every lane, rather than per-lane.

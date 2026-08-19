@@ -30,7 +30,8 @@ interface ProjectFormProps {
   error?: string | null;
   onAddStems: () => void;
   onRemoveStem: (stemId: string) => void;
-  onRenameStem: (stemId: string, name: string) => void;
+  /** Resolves to whether the rename actually persisted, so a failed write doesn't leave the field showing an unsaved name. */
+  onRenameStem: (stemId: string, name: string) => Promise<boolean>;
   onSubmit: (values: ProjectFormValues) => void;
   onCancel: () => void;
   /** Omitted for projects that can't be deleted (the bundled demo). */
@@ -41,7 +42,7 @@ interface StemNameFieldProps {
   stemId: string;
   name: string;
   disabled?: boolean;
-  onRename: (stemId: string, name: string) => void;
+  onRename: (stemId: string, name: string) => Promise<boolean>;
 }
 
 /**
@@ -50,29 +51,35 @@ interface StemNameFieldProps {
  * prop is recomputed fresh on every ProjectScreen render (a new array/object
  * per stem) - a fully-controlled input would be fine at rest but risks
  * clobbering an in-progress edit if an unrelated re-render lands mid-type.
- * Committing on blur/submit (not per keystroke) keeps a manifest rewrite off
- * every character typed. Keyed by `stemId` in the parent's `.map()`, so this
- * naturally remounts (and re-seeds) if the stem itself is removed and a
- * different one added in its place.
+ * Committing on blur only (not per keystroke, and not also on
+ * `onEndEditing` - a single-line TextInput's default `blurOnSubmit`
+ * behavior means submitting already blurs it, so wiring both fires the
+ * commit twice for one edit) keeps a manifest rewrite off every character
+ * typed and off every edit. Keyed by `stemId` in the parent's `.map()`, so
+ * this naturally remounts (and re-seeds) if the stem itself is removed and
+ * a different one added in its place.
  */
 function StemNameField({ stemId, name, disabled, onRename }: StemNameFieldProps) {
   const [draft, setDraft] = useState(name);
 
-  function commit() {
+  async function commit() {
     const trimmed = draft.trim();
-    if (trimmed.length === 0) {
+    if (trimmed.length === 0 || trimmed === name) {
       setDraft(name);
       return;
     }
-    if (trimmed !== name) onRename(stemId, trimmed);
+    // Optimistic, but reverted below if the write fails - `onRename` is an
+    // async disk write that can fail, and this field is the only thing
+    // holding the not-yet-confirmed name, so it can't just keep showing it.
     setDraft(trimmed);
+    const persisted = await onRename(stemId, trimmed);
+    if (!persisted) setDraft(name);
   }
 
   return (
     <TextInput
       value={draft}
       onChangeText={setDraft}
-      onEndEditing={commit}
       onBlur={commit}
       editable={!disabled}
       underlineColorAndroid="transparent"

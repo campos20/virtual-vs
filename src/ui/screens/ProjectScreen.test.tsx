@@ -338,7 +338,9 @@ describe('ProjectScreen - editing in place', () => {
     fireEvent.changeText(bassNameInput, 'Low End');
     expect(renameStemInProject).not.toHaveBeenCalled();
 
-    fireEvent(bassNameInput, 'endEditing');
+    // A single-line TextInput's default blurOnSubmit already blurs it on
+    // submit, so only `onBlur` is wired - see StemNameField.
+    fireEvent(bassNameInput, 'blur');
 
     await waitFor(() =>
       expect(renameStemInProject).toHaveBeenCalledWith(
@@ -347,6 +349,7 @@ describe('ProjectScreen - editing in place', () => {
         'Low End'
       )
     );
+    expect(renameStemInProject).toHaveBeenCalledTimes(1);
     await waitFor(() =>
       expect(
         store
@@ -363,10 +366,29 @@ describe('ProjectScreen - editing in place', () => {
 
     const bassNameInput = screen.getByTestId('rename-stem-bass');
     fireEvent.changeText(bassNameInput, '   ');
-    fireEvent(bassNameInput, 'endEditing');
+    fireEvent(bassNameInput, 'blur');
 
     expect(renameStemInProject).not.toHaveBeenCalled();
     expect(bassNameInput.props.value).toBe('Bass');
+  });
+
+  // The field shows the new name immediately (so typing feels responsive),
+  // but that's only a guess until the write actually persists - a failed
+  // write must not leave the input drifted from what's really on disk.
+  it('reverts the displayed name if the rename write fails', async () => {
+    (renameStemInProject as jest.Mock).mockRejectedValue(new Error('disk full'));
+
+    renderEditable();
+    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('edit-button'));
+
+    const bassNameInput = screen.getByTestId('rename-stem-bass');
+    fireEvent.changeText(bassNameInput, 'Low End');
+    fireEvent(bassNameInput, 'blur');
+
+    await waitFor(() => expect(renameStemInProject).toHaveBeenCalled());
+    await waitFor(() => expect(bassNameInput.props.value).toBe('Bass'));
+    expect(screen.getByText('disk full')).toBeTruthy();
   });
 });
 
