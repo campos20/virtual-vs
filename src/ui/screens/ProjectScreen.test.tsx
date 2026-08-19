@@ -9,6 +9,7 @@ import {
   getDemoProjectSource,
   getProjectSourceForEntry,
   removeStemFromProject,
+  renameStemInProject,
   updateProjectMetadata,
 } from '@/storage';
 import { createStore } from '@/store';
@@ -33,6 +34,7 @@ jest.mock('@/storage', () => ({
   updateProjectMetadata: jest.fn(),
   addStemsToProject: jest.fn(),
   removeStemFromProject: jest.fn(),
+  renameStemInProject: jest.fn(),
   deleteProjectDirectory: jest.fn(),
   getProjectSourceForEntry: jest.fn(),
 }));
@@ -290,6 +292,53 @@ describe('ProjectScreen - editing in place', () => {
     await waitFor(() =>
       expect(store.getState().projects.entities['my-song']?.tracks).toHaveLength(1)
     );
+  });
+
+  it('renames a stem through to the project folder on blur, not on every keystroke', async () => {
+    (renameStemInProject as jest.Mock).mockResolvedValue({
+      ...filesystemProject,
+      tracks: filesystemProject.tracks.map((t) =>
+        t.id === 'bass' ? { ...t, name: 'Low End' } : t
+      ),
+    });
+
+    const { store } = renderEditable();
+    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('edit-button'));
+
+    const bassNameInput = screen.getByTestId('rename-stem-bass');
+    fireEvent.changeText(bassNameInput, 'Low End');
+    expect(renameStemInProject).not.toHaveBeenCalled();
+
+    fireEvent(bassNameInput, 'endEditing');
+
+    await waitFor(() =>
+      expect(renameStemInProject).toHaveBeenCalledWith(
+        filesystemProject.sourceDir,
+        'bass',
+        'Low End'
+      )
+    );
+    await waitFor(() =>
+      expect(
+        store
+          .getState()
+          .projects.entities['my-song']?.tracks.find((t) => t.id === 'bass')?.name
+      ).toBe('Low End')
+    );
+  });
+
+  it('ignores an empty rename instead of blanking the stem name', async () => {
+    renderEditable();
+    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('edit-button'));
+
+    const bassNameInput = screen.getByTestId('rename-stem-bass');
+    fireEvent.changeText(bassNameInput, '   ');
+    fireEvent(bassNameInput, 'endEditing');
+
+    expect(renameStemInProject).not.toHaveBeenCalled();
+    expect(bassNameInput.props.value).toBe('Bass');
   });
 });
 

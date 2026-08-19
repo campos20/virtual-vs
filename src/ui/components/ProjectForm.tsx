@@ -30,10 +30,56 @@ interface ProjectFormProps {
   error?: string | null;
   onAddStems: () => void;
   onRemoveStem: (stemId: string) => void;
+  onRenameStem: (stemId: string, name: string) => void;
   onSubmit: (values: ProjectFormValues) => void;
   onCancel: () => void;
   /** Omitted for projects that can't be deleted (the bundled demo). */
   onDelete?: () => void;
+}
+
+interface StemNameFieldProps {
+  stemId: string;
+  name: string;
+  disabled?: boolean;
+  onRename: (stemId: string, name: string) => void;
+}
+
+/**
+ * A stem's name, editable in place. Local state (seeded once from `name`)
+ * rather than a value fully controlled by the `stems` prop, because that
+ * prop is recomputed fresh on every ProjectScreen render (a new array/object
+ * per stem) - a fully-controlled input would be fine at rest but risks
+ * clobbering an in-progress edit if an unrelated re-render lands mid-type.
+ * Committing on blur/submit (not per keystroke) keeps a manifest rewrite off
+ * every character typed. Keyed by `stemId` in the parent's `.map()`, so this
+ * naturally remounts (and re-seeds) if the stem itself is removed and a
+ * different one added in its place.
+ */
+function StemNameField({ stemId, name, disabled, onRename }: StemNameFieldProps) {
+  const [draft, setDraft] = useState(name);
+
+  function commit() {
+    const trimmed = draft.trim();
+    if (trimmed.length === 0) {
+      setDraft(name);
+      return;
+    }
+    if (trimmed !== name) onRename(stemId, trimmed);
+    setDraft(trimmed);
+  }
+
+  return (
+    <TextInput
+      value={draft}
+      onChangeText={setDraft}
+      onEndEditing={commit}
+      onBlur={commit}
+      editable={!disabled}
+      underlineColorAndroid="transparent"
+      style={styles.fileName}
+      testID={`rename-stem-${stemId}`}
+    />
+  );
 }
 
 /**
@@ -52,6 +98,7 @@ export function ProjectForm({
   error,
   onAddStems,
   onRemoveStem,
+  onRenameStem,
   onSubmit,
   onCancel,
   onDelete,
@@ -120,9 +167,12 @@ export function ProjectForm({
       ) : (
         stems.map((stem) => (
           <View key={stem.id} style={styles.fileRow}>
-            <Text style={styles.fileName} numberOfLines={1}>
-              {stem.name}
-            </Text>
+            <StemNameField
+              stemId={stem.id}
+              name={stem.name}
+              disabled={busy}
+              onRename={onRenameStem}
+            />
             <Pressable
               onPress={() => onRemoveStem(stem.id)}
               hitSlop={8}
@@ -232,6 +282,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     flex: 1,
     marginRight: 12,
+    padding: 0,
   },
   removeText: {
     color: colors.danger,

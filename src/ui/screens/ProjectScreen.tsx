@@ -21,6 +21,7 @@ import {
   deleteProjectDirectory,
   getProjectSourceForEntry,
   removeStemFromProject,
+  renameStemInProject,
   updateProjectMetadata,
 } from "@/storage";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -254,6 +255,29 @@ export function ProjectScreen() {
     }
   }
 
+  /**
+   * Unlike add/remove, a rename touches only a display name - it doesn't
+   * change what's decoded or how the engine's graph is wired, so there's no
+   * need to bump `reloadToken` and pay for a full re-decode (which would
+   * also call `audioEngine.loadProject()` again, a needless stop of a graph
+   * that was never playing anyway since editing already stopped it). Patch
+   * the already-loaded `manifest`/`waveformTracks` state directly instead.
+   */
+  async function handleRenameStem(stemId: string, name: string) {
+    setFormError(null);
+    if (!entry?.sourceDir) return;
+    try {
+      const updated = await renameStemInProject(entry.sourceDir, stemId, name);
+      dispatch(projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }));
+      setManifest((prev) => prev && { ...prev, tracks: updated.tracks });
+      setWaveformTracks((prev) =>
+        prev.map((track) => (track.id === stemId ? { ...track, name } : track)),
+      );
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   async function handleSubmit(values: ProjectFormValues) {
     if (!entry?.sourceDir) return;
     setBusy(true);
@@ -388,6 +412,7 @@ export function ProjectScreen() {
           error={formError}
           onAddStems={handleAddStems}
           onRemoveStem={handleRemoveStem}
+          onRenameStem={handleRenameStem}
           onSubmit={handleSubmit}
           onCancel={handleCancelEditing}
           onDelete={entry?.sourceDir ? handleDelete : undefined}
