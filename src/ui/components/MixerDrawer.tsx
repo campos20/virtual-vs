@@ -5,6 +5,7 @@ import type { ProjectManifest } from '@/types/project';
 import { colors, elevation, radii, spacing } from '@/ui/theme';
 import { ChannelStrip } from './ChannelStrip';
 import { ClickToggle } from './ClickToggle';
+import { HeaderButton } from './HeaderButton';
 import { MonitorSplitSwitch } from './MonitorSplitSwitch';
 
 interface MixerDrawerProps {
@@ -15,6 +16,8 @@ interface MixerDrawerProps {
   onMonitorModeChange: (mode: MonitorMode) => void;
   clickEnabled: boolean;
   onClickEnabledChange: (enabled: boolean) => void;
+  /** Omitted for projects that can't be edited (the bundled demo) - matches the old header's `canEdit` check. */
+  onEdit?: () => void;
 }
 
 /**
@@ -35,6 +38,7 @@ export function MixerDrawer({
   onMonitorModeChange,
   clickEnabled,
   onClickEnabledChange,
+  onEdit,
 }: MixerDrawerProps) {
   const { t } = useTranslation();
 
@@ -49,14 +53,20 @@ export function MixerDrawer({
       <View style={styles.sheet}>
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle}>{t.project.mixer}</Text>
-          <Pressable
-            onPress={onClose}
-            hitSlop={8}
-            testID="close-mixer-button"
-            style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}
-          >
-            <Text style={styles.closeButtonText}>{t.common.close}</Text>
-          </Pressable>
+          <View style={styles.sheetHeaderActions}>
+            {/* Living behind the mixer drawer rather than on the main header means it takes a
+                deliberate tap to reach, not a stray one during a set - see AGENTS.md-adjacent
+                intent: the mixer already exists to keep rarely-touched controls out of the way. */}
+            {onEdit && <HeaderButton label={t.project.edit} onPress={onEdit} testID="edit-button" />}
+            <Pressable
+              onPress={onClose}
+              hitSlop={8}
+              testID="close-mixer-button"
+              style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.closeButtonText}>{t.common.close}</Text>
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.rack}>
@@ -107,6 +117,11 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 18,
     fontWeight: '800',
+  },
+  sheetHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   closeButton: {
     paddingHorizontal: spacing.md,

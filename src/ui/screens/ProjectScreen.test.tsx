@@ -192,11 +192,39 @@ describe('ProjectScreen - editing in place', () => {
     return renderWithStore(<ProjectScreen />, store);
   }
 
-  it('offers no Edit button for the bundled demo project', async () => {
+  it('offers no Edit button for the bundled demo project, even from the mixer', async () => {
     renderDemo();
     await waitForMixer();
+    openMixer();
 
     expect(screen.queryByTestId('edit-button')).toBeNull();
+  });
+
+  // Edit lives behind the mixer drawer now, not in the main header, so a
+  // stray tap during a set can't land on it - it takes opening the mixer first.
+  it('keeps Edit out of the header and reachable only through the mixer once loaded', async () => {
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: filesystemProject,
+      resolveFile: () => 0,
+    });
+
+    renderEditable();
+    await waitForMixer();
+    expect(screen.queryByTestId('edit-button')).toBeNull();
+
+    openMixer();
+    expect(screen.getByTestId('edit-button')).toBeTruthy();
+  });
+
+  // A failed load (e.g. a corrupted stem) is exactly when the user needs to
+  // get into the editor to fix it, so Edit can't be trapped behind a mixer
+  // drawer that has nothing to show - it has to surface directly.
+  it('offers Edit directly, without a mixer, when the project fails to load', async () => {
+    renderEditable(); // the default mocked getProjectSourceForEntry fails for this fake sourceDir
+    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
+
+    expect(screen.getByText(filesystemProject.title)).toBeTruthy();
+    expect(screen.queryByTestId('mixer-menu-button')).toBeNull();
   });
 
   // Editing can delete the files the transport is reading, so entering edit
@@ -413,7 +441,7 @@ describe('ProjectScreen - a brand-new (stemless) project', () => {
 });
 
 describe('ProjectScreen - deleting', () => {
-  function renderEditableInEditMode() {
+  async function renderEditableInEditMode() {
     mockParams = { projectId: 'my-song' };
     const store = createStore();
     store.dispatch(projectAdded(filesystemProject));
@@ -424,6 +452,10 @@ describe('ProjectScreen - deleting', () => {
       })
     );
     const rendered = renderWithStore(<ProjectScreen />, store);
+    // This fake sourceDir has no real manifest.json behind it, so the load
+    // always fails - Edit has to stay reachable straight from the error
+    // state (see ProjectScreen's error branch), not behind the mixer drawer.
+    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
     fireEvent.press(screen.getByTestId('edit-button'));
     return rendered;
   }
@@ -443,9 +475,9 @@ describe('ProjectScreen - deleting', () => {
   });
 
   // Deleting destroys the audio files, so it must never happen on one tap.
-  it('asks before deleting anything', () => {
+  it('asks before deleting anything', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    renderEditableInEditMode();
+    await renderEditableInEditMode();
 
     fireEvent.press(screen.getByTestId('delete-project-button'));
 
@@ -454,9 +486,9 @@ describe('ProjectScreen - deleting', () => {
     expect(mockBack).not.toHaveBeenCalled();
   });
 
-  it('deletes the folder, the entry and its mixer state once confirmed', () => {
+  it('deletes the folder, the entry and its mixer state once confirmed', async () => {
     answerAlertWith('Delete');
-    const { store } = renderEditableInEditMode();
+    const { store } = await renderEditableInEditMode();
 
     fireEvent.press(screen.getByTestId('delete-project-button'));
 
@@ -468,9 +500,9 @@ describe('ProjectScreen - deleting', () => {
     expect(mockBack).toHaveBeenCalled();
   });
 
-  it('leaves everything alone when the confirmation is dismissed', () => {
+  it('leaves everything alone when the confirmation is dismissed', async () => {
     answerAlertWith('Cancel');
-    const { store } = renderEditableInEditMode();
+    const { store } = await renderEditableInEditMode();
 
     fireEvent.press(screen.getByTestId('delete-project-button'));
 
@@ -479,12 +511,12 @@ describe('ProjectScreen - deleting', () => {
     expect(mockBack).not.toHaveBeenCalled();
   });
 
-  it('keeps the project if deleting the folder fails', () => {
+  it('keeps the project if deleting the folder fails', async () => {
     answerAlertWith('Delete');
     (deleteProjectDirectory as jest.Mock).mockImplementationOnce(() => {
       throw new Error('disk busy');
     });
-    const { store } = renderEditableInEditMode();
+    const { store } = await renderEditableInEditMode();
 
     fireEvent.press(screen.getByTestId('delete-project-button'));
 

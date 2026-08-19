@@ -212,6 +212,9 @@ export function ProjectScreen() {
     audioEngine.stop();
     setFormError(null);
     setEditing(true);
+    // Otherwise cancelling out of the form would land back on the mixer
+    // with the drawer still open, right where the user tapped Edit from.
+    setMixerOpen(false);
   }
 
   async function pickFiles(): Promise<DocumentPickerAsset[] | null> {
@@ -366,22 +369,17 @@ export function ProjectScreen() {
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
           <BackButton label={t.project.backToLibrary} onPress={handleBackFromProject} testID="back-button" />
-          <View style={styles.headerActions}>
-            {manifest && !editing && (
-              <Pressable
-                onPress={() => setMixerOpen(true)}
-                style={({ pressed }) => [styles.mixerButton, pressed && styles.mixerButtonPressed]}
-                hitSlop={8}
-                testID="mixer-menu-button"
-                accessibilityLabel={t.project.mixer}
-              >
-                <HamburgerIcon />
-              </Pressable>
-            )}
-            {canEdit && !editing && (
-              <HeaderButton label={t.project.edit} onPress={handleStartEditing} testID="edit-button" />
-            )}
-          </View>
+          {manifest && !editing && (
+            <Pressable
+              onPress={() => setMixerOpen(true)}
+              style={({ pressed }) => [styles.mixerButton, pressed && styles.mixerButtonPressed]}
+              hitSlop={8}
+              testID="mixer-menu-button"
+              accessibilityLabel={t.project.mixer}
+            >
+              <HamburgerIcon />
+            </Pressable>
+          )}
         </View>
         <Text style={styles.title}>{headerTitle}</Text>
         {manifest && !editing && (
@@ -459,6 +457,14 @@ export function ProjectScreen() {
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
         {renderHeader()}
         <Text style={styles.error}>{error ?? t.project.loadFailed}</Text>
+        {/* A failed load (e.g. a corrupted stem) is exactly when editing - to remove or
+            replace the offending stem - matters most, so this can't live only behind the
+            mixer drawer like the rest of Edit's access: there's no mixer to open here. */}
+        {canEdit && (
+          <View style={styles.errorActions}>
+            <HeaderButton label={t.project.edit} onPress={handleStartEditing} testID="edit-button" />
+          </View>
+        )}
       </SafeAreaView>
     );
   }
@@ -490,6 +496,7 @@ export function ProjectScreen() {
         onMonitorModeChange={handleMonitorModeChange}
         clickEnabled={clickEnabled}
         onClickEnabledChange={handleClickEnabledChange}
+        onEdit={canEdit ? handleStartEditing : undefined}
       />
     </SafeAreaView>
   );
@@ -518,11 +525,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: spacing.sm,
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
   },
   title: {
     color: colors.textPrimary,
@@ -583,5 +585,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textAlign: "center",
     marginTop: 40,
+  },
+  errorActions: {
+    alignItems: "center",
+    marginTop: spacing.lg,
   },
 });
