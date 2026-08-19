@@ -7,6 +7,7 @@ export const en = {
   common: {
     cancel: 'Cancel',
     save: 'Save',
+    close: 'Close',
   },
   library: {
     title: 'Library',
@@ -27,6 +28,7 @@ export const en = {
     deleteConfirmBody: (title: string, stemCount: number) =>
       `"${title}" and its ${stemCount} stem${stemCount === 1 ? '' : 's'} will be permanently deleted from this device.`,
     deleteConfirmConfirm: 'Delete',
+    mixer: 'Mixer',
   },
   projectForm: {
     titleLabel: 'TITLE',

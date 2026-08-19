@@ -9,6 +9,7 @@ import {
   getDemoProjectSource,
   getProjectSourceForEntry,
   removeStemFromProject,
+  renameStemInProject,
   updateProjectMetadata,
 } from '@/storage';
 import { createStore } from '@/store';
@@ -33,6 +34,7 @@ jest.mock('@/storage', () => ({
   updateProjectMetadata: jest.fn(),
   addStemsToProject: jest.fn(),
   removeStemFromProject: jest.fn(),
+  renameStemInProject: jest.fn(),
   deleteProjectDirectory: jest.fn(),
   getProjectSourceForEntry: jest.fn(),
 }));
@@ -86,7 +88,12 @@ function renderDemo() {
 }
 
 async function waitForMixer() {
-  await waitFor(() => expect(screen.getByText('Bass')).toBeTruthy());
+  await waitFor(() => expect(screen.getByTestId('play-pause-button')).toBeTruthy());
+}
+
+/** Volume/output/click controls live behind the hamburger drawer now - open it before touching them. */
+function openMixer() {
+  fireEvent.press(screen.getByTestId('mixer-menu-button'));
 }
 
 describe('ProjectScreen - playing', () => {
@@ -96,8 +103,13 @@ describe('ProjectScreen - playing', () => {
 
     expect(screen.getByText('Demo: Sync Test')).toBeTruthy();
     expect(screen.getByText('120 BPM')).toBeTruthy();
+    // The waveform view labels each stem's lane too, so "Keys" is already on screen.
     expect(screen.getByText('Keys')).toBeTruthy();
-    expect(screen.getByText('Guide Vocal')).toBeTruthy();
+
+    openMixer();
+    // Now it appears twice: once for its waveform lane, once for its channel strip.
+    expect(screen.getAllByText('Keys')).toHaveLength(2);
+    expect(screen.getAllByText('Guide Vocal')).toHaveLength(2);
   });
 
   it('play/pause drives the real audio engine transport', async () => {
@@ -115,6 +127,7 @@ describe('ProjectScreen - playing', () => {
   it('toggling mute commits to the engine and the store', async () => {
     const { store } = renderDemo();
     await waitForMixer();
+    openMixer();
 
     const [bassMute] = screen.getAllByText('M');
     fireEvent.press(bassMute);
@@ -179,11 +192,39 @@ describe('ProjectScreen - editing in place', () => {
     return renderWithStore(<ProjectScreen />, store);
   }
 
-  it('offers no Edit button for the bundled demo project', async () => {
+  it('offers no Edit button for the bundled demo project, even from the mixer', async () => {
     renderDemo();
     await waitForMixer();
+    openMixer();
 
     expect(screen.queryByTestId('edit-button')).toBeNull();
+  });
+
+  // Edit lives behind the mixer drawer now, not in the main header, so a
+  // stray tap during a set can't land on it - it takes opening the mixer first.
+  it('keeps Edit out of the header and reachable only through the mixer once loaded', async () => {
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: filesystemProject,
+      resolveFile: () => 0,
+    });
+
+    renderEditable();
+    await waitForMixer();
+    expect(screen.queryByTestId('edit-button')).toBeNull();
+
+    openMixer();
+    expect(screen.getByTestId('edit-button')).toBeTruthy();
+  });
+
+  // A failed load (e.g. a corrupted stem) is exactly when the user needs to
+  // get into the editor to fix it, so Edit can't be trapped behind a mixer
+  // drawer that has nothing to show - it has to surface directly.
+  it('offers Edit directly, without a mixer, when the project fails to load', async () => {
+    renderEditable(); // the default mocked getProjectSourceForEntry fails for this fake sourceDir
+    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
+
+    expect(screen.getByText(filesystemProject.title)).toBeTruthy();
+    expect(screen.queryByTestId('mixer-menu-button')).toBeNull();
   });
 
   // Editing can delete the files the transport is reading, so entering edit
@@ -280,6 +321,75 @@ describe('ProjectScreen - editing in place', () => {
       expect(store.getState().projects.entities['my-song']?.tracks).toHaveLength(1)
     );
   });
+
+  it('renames a stem through to the project folder on blur, not on every keystroke', async () => {
+    (renameStemInProject as jest.Mock).mockResolvedValue({
+      ...filesystemProject,
+      tracks: filesystemProject.tracks.map((t) =>
+        t.id === 'bass' ? { ...t, name: 'Low End' } : t
+      ),
+    });
+
+    const { store } = renderEditable();
+    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('edit-button'));
+
+    const bassNameInput = screen.getByTestId('rename-stem-bass');
+    fireEvent.changeText(bassNameInput, 'Low End');
+    expect(renameStemInProject).not.toHaveBeenCalled();
+
+    // A single-line TextInput's default blurOnSubmit already blurs it on
+    // submit, so only `onBlur` is wired - see StemNameField.
+    fireEvent(bassNameInput, 'blur');
+
+    await waitFor(() =>
+      expect(renameStemInProject).toHaveBeenCalledWith(
+        filesystemProject.sourceDir,
+        'bass',
+        'Low End'
+      )
+    );
+    expect(renameStemInProject).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(
+        store
+          .getState()
+          .projects.entities['my-song']?.tracks.find((t) => t.id === 'bass')?.name
+      ).toBe('Low End')
+    );
+  });
+
+  it('ignores an empty rename instead of blanking the stem name', async () => {
+    renderEditable();
+    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('edit-button'));
+
+    const bassNameInput = screen.getByTestId('rename-stem-bass');
+    fireEvent.changeText(bassNameInput, '   ');
+    fireEvent(bassNameInput, 'blur');
+
+    expect(renameStemInProject).not.toHaveBeenCalled();
+    expect(bassNameInput.props.value).toBe('Bass');
+  });
+
+  // The field shows the new name immediately (so typing feels responsive),
+  // but that's only a guess until the write actually persists - a failed
+  // write must not leave the input drifted from what's really on disk.
+  it('reverts the displayed name if the rename write fails', async () => {
+    (renameStemInProject as jest.Mock).mockRejectedValue(new Error('disk full'));
+
+    renderEditable();
+    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('edit-button'));
+
+    const bassNameInput = screen.getByTestId('rename-stem-bass');
+    fireEvent.changeText(bassNameInput, 'Low End');
+    fireEvent(bassNameInput, 'blur');
+
+    await waitFor(() => expect(renameStemInProject).toHaveBeenCalled());
+    await waitFor(() => expect(bassNameInput.props.value).toBe('Bass'));
+    expect(screen.getByText('disk full')).toBeTruthy();
+  });
 });
 
 describe('ProjectScreen - a brand-new (stemless) project', () => {
@@ -353,7 +463,7 @@ describe('ProjectScreen - a brand-new (stemless) project', () => {
 });
 
 describe('ProjectScreen - deleting', () => {
-  function renderEditableInEditMode() {
+  async function renderEditableInEditMode() {
     mockParams = { projectId: 'my-song' };
     const store = createStore();
     store.dispatch(projectAdded(filesystemProject));
@@ -364,6 +474,10 @@ describe('ProjectScreen - deleting', () => {
       })
     );
     const rendered = renderWithStore(<ProjectScreen />, store);
+    // This fake sourceDir has no real manifest.json behind it, so the load
+    // always fails - Edit has to stay reachable straight from the error
+    // state (see ProjectScreen's error branch), not behind the mixer drawer.
+    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
     fireEvent.press(screen.getByTestId('edit-button'));
     return rendered;
   }
@@ -383,9 +497,9 @@ describe('ProjectScreen - deleting', () => {
   });
 
   // Deleting destroys the audio files, so it must never happen on one tap.
-  it('asks before deleting anything', () => {
+  it('asks before deleting anything', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    renderEditableInEditMode();
+    await renderEditableInEditMode();
 
     fireEvent.press(screen.getByTestId('delete-project-button'));
 
@@ -394,9 +508,9 @@ describe('ProjectScreen - deleting', () => {
     expect(mockBack).not.toHaveBeenCalled();
   });
 
-  it('deletes the folder, the entry and its mixer state once confirmed', () => {
+  it('deletes the folder, the entry and its mixer state once confirmed', async () => {
     answerAlertWith('Delete');
-    const { store } = renderEditableInEditMode();
+    const { store } = await renderEditableInEditMode();
 
     fireEvent.press(screen.getByTestId('delete-project-button'));
 
@@ -408,9 +522,9 @@ describe('ProjectScreen - deleting', () => {
     expect(mockBack).toHaveBeenCalled();
   });
 
-  it('leaves everything alone when the confirmation is dismissed', () => {
+  it('leaves everything alone when the confirmation is dismissed', async () => {
     answerAlertWith('Cancel');
-    const { store } = renderEditableInEditMode();
+    const { store } = await renderEditableInEditMode();
 
     fireEvent.press(screen.getByTestId('delete-project-button'));
 
@@ -419,12 +533,12 @@ describe('ProjectScreen - deleting', () => {
     expect(mockBack).not.toHaveBeenCalled();
   });
 
-  it('keeps the project if deleting the folder fails', () => {
+  it('keeps the project if deleting the folder fails', async () => {
     answerAlertWith('Delete');
     (deleteProjectDirectory as jest.Mock).mockImplementationOnce(() => {
       throw new Error('disk busy');
     });
-    const { store } = renderEditableInEditMode();
+    const { store } = await renderEditableInEditMode();
 
     fireEvent.press(screen.getByTestId('delete-project-button'));
 

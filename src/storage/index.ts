@@ -6,6 +6,7 @@ export {
   deleteProjectDirectory,
   patchProjectManifest,
   removeStemFromProject,
+  renameStemInProject,
   updateProjectMetadata,
   DRAFT_PROJECT_TITLE,
   type ProjectMetadataEdits,

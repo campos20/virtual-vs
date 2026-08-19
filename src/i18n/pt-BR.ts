@@ -16,6 +16,7 @@ export const ptBR: TranslationDictionary = {
   common: {
     cancel: 'Cancelar',
     save: 'Salvar',
+    close: 'Fechar',
   },
   library: {
     title: 'Biblioteca',
@@ -36,6 +37,7 @@ export const ptBR: TranslationDictionary = {
     deleteConfirmBody: (title: string, stemCount: number) =>
       `"${title}" e ${stemCount} ${stemCount === 1 ? 'faixa' : 'faixas'} serão excluídos permanentemente deste aparelho.`,
     deleteConfirmConfirm: 'Excluir',
+    mixer: 'Mixer',
   },
   projectForm: {
     titleLabel: 'TÍTULO',

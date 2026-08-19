@@ -204,6 +204,28 @@ export async function removeStemFromProject(
 }
 
 /**
+ * Renames a stem in place: only its display `name` changes, never its `id`
+ * or `file` - those are what the manifest, the engine's track state and any
+ * already-decoded buffer are keyed on, so leaving them alone means a rename
+ * never has to touch the audio graph.
+ */
+export async function renameStemInProject(
+  sourceDir: string,
+  trackId: string,
+  name: string
+): Promise<ProjectManifest> {
+  const directory = new Directory(sourceDir);
+  const manifest = await readProjectManifest(directory);
+
+  const updated: ProjectManifest = {
+    ...manifest,
+    tracks: manifest.tracks.map((t) => (t.id === trackId ? { ...t, name } : t)),
+  };
+  new File(directory, 'manifest.json').write(JSON.stringify(updated, null, 2));
+  return updated;
+}
+
+/**
  * Merges `changes` into a project's manifest.json on disk.
  *
  * This is how mixer state survives the app closing: the manifest is the

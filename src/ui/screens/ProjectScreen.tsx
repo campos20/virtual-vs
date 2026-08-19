@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  ScrollView,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { audioEngine, type EngineTransportState } from "@/engine";
 import { useTranslation } from "@/i18n";
 import { trackRuntimeStatesFromManifest } from "@/engine/trackRuntimeState";
+import { computeWaveformPeaks, waveformBarCount } from "@/engine/waveform";
 import { usePlayhead } from "@/hooks/usePlayhead";
 import {
   addStemsToProject,
@@ -20,6 +21,7 @@ import {
   deleteProjectDirectory,
   getProjectSourceForEntry,
   removeStemFromProject,
+  renameStemInProject,
   updateProjectMetadata,
 } from "@/storage";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -31,14 +33,18 @@ import {
   tracksRemovedForProject,
 } from "@/store/tracksSlice";
 import type { ProjectManifest } from "@/types/project";
-import { ChannelStrip } from "@/ui/components/ChannelStrip";
-import { ClickToggle } from "@/ui/components/ClickToggle";
-import { MonitorSplitSwitch } from "@/ui/components/MonitorSplitSwitch";
+import { HamburgerIcon } from "@/ui/components/HamburgerIcon";
+import { MixerDrawer } from "@/ui/components/MixerDrawer";
 import { ProjectForm, type ProjectFormValues } from "@/ui/components/ProjectForm";
 import { TransportBar } from "@/ui/components/TransportBar";
+import { WaveformView, type StemWaveform } from "@/ui/components/WaveformView";
 import { BackButton } from "@/ui/components/BackButton";
 import { HeaderButton } from "@/ui/components/HeaderButton";
 import { colors, elevation, radii, spacing } from "@/ui/theme";
+import { getTrackColor } from "@/ui/trackColors";
+
+/** Bounds the number of stem waveform lanes rendered - past this, only the mixer's per-track strips show the rest. */
+const MAX_WAVEFORM_STEMS = 16;
 
 /**
  * The one and only project view - play it, edit it, or fill in a brand-new
@@ -64,9 +70,11 @@ export function ProjectScreen() {
 
   const [manifest, setManifest] = useState<ProjectManifest | null>(null);
   const [durationSec, setDurationSec] = useState(0);
+  const [waveformTracks, setWaveformTracks] = useState<StemWaveform[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [transportState, setTransportState] = useState<EngineTransportState>("stopped");
+  const [mixerOpen, setMixerOpen] = useState(false);
   // A project with no stems can't be played, so it opens straight in edit
   // mode - that is all "creating a project" means here.
   const [editing, setEditing] = useState((entry?.tracks.length ?? 0) === 0);
@@ -131,6 +139,20 @@ export function ProjectScreen() {
         );
 
         setDurationSec(longestBufferSec);
+
+        const waveformStems = source.manifest.tracks.slice(0, MAX_WAVEFORM_STEMS);
+        const laneBarCount = waveformBarCount(longestBufferSec, waveformStems.length);
+        setWaveformTracks(
+          waveformStems.map((track, index) => ({
+            id: track.id,
+            name: track.name,
+            color: getTrackColor(index),
+            peaks: decoded.trackBuffers[track.id]
+              ? computeWaveformPeaks([decoded.trackBuffers[track.id]], longestBufferSec, laneBarCount)
+              : new Float32Array(laneBarCount),
+          })),
+        );
+
         setManifest(source.manifest);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
@@ -190,6 +212,9 @@ export function ProjectScreen() {
     audioEngine.stop();
     setFormError(null);
     setEditing(true);
+    // Otherwise cancelling out of the form would land back on the mixer
+    // with the drawer still open, right where the user tapped Edit from.
+    setMixerOpen(false);
   }
 
   async function pickFiles(): Promise<DocumentPickerAsset[] | null> {
@@ -230,6 +255,35 @@ export function ProjectScreen() {
       setFormError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+    }
+  }
+
+  /**
+   * Unlike add/remove, a rename touches only a display name - it doesn't
+   * change what's decoded or how the engine's graph is wired, so there's no
+   * need to bump `reloadToken` and pay for a full re-decode (which would
+   * also call `audioEngine.loadProject()` again, a needless stop of a graph
+   * that was never playing anyway since editing already stopped it). Patch
+   * the already-loaded `manifest`/`waveformTracks` state directly instead.
+   *
+   * Returns whether the write actually persisted - StemNameField shows the
+   * new name optimistically and needs to revert it if this resolves false,
+   * rather than drifting out of sync with what's actually on disk.
+   */
+  async function handleRenameStem(stemId: string, name: string): Promise<boolean> {
+    setFormError(null);
+    if (!entry?.sourceDir) return false;
+    try {
+      const updated = await renameStemInProject(entry.sourceDir, stemId, name);
+      dispatch(projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }));
+      setManifest((prev) => prev && { ...prev, tracks: updated.tracks });
+      setWaveformTracks((prev) =>
+        prev.map((track) => (track.id === stemId ? { ...track, name } : track)),
+      );
+      return true;
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : String(e));
+      return false;
     }
   }
 
@@ -321,8 +375,16 @@ export function ProjectScreen() {
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
           <BackButton label={t.project.backToLibrary} onPress={handleBackFromProject} testID="back-button" />
-          {canEdit && !editing && (
-            <HeaderButton label={t.project.edit} onPress={handleStartEditing} testID="edit-button" />
+          {manifest && !editing && (
+            <Pressable
+              onPress={() => setMixerOpen(true)}
+              style={({ pressed }) => [styles.mixerButton, pressed && styles.mixerButtonPressed]}
+              hitSlop={8}
+              testID="mixer-menu-button"
+              accessibilityLabel={t.project.mixer}
+            >
+              <HamburgerIcon />
+            </Pressable>
           )}
         </View>
         <Text style={styles.title}>{headerTitle}</Text>
@@ -367,6 +429,7 @@ export function ProjectScreen() {
           error={formError}
           onAddStems={handleAddStems}
           onRemoveStem={handleRemoveStem}
+          onRenameStem={handleRenameStem}
           onSubmit={handleSubmit}
           onCancel={handleCancelEditing}
           onDelete={entry?.sourceDir ? handleDelete : undefined}
@@ -400,6 +463,14 @@ export function ProjectScreen() {
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
         {renderHeader()}
         <Text style={styles.error}>{error ?? t.project.loadFailed}</Text>
+        {/* A failed load (e.g. a corrupted stem) is exactly when editing - to remove or
+            replace the offending stem - matters most, so this can't live only behind the
+            mixer drawer like the rest of Edit's access: there's no mixer to open here. */}
+        {canEdit && (
+          <View style={styles.errorActions}>
+            <HeaderButton label={t.project.edit} onPress={handleStartEditing} testID="edit-button" />
+          </View>
+        )}
       </SafeAreaView>
     );
   }
@@ -408,29 +479,11 @@ export function ProjectScreen() {
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       {renderHeader()}
 
-      <View style={styles.mixer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.mixerContent}
-        >
-          {manifest.tracks.map((item, index) => (
-            <ChannelStrip key={item.id} projectId={manifest.id} track={item} index={index} />
-          ))}
-        </ScrollView>
+      <View style={styles.waveformArea}>
+        <WaveformView tracks={waveformTracks} durationSec={durationSec} playheadSec={playheadSec} />
       </View>
 
       <View style={styles.console}>
-        <View style={styles.rack}>
-          <MonitorSplitSwitch mode={monitorMode} onChange={handleMonitorModeChange} />
-          {/* No bpm means no synthesized click, so there is nothing to toggle. */}
-          {manifest.bpm !== undefined && (
-            <>
-              <View style={styles.rackDivider} />
-              <ClickToggle enabled={clickEnabled} onChange={handleClickEnabledChange} />
-            </>
-          )}
-        </View>
         <TransportBar
           isPlaying={transportState === "playing"}
           playheadSec={playheadSec}
@@ -440,6 +493,17 @@ export function ProjectScreen() {
           onSeek={(seconds) => audioEngine.seek(seconds)}
         />
       </View>
+
+      <MixerDrawer
+        visible={mixerOpen}
+        onClose={() => setMixerOpen(false)}
+        manifest={manifest}
+        monitorMode={monitorMode}
+        onMonitorModeChange={handleMonitorModeChange}
+        clickEnabled={clickEnabled}
+        onClickEnabledChange={handleClickEnabledChange}
+        onEdit={canEdit ? handleStartEditing : undefined}
+      />
     </SafeAreaView>
   );
 }
@@ -498,15 +562,10 @@ const styles = StyleSheet.create({
     marginTop: 40,
     paddingHorizontal: 24,
   },
-  mixer: {
+  waveformArea: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  mixerContent: {
-    // Strips stretch to fill the mixer area so the console reads as one
-    // continuous surface instead of floating above empty space.
-    alignItems: "stretch",
-    paddingHorizontal: 6,
+    justifyContent: "center",
   },
   console: {
     backgroundColor: colors.panel,
@@ -514,23 +573,27 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     ...elevation,
   },
-  rack: {
-    flexDirection: "row",
+  mixerButton: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.pill,
     alignItems: "center",
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-    paddingHorizontal: spacing.lg,
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
   },
-  rackDivider: {
-    width: StyleSheet.hairlineWidth,
-    alignSelf: "stretch",
-    backgroundColor: colors.border,
-    marginVertical: 4,
+  mixerButtonPressed: {
+    opacity: 0.7,
   },
   error: {
     color: colors.danger,
     fontSize: 15,
     textAlign: "center",
     marginTop: 40,
+  },
+  errorActions: {
+    alignItems: "center",
+    marginTop: spacing.lg,
   },
 });

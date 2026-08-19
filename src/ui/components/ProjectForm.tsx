@@ -30,10 +30,63 @@ interface ProjectFormProps {
   error?: string | null;
   onAddStems: () => void;
   onRemoveStem: (stemId: string) => void;
+  /** Resolves to whether the rename actually persisted, so a failed write doesn't leave the field showing an unsaved name. */
+  onRenameStem: (stemId: string, name: string) => Promise<boolean>;
   onSubmit: (values: ProjectFormValues) => void;
   onCancel: () => void;
   /** Omitted for projects that can't be deleted (the bundled demo). */
   onDelete?: () => void;
+}
+
+interface StemNameFieldProps {
+  stemId: string;
+  name: string;
+  disabled?: boolean;
+  onRename: (stemId: string, name: string) => Promise<boolean>;
+}
+
+/**
+ * A stem's name, editable in place. Local state (seeded once from `name`)
+ * rather than a value fully controlled by the `stems` prop, because that
+ * prop is recomputed fresh on every ProjectScreen render (a new array/object
+ * per stem) - a fully-controlled input would be fine at rest but risks
+ * clobbering an in-progress edit if an unrelated re-render lands mid-type.
+ * Committing on blur only (not per keystroke, and not also on
+ * `onEndEditing` - a single-line TextInput's default `blurOnSubmit`
+ * behavior means submitting already blurs it, so wiring both fires the
+ * commit twice for one edit) keeps a manifest rewrite off every character
+ * typed and off every edit. Keyed by `stemId` in the parent's `.map()`, so
+ * this naturally remounts (and re-seeds) if the stem itself is removed and
+ * a different one added in its place.
+ */
+function StemNameField({ stemId, name, disabled, onRename }: StemNameFieldProps) {
+  const [draft, setDraft] = useState(name);
+
+  async function commit() {
+    const trimmed = draft.trim();
+    if (trimmed.length === 0 || trimmed === name) {
+      setDraft(name);
+      return;
+    }
+    // Optimistic, but reverted below if the write fails - `onRename` is an
+    // async disk write that can fail, and this field is the only thing
+    // holding the not-yet-confirmed name, so it can't just keep showing it.
+    setDraft(trimmed);
+    const persisted = await onRename(stemId, trimmed);
+    if (!persisted) setDraft(name);
+  }
+
+  return (
+    <TextInput
+      value={draft}
+      onChangeText={setDraft}
+      onBlur={commit}
+      editable={!disabled}
+      underlineColorAndroid="transparent"
+      style={styles.fileName}
+      testID={`rename-stem-${stemId}`}
+    />
+  );
 }
 
 /**
@@ -52,6 +105,7 @@ export function ProjectForm({
   error,
   onAddStems,
   onRemoveStem,
+  onRenameStem,
   onSubmit,
   onCancel,
   onDelete,
@@ -120,9 +174,12 @@ export function ProjectForm({
       ) : (
         stems.map((stem) => (
           <View key={stem.id} style={styles.fileRow}>
-            <Text style={styles.fileName} numberOfLines={1}>
-              {stem.name}
-            </Text>
+            <StemNameField
+              stemId={stem.id}
+              name={stem.name}
+              disabled={busy}
+              onRename={onRenameStem}
+            />
             <Pressable
               onPress={() => onRemoveStem(stem.id)}
               hitSlop={8}
@@ -232,6 +289,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     flex: 1,
     marginRight: 12,
+    padding: 0,
   },
   removeText: {
     color: colors.danger,
