@@ -12,6 +12,7 @@ import {
   renameStemInProject,
   updateProjectMetadata,
 } from '@/storage';
+import { nowPlayingStore } from '@/playback/nowPlayingStore';
 import { createStore } from '@/store';
 import { projectAdded } from '@/store/projectsSlice';
 import { trackEntityId, tracksInitializedForProject } from '@/store/tracksSlice';
@@ -56,6 +57,10 @@ afterEach(() => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockParams = {};
+  // nowPlayingStore's whole point is skipping a reload when a project is
+  // already current - which would silently leak across tests that reuse the
+  // same project id (most of them use 'demo-sync-test') unless reset here.
+  nowPlayingStore.resetForTests();
   // Real behaviour by default; individual tests override it.
   (getProjectSourceForEntry as jest.Mock).mockImplementation(
     jest.requireActual('@/storage').getProjectSourceForEntry
@@ -88,7 +93,7 @@ function renderDemo() {
 }
 
 async function waitForMixer() {
-  await waitFor(() => expect(screen.getByTestId('play-pause-button')).toBeTruthy());
+  await waitFor(() => expect(screen.getByTestId('mixer-menu-button')).toBeTruthy());
 }
 
 /** Volume/output/click controls live behind the hamburger drawer now - open it before touching them. */
@@ -112,16 +117,17 @@ describe('ProjectScreen - playing', () => {
     expect(screen.getAllByText('Guide Vocal')).toHaveLength(2);
   });
 
-  it('play/pause drives the real audio engine transport', async () => {
+  // Play/pause/stop/seek are exclusively the global NowPlayingBar's job now
+  // (see NowPlayingBar.test.tsx) - this screen only loads a project in and
+  // lets the shared engine transport drive its waveform.
+  it('loads the project into the engine, ready to play', async () => {
     renderDemo();
     await waitForMixer();
 
-    fireEvent.press(screen.getByTestId('play-pause-button'));
+    expect(audioEngine.getManifestTrackIds().length).toBeGreaterThan(0);
+    audioEngine.play();
     expect(audioEngine.getTransportState()).toBe('playing');
-    expect(screen.getByTestId('pause-icon')).toBeTruthy();
-
-    fireEvent.press(screen.getByTestId('play-pause-button'));
-    expect(audioEngine.getTransportState()).toBe('paused');
+    audioEngine.stop();
   });
 
   it('toggling mute commits to the engine and the store', async () => {
@@ -167,20 +173,61 @@ describe('ProjectScreen - playing', () => {
     expect(audioEngine.getTrackState('keys')?.soloed).toBe(true);
   });
 
-  it('detaches the engine listener before stopping it on unmount', async () => {
-    const detach = jest.fn();
-    jest.spyOn(audioEngine, 'onTransportStateChange').mockReturnValue(detach);
+  // The core of the "now playing" feature: playback used to be tied to this
+  // screen's mount lifecycle (stopped on Back/unmount/entering Edit) - it no
+  // longer is. Only the mini-player, deleting the project, or the user
+  // explicitly hitting stop/pause should ever stop the engine now.
+  it('keeps playing across unmount, instead of stopping like it used to', async () => {
     const stopSpy = jest.spyOn(audioEngine, 'stop');
 
     const { unmount } = renderDemo();
     await waitForMixer();
+    audioEngine.play();
     stopSpy.mockClear();
 
     unmount();
 
-    expect(detach.mock.invocationCallOrder[0]).toBeLessThan(
-      stopSpy.mock.invocationCallOrder[0]
-    );
+    expect(stopSpy).not.toHaveBeenCalled();
+    expect(audioEngine.getTransportState()).toBe('playing');
+    audioEngine.stop();
+  });
+
+  it('does not re-decode or restart playback when re-opening the same project', async () => {
+    const { unmount } = renderDemo();
+    await waitForMixer();
+    audioEngine.play();
+    unmount();
+
+    (getProjectSourceForEntry as jest.Mock).mockClear();
+    renderDemo();
+    await waitForMixer();
+
+    expect(getProjectSourceForEntry).not.toHaveBeenCalled();
+    expect(audioEngine.getTransportState()).toBe('playing');
+    audioEngine.stop();
+  });
+
+  // "Stop A, show B" - opening a *different* project is the one case that's
+  // still supposed to interrupt whatever was playing (unlike Back/Edit/
+  // re-opening the same project, which no longer do).
+  it('opening a different project stops the previous one and replaces it', async () => {
+    const { unmount } = renderDemo();
+    await waitForMixer();
+    audioEngine.play();
+    unmount();
+
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: filesystemProject,
+      resolveFile: () => 0,
+    });
+    mockParams = { projectId: 'my-song' };
+    const store = createStore();
+    store.dispatch(projectAdded(filesystemProject));
+    renderWithStore(<ProjectScreen />, store);
+    await waitForMixer();
+
+    expect(audioEngine.getTransportState()).toBe('stopped');
+    expect(screen.getByText('My Song')).toBeTruthy();
   });
 });
 
@@ -227,16 +274,16 @@ describe('ProjectScreen - editing in place', () => {
     expect(screen.queryByTestId('mixer-menu-button')).toBeNull();
   });
 
-  // Editing can delete the files the transport is reading, so entering edit
-  // mode must always stop audio first.
-  it('stops playback and swaps in the form when Edit is pressed', async () => {
+  // Entering Edit used to always stop audio first - it no longer does, so a
+  // song keeps playing while its stems are being tidied up mid-set.
+  it('swaps in the form without stopping playback when Edit is pressed', async () => {
     renderEditable();
     await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
     const stopSpy = jest.spyOn(audioEngine, 'stop');
 
     fireEvent.press(screen.getByTestId('edit-button'));
 
-    expect(stopSpy).toHaveBeenCalled();
+    expect(stopSpy).not.toHaveBeenCalled();
     expect(screen.getByTestId('title-input')).toBeTruthy();
     expect(screen.getByTestId('save-button')).toBeTruthy();
   });
@@ -417,7 +464,7 @@ describe('ProjectScreen - a brand-new (stemless) project', () => {
 
     expect(screen.getByTestId('title-input')).toBeTruthy();
     expect(screen.getByTestId('save-button')).toBeTruthy();
-    expect(screen.queryByTestId('play-pause-button')).toBeNull();
+    expect(screen.queryByTestId('mixer-menu-button')).toBeNull();
   });
 
   it('saves metadata on a stemless project without needing stems first', async () => {
@@ -545,5 +592,30 @@ describe('ProjectScreen - deleting', () => {
     expect(store.getState().projects.entities['my-song']).toBeTruthy();
     expect(mockBack).not.toHaveBeenCalled();
     expect(screen.getByText('disk busy')).toBeTruthy();
+  });
+
+  // Unlike the fake-sourceDir cases above (which never actually load), this
+  // one loads for real, so it's the one that exercises nowPlayingStore's
+  // closeIfCurrent - deleting the project that's actually loaded/playing
+  // must stop it, not leave it playing under a deleted project.
+  it('stops the engine when deleting the project that is currently loaded and playing', async () => {
+    answerAlertWith('Delete');
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: filesystemProject,
+      resolveFile: () => 0,
+    });
+    mockParams = { projectId: 'my-song' };
+    const store = createStore();
+    store.dispatch(projectAdded(filesystemProject));
+    renderWithStore(<ProjectScreen />, store);
+    await waitForMixer();
+    audioEngine.play();
+    openMixer();
+    fireEvent.press(screen.getByTestId('edit-button'));
+
+    fireEvent.press(screen.getByTestId('delete-project-button'));
+
+    expect(audioEngine.getTransportState()).toBe('stopped');
+    expect(deleteProjectDirectory).toHaveBeenCalledWith(filesystemProject.sourceDir);
   });
 });

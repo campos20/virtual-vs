@@ -12,6 +12,17 @@ import { generateClickBuffer } from './clickTrack';
 import type { EngineTransportState, MonitorMode, TrackRuntimeState } from './types';
 
 const LOOKAHEAD_SEC = 0.15;
+/**
+ * Lookahead for stop scheduling. `stopSources()` computes one `stopAt` and
+ * passes it to every node so they all stop on the same sample - but
+ * `ctx.currentTime` keeps advancing while that loop runs, so an un-offset
+ * `stopAt` can already be in the past by the time a later call in the loop
+ * actually reaches the audio thread, which gets treated as "stop ASAP"
+ * (i.e. no longer the same guaranteed instant as the earlier calls). Small
+ * enough to be imperceptible as stop latency, comfortably larger than the
+ * loop's real overhead for the track counts this app deals with.
+ */
+const STOP_LOOKAHEAD_SEC = 0.01;
 /** Ramp time for volume/mute/solo changes, short enough to feel instant but long enough to avoid zipper clicks. */
 const GAIN_RAMP_SEC = 0.015;
 
@@ -294,12 +305,24 @@ export class AudioEngine {
     this.setTransportState('playing');
   }
 
+  /**
+   * Stops every stem (and the click) at the exact same context time -
+   * mirrors `scheduleSources()` sharing one `startAt` for starts. An
+   * argument-less `.stop()` per node, called across a JS loop, has no such
+   * guarantee: each call would independently mean "stop as soon as
+   * possible" rather than all landing on the same sample. `stopAt` is
+   * nudged `STOP_LOOKAHEAD_SEC` into the future (not just `currentTime`) so
+   * it's still ahead of the clock for every call in the loop, not only the
+   * first - a `when` already in the past falls back to that same "ASAP"
+   * behavior this exists to avoid. See AGENTS.md "Stems stay sample-locked".
+   */
   private stopSources(): void {
+    const stopAt = this.ctx.currentTime + STOP_LOOKAHEAD_SEC;
     for (const node of this.tracks.values()) {
-      node.source?.stop();
+      node.source?.stop(stopAt);
       node.source = null;
     }
-    this.clickSource?.stop();
+    this.clickSource?.stop(stopAt);
     this.clickSource = null;
   }
 

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "@/i18n";
+import { useNowPlaying } from "@/hooks/useNowPlaying";
 import { createDraftProject } from "@/storage";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { persistProjectsReordered } from "@/store/persistProjectOrder";
@@ -21,6 +22,7 @@ export function LibraryScreen() {
     projectsSelectors.selectAll(s.projects),
   );
   const hydrated = useAppSelector((s) => s.projects.hydrated);
+  const nowPlayingProjectId = useNowPlaying().projectId;
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,6 +117,8 @@ export function LibraryScreen() {
                 canMoveDown={index < projects.length - 1}
                 moveUpAccessibilityLabel={t.library.moveUp}
                 moveDownAccessibilityLabel={t.library.moveDown}
+                isNowPlaying={item.id === nowPlayingProjectId}
+                nowPlayingAccessibilityLabel={t.nowPlaying.heading}
                 onPress={() =>
                   router.push({
                     pathname: "/project/[projectId]",

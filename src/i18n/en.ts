@@ -45,6 +45,10 @@ export const en = {
     remove: 'Remove',
     deleteProject: 'Delete Project',
   },
+  nowPlaying: {
+    heading: 'Now Playing',
+    goToSong: (title: string) => `Now playing: ${title}. Go to song.`,
+  },
   monitorSplit: {
     heading: 'OUTPUT',
     split: 'Split',

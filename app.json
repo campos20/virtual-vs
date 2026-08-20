@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "virtual-vs",
+    "name": "Virtual VS",
     "slug": "virtual-vs",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -43,9 +43,7 @@
         {
           "iosBackgroundMode": true,
           "androidForegroundService": true,
-          "androidFSTypes": [
-            "mediaPlayback"
-          ],
+          "androidFSTypes": ["mediaPlayback"],
           "androidPermissions": [
             "android.permission.FOREGROUND_SERVICE",
             "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"

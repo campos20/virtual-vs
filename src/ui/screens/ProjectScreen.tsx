@@ -1,6 +1,6 @@
 import { getDocumentAsync, type DocumentPickerAsset } from "expo-document-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -10,16 +10,14 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { audioEngine, type EngineTransportState } from "@/engine";
+import { audioEngine } from "@/engine";
 import { useTranslation } from "@/i18n";
-import { trackRuntimeStatesFromManifest } from "@/engine/trackRuntimeState";
-import { computeWaveformPeaks, waveformBarCount } from "@/engine/waveform";
+import { useNowPlaying } from "@/hooks/useNowPlaying";
 import { usePlayhead } from "@/hooks/usePlayhead";
+import { nowPlayingStore } from "@/playback/nowPlayingStore";
 import {
   addStemsToProject,
-  decodeProjectAudio,
   deleteProjectDirectory,
-  getProjectSourceForEntry,
   removeStemFromProject,
   renameStemInProject,
   updateProjectMetadata,
@@ -32,19 +30,13 @@ import {
   tracksInitializedForProject,
   tracksRemovedForProject,
 } from "@/store/tracksSlice";
-import type { ProjectManifest } from "@/types/project";
 import { HamburgerIcon } from "@/ui/components/HamburgerIcon";
 import { MixerDrawer } from "@/ui/components/MixerDrawer";
 import { ProjectForm, type ProjectFormValues } from "@/ui/components/ProjectForm";
-import { TransportBar } from "@/ui/components/TransportBar";
-import { WaveformView, type StemWaveform } from "@/ui/components/WaveformView";
+import { WaveformView } from "@/ui/components/WaveformView";
 import { BackButton } from "@/ui/components/BackButton";
 import { HeaderButton } from "@/ui/components/HeaderButton";
-import { colors, elevation, radii, spacing } from "@/ui/theme";
-import { getTrackColor } from "@/ui/trackColors";
-
-/** Bounds the number of stem waveform lanes rendered - past this, only the mixer's per-track strips show the rest. */
-const MAX_WAVEFORM_STEMS = 16;
+import { colors, radii, spacing } from "@/ui/theme";
 
 /**
  * The one and only project view - play it, edit it, or fill in a brand-new
@@ -52,6 +44,14 @@ const MAX_WAVEFORM_STEMS = 16;
  * workspace. There is no separate "new project" screen: "+ New" creates an
  * empty project and lands here, and a project with no stems simply opens in
  * edit mode because there is nothing to play yet.
+ *
+ * Playback itself is NOT tied to this screen's lifecycle - see
+ * `nowPlayingStore`/`NowPlayingBar`. Loading a project into the engine, the
+ * live transport, and the persistent bottom bar all survive navigating away
+ * (Back, editing, browsing the Library); this screen only loads a project in
+ * (deferring to the shared store if it's already the current one) and
+ * renders whatever the shared store says is current, once it agrees with
+ * the project this screen represents.
  */
 export function ProjectScreen() {
   const { projectId } = useLocalSearchParams<{ projectId?: string }>();
@@ -68,92 +68,45 @@ export function ProjectScreen() {
   // headphone splitter is wired, which is the same for every song at a gig.
   const clickEnabled = entry?.clickEnabled ?? true;
 
-  const [manifest, setManifest] = useState<ProjectManifest | null>(null);
-  const [durationSec, setDurationSec] = useState(0);
-  const [waveformTracks, setWaveformTracks] = useState<StemWaveform[]>([]);
+  const nowPlaying = useNowPlaying();
+  const isCurrent = entry !== undefined && nowPlaying.projectId === entry.id;
+
+  // This screen's own "did *my* load attempt succeed" state - distinct from
+  // the shared store's state, which might still (correctly) reflect a
+  // *different* project if this one's load failed. See nowPlayingStore's
+  // decode-failure handling.
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [transportState, setTransportState] = useState<EngineTransportState>("stopped");
   const [mixerOpen, setMixerOpen] = useState(false);
   // A project with no stems can't be played, so it opens straight in edit
   // mode - that is all "creating a project" means here.
   const [editing, setEditing] = useState((entry?.tracks.length ?? 0) === 0);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  // Bumped to force the loader effect to re-run after stems/metadata change.
-  const [reloadToken, setReloadToken] = useState(0);
 
   const { seconds: playheadSec, stop: stopPlayhead } = usePlayhead();
-  const detachTransportRef = useRef<(() => void) | null>(null);
-
-  // Declared *before* the loader effect on purpose. React runs cleanups in
-  // declaration order, so on unmount this one detaches the engine from React
-  // state before the loader's cleanup calls audioEngine.stop(). Otherwise
-  // that stop() would push a transport change into setState while the
-  // navigator is tearing this screen's native views down - the "already has
-  // a parent" Fabric crash in AGENTS.md. This ordering is what covers the
-  // Android hardware back button and the back gesture, neither of which goes
-  // through handleBack below.
-  useEffect(() => {
-    detachTransportRef.current = audioEngine.onTransportStateChange(setTransportState);
-    return () => {
-      detachTransportRef.current?.();
-      detachTransportRef.current = null;
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
       if (!entry) return;
+      if (entry.tracks.length === 0) {
+        // Nothing to decode - matches the `editing` default above.
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       setError(null);
       try {
-        const source = await getProjectSourceForEntry(entry);
-        const decoded = await decodeProjectAudio(audioEngine.context, source);
+        const { manifest } = await nowPlayingStore.openProject(entry, {
+          monitorMode,
+          clickEnabled,
+        });
         if (cancelled) return;
-
         dispatch(
-          tracksInitializedForProject({
-            projectId: entry.id,
-            tracks: source.manifest.tracks,
-          }),
+          tracksInitializedForProject({ projectId: entry.id, tracks: manifest.tracks }),
         );
-
-        // Derived from the manifest rather than read back out of the store:
-        // the dispatch above seeds the store from this same data, so going
-        // through Redux would just be a round-trip - and reading the module's
-        // store singleton would ignore whichever store the screen is actually
-        // rendered under.
-        audioEngine.loadProject(
-          decoded,
-          trackRuntimeStatesFromManifest(source.manifest.tracks),
-        );
-        audioEngine.setMonitorMode(monitorMode);
-        audioEngine.setClickEnabled(clickEnabled);
-
-        const longestBufferSec = source.manifest.tracks.reduce(
-          (max, t) => Math.max(max, decoded.trackBuffers[t.id]?.duration ?? 0),
-          0,
-        );
-
-        setDurationSec(longestBufferSec);
-
-        const waveformStems = source.manifest.tracks.slice(0, MAX_WAVEFORM_STEMS);
-        const laneBarCount = waveformBarCount(longestBufferSec, waveformStems.length);
-        setWaveformTracks(
-          waveformStems.map((track, index) => ({
-            id: track.id,
-            name: track.name,
-            color: getTrackColor(index),
-            peaks: decoded.trackBuffers[track.id]
-              ? computeWaveformPeaks([decoded.trackBuffers[track.id]], longestBufferSec, laneBarCount)
-              : new Float32Array(laneBarCount),
-          })),
-        );
-
-        setManifest(source.manifest);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -164,21 +117,26 @@ export function ProjectScreen() {
     load();
     return () => {
       cancelled = true;
-      audioEngine.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- monitorMode/clickEnabled intentionally only applied on (re)load
-  }, [entry?.id, dispatch, reloadToken]);
+  }, [entry?.id, dispatch]);
 
-  // Silence every path that can schedule a React render *before* handing
-  // control to the navigator: detach the engine listener, kill the playhead
-  // rAF loop, then stop audio (which can no longer reach setState), and only
-  // then navigate.
+  /** Forces a fresh reload of the current project (its content actually changed) and re-seeds the store's mixer state from the result. */
+  const reloadAndSeed = useCallback(async () => {
+    if (!entry) return;
+    const { manifest } = await nowPlayingStore.reload(entry, { monitorMode, clickEnabled });
+    dispatch(tracksInitializedForProject({ projectId: entry.id, tracks: manifest.tracks }));
+  }, [entry, monitorMode, clickEnabled, dispatch]);
+
+  // Kills this screen's own rAF-driven waveform re-render loop before
+  // navigating away - independent of whether the engine itself keeps
+  // playing (it does; see nowPlayingStore). Left in place because a stray
+  // setState from this loop committing while the navigator tears this
+  // screen's native views down is exactly the class of Fabric crash
+  // AGENTS.md documents, regardless of what audio is doing underneath.
   const teardownAndNavigate = useCallback(
     (navigate: () => void) => {
-      detachTransportRef.current?.();
-      detachTransportRef.current = null;
       stopPlayhead();
-      audioEngine.stop();
       navigate();
     },
     [stopPlayhead],
@@ -186,14 +144,6 @@ export function ProjectScreen() {
 
   function handleBack() {
     teardownAndNavigate(() => router.back());
-  }
-
-  function handlePlayPause() {
-    if (audioEngine.getTransportState() === "playing") {
-      audioEngine.pause();
-    } else {
-      audioEngine.play();
-    }
   }
 
   function handleMonitorModeChange(mode: typeof monitorMode) {
@@ -207,9 +157,6 @@ export function ProjectScreen() {
   }
 
   function handleStartEditing() {
-    // Editing can delete the very files the transport is reading, so never
-    // leave audio running underneath the form.
-    audioEngine.stop();
     setFormError(null);
     setEditing(true);
     // Otherwise cancelling out of the form would land back on the mixer
@@ -235,7 +182,7 @@ export function ProjectScreen() {
       setBusy(true);
       const updated = await addStemsToProject(entry.sourceDir, assets, audioEngine.context);
       dispatch(projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }));
-      setReloadToken((n) => n + 1);
+      await reloadAndSeed();
     } catch (e) {
       setFormError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -250,7 +197,7 @@ export function ProjectScreen() {
     try {
       const updated = await removeStemFromProject(entry.sourceDir, stemId);
       dispatch(projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }));
-      setReloadToken((n) => n + 1);
+      await reloadAndSeed();
     } catch (e) {
       setFormError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -261,10 +208,8 @@ export function ProjectScreen() {
   /**
    * Unlike add/remove, a rename touches only a display name - it doesn't
    * change what's decoded or how the engine's graph is wired, so there's no
-   * need to bump `reloadToken` and pay for a full re-decode (which would
-   * also call `audioEngine.loadProject()` again, a needless stop of a graph
-   * that was never playing anyway since editing already stopped it). Patch
-   * the already-loaded `manifest`/`waveformTracks` state directly instead.
+   * need to pay for a full re-decode. Patches the shared store's already-
+   * loaded manifest/waveform directly instead.
    *
    * Returns whether the write actually persisted - StemNameField shows the
    * new name optimistically and needs to revert it if this resolves false,
@@ -276,10 +221,7 @@ export function ProjectScreen() {
     try {
       const updated = await renameStemInProject(entry.sourceDir, stemId, name);
       dispatch(projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }));
-      setManifest((prev) => prev && { ...prev, tracks: updated.tracks });
-      setWaveformTracks((prev) =>
-        prev.map((track) => (track.id === stemId ? { ...track, name } : track)),
-      );
+      nowPlayingStore.renameTrackLocal(stemId, name);
       return true;
     } catch (e) {
       setFormError(e instanceof Error ? e.message : String(e));
@@ -296,7 +238,7 @@ export function ProjectScreen() {
       dispatch(projectUpdated({ id: entry.id, changes: values }));
       setEditing(false);
       // bpm may have changed, which adds or removes the click entirely.
-      setReloadToken((n) => n + 1);
+      await reloadAndSeed();
     } catch (e) {
       setFormError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -327,7 +269,8 @@ export function ProjectScreen() {
 
   /**
    * Deleting takes the project folder and its audio with it, so it asks
-   * first. The engine is torn down before the files disappear underneath it.
+   * first. If this is the project currently loaded/playing, that's stopped
+   * and cleared before the files disappear underneath it.
    */
   function handleDelete() {
     if (!entry?.sourceDir) return;
@@ -346,6 +289,7 @@ export function ProjectScreen() {
               setFormError(e instanceof Error ? e.message : String(e));
               return;
             }
+            nowPlayingStore.closeIfCurrent(entry.id);
             dispatch(projectRemoved(entry.id));
             dispatch(tracksRemovedForProject(entry.id));
             teardownAndNavigate(() => router.back());
@@ -368,14 +312,14 @@ export function ProjectScreen() {
 
   const canEdit = entry?.origin === "filesystem";
   const formStems = (entry?.tracks ?? []).map((t) => ({ id: t.id, name: t.name }));
-  const headerTitle = manifest?.title ?? entry?.title ?? "";
+  const headerTitle = (isCurrent ? nowPlaying.manifest?.title : undefined) ?? entry?.title ?? "";
 
   function renderHeader() {
     return (
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
           <BackButton label={t.project.backToLibrary} onPress={handleBackFromProject} testID="back-button" />
-          {manifest && !editing && (
+          {isCurrent && nowPlaying.manifest && !editing && (
             <Pressable
               onPress={() => setMixerOpen(true)}
               style={({ pressed }) => [styles.mixerButton, pressed && styles.mixerButtonPressed]}
@@ -388,15 +332,15 @@ export function ProjectScreen() {
           )}
         </View>
         <Text style={styles.title}>{headerTitle}</Text>
-        {manifest && !editing && (
+        {isCurrent && nowPlaying.manifest && !editing && (
           <View style={styles.subtitleRow}>
-            {manifest.bpm !== undefined && (
+            {nowPlaying.manifest.bpm !== undefined && (
               <View style={styles.subtitlePill}>
-                <Text style={styles.subtitlePillText}>{manifest.bpm} BPM</Text>
+                <Text style={styles.subtitlePillText}>{nowPlaying.manifest.bpm} BPM</Text>
               </View>
             )}
             <View style={styles.subtitlePill}>
-              <Text style={styles.subtitlePillText}>{manifest.key || "—"}</Text>
+              <Text style={styles.subtitlePillText}>{nowPlaying.manifest.key || "—"}</Text>
             </View>
           </View>
         )}
@@ -458,7 +402,7 @@ export function ProjectScreen() {
     );
   }
 
-  if (error || !manifest) {
+  if (error || !isCurrent || !nowPlaying.manifest) {
     return (
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
         {renderHeader()}
@@ -480,24 +424,17 @@ export function ProjectScreen() {
       {renderHeader()}
 
       <View style={styles.waveformArea}>
-        <WaveformView tracks={waveformTracks} durationSec={durationSec} playheadSec={playheadSec} />
-      </View>
-
-      <View style={styles.console}>
-        <TransportBar
-          isPlaying={transportState === "playing"}
+        <WaveformView
+          tracks={nowPlaying.waveformTracks}
+          durationSec={nowPlaying.durationSec}
           playheadSec={playheadSec}
-          durationSec={durationSec}
-          onPlayPause={handlePlayPause}
-          onStop={() => audioEngine.stop()}
-          onSeek={(seconds) => audioEngine.seek(seconds)}
         />
       </View>
 
       <MixerDrawer
         visible={mixerOpen}
         onClose={() => setMixerOpen(false)}
-        manifest={manifest}
+        manifest={nowPlaying.manifest}
         monitorMode={monitorMode}
         onMonitorModeChange={handleMonitorModeChange}
         clickEnabled={clickEnabled}
@@ -566,12 +503,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
     justifyContent: "center",
-  },
-  console: {
-    backgroundColor: colors.panel,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    ...elevation,
   },
   mixerButton: {
     width: 36,
