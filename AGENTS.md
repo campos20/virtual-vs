@@ -85,3 +85,81 @@ Concretely:
 - Test/dev-only tooling (Jest, Testing Library, etc.) doesn't ship in the
   built app and isn't a stability concern the same way - this principle is
   about runtime dependencies.
+
+# Stems stay sample-locked
+
+Every stem in a project (and the synthesized click) must start, stay, and
+stop in perfect sample sync with every other stem, at all times, no
+exceptions. This is not a "nice to have" - a band plays to these tracks live;
+audible drift between stems is arguably worse than a crash, because a crash
+is instantly obvious and drift might not be until the take is already
+ruined. Treat any change to `AudioEngine.ts` scheduling with the same level
+of care AGENTS.md asks for Fabric/navigation crashes above.
+
+How this is guaranteed today:
+
+- **One `AudioContext` for the whole app** (`AudioEngine`/`audioEngine`, a
+  singleton). Every stem is a sibling node in the *same* render graph, so
+  there is no independent per-track clock that could drift over time -
+  once two nodes are scheduled against the same context time, the audio
+  hardware renders them from the same sample position onward. Drift between
+  stems already loaded together is structurally impossible, not just
+  unlikely, as long as they were started together in the first place.
+- **`scheduleSources()` is the only place stems ever start**, and `play()`/
+  the resume path/`seek()` all funnel through it. It computes exactly one
+  `startAt` (context time) / `offsetSec` (position) pair and passes that
+  *same* pair to every stem's `.start()` call and to the click's - never a
+  per-track value, never computed inside a per-track loop.
+- **`stopSources()` stops every stem and the click at one shared explicit
+  context time** (`ctx.currentTime`), the same way. This used to call each
+  node's `.stop()` with no argument, which independently means "stop as soon
+  as possible" per node rather than guaranteeing they all land on the same
+  sample - fixed to pass one shared `when` to every call. See
+  `AudioEngine.test.ts`'s "keeps every stem sample-locked" describe block,
+  which asserts every `start`/`stop` call in a play/pause-resume/seek/stop
+  cycle shares one identical, explicitly-passed time.
+- **Volume/mute/solo/bus changes are pure gain automation**
+  (`trackGain.gain.*` ramps) and never touch a `BufferSourceNode`'s
+  scheduling at all, so they cannot desync anything by construction - see
+  the "never re-schedules any stem for a volume/mute/solo change" test.
+- **Adding/removing a stem always goes through `loadProject()`**, which
+  fully stops and rebuilds the entire graph atomically. There is no
+  "hot-swap" of a single stem while its siblings keep playing - that would
+  be the easiest way to accidentally introduce an unsynced track.
+
+Known, narrow, deliberately-not-"fixed" gaps:
+
+- `loadProject()` picks one `longestTrackId` (first `Math.max` winner) and
+  only that track's source gets an `onEnded` handler driving natural
+  end-of-playback. If two stems are exactly tied for longest, the untracked
+  one's tail could in theory still be rendering for a few samples after the
+  transport flips to `'stopped'`. Sub-audio-block, inaudible in practice -
+  not worth chasing without a concrete repro.
+- Stems are trusted to already be time-aligned *in their source files*
+  (same start offset, same lead-in silence). Nothing validates this at
+  import (`addStemsToProject`/`copyStems`) - there's no way to infer
+  "these should line up" from the audio alone. A misaligned stem will still
+  play in perfect sample sync with the others; it'll just be synced to the
+  wrong content. That's a content-authoring problem, not an engine one.
+- `decodeAudioData` is trusted to resample every stem to the engine's
+  `AudioContext` sample rate on decode (standard Web Audio API contract) -
+  the app doesn't independently re-verify decoded buffers' sample rates,
+  since doing so would just be re-asserting a guarantee the underlying
+  library (`react-native-audio-api`) already owns.
+
+Guardrails for touching `AudioEngine.ts`:
+
+- Never call `.start()`/`.stop()` per-track with its own independently
+  computed time - compute one time, pass it to every node.
+- Never schedule or stop stems inside a loop that awaits anything per
+  iteration - a JS-thread delay between iterations is exactly how
+  inter-track timing skew would sneak in.
+- Never introduce a second `AudioContext`/engine instance (e.g. one per
+  track). The single shared context is *the* invariant that makes drift
+  structurally impossible in the first place.
+- A stem being added, removed, or replaced must always go through a full
+  `loadProject()` rebuild, never a partial graph patch while the transport
+  is playing.
+- Run (and extend) `AudioEngine.test.ts`'s "keeps every stem sample-locked"
+  suite whenever touching `scheduleSources`/`stopSources`/`play`/`pause`/
+  `seek`.

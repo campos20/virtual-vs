@@ -294,12 +294,21 @@ export class AudioEngine {
     this.setTransportState('playing');
   }
 
+  /**
+   * Stops every stem (and the click) at the exact same context time -
+   * mirrors `scheduleSources()` sharing one `startAt` for starts. An
+   * argument-less `.stop()` per node, called across a JS loop, has no such
+   * guarantee: each call would independently mean "stop as soon as
+   * possible" rather than all landing on the same sample. See AGENTS.md
+   * "Stems stay sample-locked".
+   */
   private stopSources(): void {
+    const stopAt = this.ctx.currentTime;
     for (const node of this.tracks.values()) {
-      node.source?.stop();
+      node.source?.stop(stopAt);
       node.source = null;
     }
-    this.clickSource?.stop();
+    this.clickSource?.stop(stopAt);
     this.clickSource = null;
   }
 
