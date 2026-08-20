@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, elevation, radii, spacing } from '@/ui/theme';
+import { colors, elevation, glow, radii, spacing } from '@/ui/theme';
 
 interface ProjectRowProps {
   title: string;
@@ -14,6 +14,9 @@ interface ProjectRowProps {
   onMoveDown: () => void;
   moveUpAccessibilityLabel: string;
   moveDownAccessibilityLabel: string;
+  /** This is the project currently loaded in the engine (see nowPlayingStore) - highlighted so it reads apart from the rest of the list. */
+  isNowPlaying?: boolean;
+  nowPlayingAccessibilityLabel?: string;
   testID?: string;
 }
 
@@ -39,6 +42,8 @@ export function ProjectRow({
   onMoveDown,
   moveUpAccessibilityLabel,
   moveDownAccessibilityLabel,
+  isNowPlaying,
+  nowPlayingAccessibilityLabel,
   testID,
 }: ProjectRowProps) {
   return (
@@ -48,9 +53,26 @@ export function ProjectRow({
         testID={testID}
         style={({ pressed }) => [styles.row, pressed && styles.pressed]}
       >
-        <View style={[styles.colorBar, { backgroundColor: accentColor }]} />
+        <View
+          style={[
+            styles.colorBar,
+            { backgroundColor: accentColor },
+            isNowPlaying && glow(accentColor, 8),
+          ]}
+        />
         <View style={styles.rowBody}>
-          <Text style={styles.title}>{title}</Text>
+          <View style={styles.titleRow}>
+            {isNowPlaying && (
+              <View
+                style={[styles.nowPlayingDot, glow(colors.accent, 6)]}
+                accessibilityLabel={nowPlayingAccessibilityLabel}
+                testID={testID ? `${testID}-now-playing` : undefined}
+              />
+            )}
+            <Text style={styles.title} numberOfLines={1}>
+              {title}
+            </Text>
+          </View>
           <View style={styles.metaRow}>
             {bpm !== undefined && (
               <View style={styles.metaPill}>
@@ -129,10 +151,22 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 8,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  nowPlayingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+  },
   title: {
     color: colors.textPrimary,
     fontSize: 17,
     fontWeight: '700',
+    flexShrink: 1,
   },
   metaRow: {
     flexDirection: 'row',

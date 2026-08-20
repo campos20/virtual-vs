@@ -1,4 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { nowPlayingStore } from '@/playback/nowPlayingStore';
 import { createDraftProject, getDemoLibraryEntry } from '@/storage';
 import { createStore } from '@/store';
 import { projectsHydrated, projectsSelectors, type LibraryProjectEntry } from '@/store/projectsSlice';
@@ -18,6 +19,7 @@ jest.mock('@/storage', () => ({
 
 beforeEach(() => {
   mockPush.mockClear();
+  nowPlayingStore.resetForTests();
 });
 
 /**
@@ -158,6 +160,29 @@ describe('LibraryScreen', () => {
     expect(projectsSelectors.selectIds(store.getState().projects)).toEqual(['second-song', 'demo-sync-test']);
     // Reordering must never also trigger the row's own tap-to-open handler.
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('marks the row for the currently-loaded project, and no other', async () => {
+    renderHydrated([
+      {
+        id: 'second-song',
+        title: 'Second Song',
+        key: '',
+        tracks: [],
+        sections: [],
+        origin: 'filesystem',
+        sourceDir: 'file:///mock/document/projects/second-song',
+      },
+    ]);
+    await nowPlayingStore.openProject(getDemoLibraryEntry(), {
+      monitorMode: 'split',
+      clickEnabled: true,
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('project-row-demo-sync-test-now-playing')).toBeTruthy()
+    );
+    expect(screen.queryByTestId('project-row-second-song-now-playing')).toBeNull();
   });
 
   it('has no separate edit affordance - opening a project is how you edit it', () => {

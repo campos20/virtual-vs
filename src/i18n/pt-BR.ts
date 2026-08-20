@@ -54,6 +54,10 @@ export const ptBR: TranslationDictionary = {
     remove: 'Remover',
     deleteProject: 'Excluir Projeto',
   },
+  nowPlaying: {
+    heading: 'Tocando Agora',
+    goToSong: (title: string) => `Tocando agora: ${title}. Ir para a música.`,
+  },
   monitorSplit: {
     heading: 'SAÍDA',
     split: 'Split',
