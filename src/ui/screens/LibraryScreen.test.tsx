@@ -183,6 +183,14 @@ describe('LibraryScreen', () => {
       expect(screen.getByTestId('project-row-demo-sync-test-now-playing')).toBeTruthy()
     );
     expect(screen.queryByTestId('project-row-second-song-now-playing')).toBeNull();
+
+    // A plain View isn't an accessibility element by default, so a screen
+    // reader would silently skip right over the indicator (and its label)
+    // without these - see ProjectRow.
+    const dot = screen.getByTestId('project-row-demo-sync-test-now-playing');
+    expect(dot.props.accessible).toBe(true);
+    expect(dot.props.accessibilityRole).toBe('image');
+    expect(dot.props.accessibilityLabel).toBeTruthy();
   });
 
   it('has no separate edit affordance - opening a project is how you edit it', () => {

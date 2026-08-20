@@ -57,6 +57,20 @@ describe('NowPlayingBar', () => {
     expect(screen.queryByTestId('now-playing-bar')).toBeNull();
   });
 
+  // This component is mounted for the app's whole lifetime (see
+  // `_layout.tsx`) - if it polled the playhead even while rendering
+  // nothing, that would burn CPU on every screen for as long as the app is
+  // open, not just a one-time cost. The hooks that poll live only in the
+  // child that's conditionally mounted once something is actually loaded.
+  it('does not start the playhead polling loop until a project is actually loaded', async () => {
+    renderWithStore(<NowPlayingBar />);
+    expect(requestAnimationFrame).not.toHaveBeenCalled();
+
+    await nowPlayingStore.openProject(entry, { monitorMode: 'split', clickEnabled: true });
+
+    await waitFor(() => expect(requestAnimationFrame).toHaveBeenCalled());
+  });
+
   it('shows the loaded project once one is open', async () => {
     renderWithStore(<NowPlayingBar />);
     await nowPlayingStore.openProject(entry, { monitorMode: 'split', clickEnabled: true });

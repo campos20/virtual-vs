@@ -111,6 +111,12 @@ describe('AudioEngine keeps every stem sample-locked', () => {
     engine.stop();
 
     expectSampleLocked(stops, 4);
+    // Not just equal to each other, but strictly ahead of the clock at the
+    // moment they were scheduled - `ctx.currentTime` on its own can already
+    // be behind by the time a later call in the loop reaches the audio
+    // thread, which silently falls back to "stop ASAP" per node instead of
+    // the shared guaranteed instant this is supposed to be.
+    expect(stops[0]).toBeGreaterThan(engine.context.currentTime);
   });
 
   it('never re-schedules any stem for a volume/mute/solo change - those are gain automation only', () => {

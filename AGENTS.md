@@ -111,10 +111,15 @@ How this is guaranteed today:
   *same* pair to every stem's `.start()` call and to the click's - never a
   per-track value, never computed inside a per-track loop.
 - **`stopSources()` stops every stem and the click at one shared explicit
-  context time** (`ctx.currentTime`), the same way. This used to call each
-  node's `.stop()` with no argument, which independently means "stop as soon
-  as possible" per node rather than guaranteeing they all land on the same
-  sample - fixed to pass one shared `when` to every call. See
+  context time**, the same way. This used to call each node's `.stop()`
+  with no argument, which independently means "stop as soon as possible"
+  per node rather than guaranteeing they all land on the same sample -
+  fixed to pass one shared `when` to every call. That `when` is
+  `ctx.currentTime + STOP_LOOKAHEAD_SEC`, not bare `ctx.currentTime`: the
+  clock keeps advancing while the loop runs, so an un-offset value can
+  already be behind `currentTime` by the time a later call in the same loop
+  reaches the audio thread - which falls back to the same "ASAP" behavior
+  this exists to avoid, just for only *some* of the nodes. See
   `AudioEngine.test.ts`'s "keeps every stem sample-locked" describe block,
   which asserts every `start`/`stop` call in a play/pause-resume/seek/stop
   cycle shares one identical, explicitly-passed time.

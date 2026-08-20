@@ -65,6 +65,8 @@ export function ProjectRow({
             {isNowPlaying && (
               <View
                 style={[styles.nowPlayingDot, glow(colors.accent, 6)]}
+                accessible
+                accessibilityRole="image"
                 accessibilityLabel={nowPlayingAccessibilityLabel}
                 testID={testID ? `${testID}-now-playing` : undefined}
               />
