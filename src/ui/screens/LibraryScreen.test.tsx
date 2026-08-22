@@ -1,6 +1,16 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { nowPlayingStore } from '@/playback/nowPlayingStore';
-import { createDraftProject, getProjectSourceForEntry } from '@/storage';
+import { getDocumentAsync } from 'expo-document-picker';
+import {
+  createDraftProject,
+  getProjectSourceForEntry,
+  shareBundle,
+  writeBundleToCache,
+} from '@/storage';
+// Mocked at its own path, not through the barrel: the import thunk reaches
+// for it directly, and a barrel mock would leave the real one running.
+import { importBundle } from '@/storage/bundle';
+import { audioEngine } from '@/engine';
 import { createStore } from '@/store';
 import { projectsHydrated, type LibraryProjectEntry } from '@/store/projectsSlice';
 import { setlistsHydrated } from '@/store/setlistsSlice';
@@ -14,10 +24,19 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
+jest.mock('expo-document-picker', () => ({ getDocumentAsync: jest.fn() }));
+
 jest.mock('@/storage', () => ({
   ...jest.requireActual('@/storage'),
   createDraftProject: jest.fn(),
   getProjectSourceForEntry: jest.fn(),
+  writeBundleToCache: jest.fn(),
+  shareBundle: jest.fn(),
+}));
+
+jest.mock('@/storage/bundle', () => ({
+  ...jest.requireActual('@/storage/bundle'),
+  importBundle: jest.fn(),
 }));
 
 beforeEach(() => {
@@ -420,6 +439,148 @@ describe('LibraryScreen', () => {
       expect(store.getState().settings.libraryOrder[0]).toBe(`folder:${ids[0]}`);
       // Straight into the rename field: "New folder" is never what was meant.
       expect(screen.getByTestId(`folder-row-${ids[0]}-rename-input`)).toBeTruthy();
+    });
+  });
+
+  /**
+   * A bundle is how a whole project - audio and all - reaches Google Drive
+   * and comes back: the app writes one file and hands it to the OS share
+   * sheet, and the file picker takes one back from wherever it landed. The
+   * app itself never talks to any cloud service.
+   */
+  describe('backup and sharing', () => {
+    const bundleFile = { uri: 'file:///cache/sunday-set.vvs' };
+
+    function renderWithFolders(folders: SetlistManifest[], songs: LibraryProjectEntry[]) {
+      const store = createStore();
+      store.dispatch(projectsHydrated(songs));
+      store.dispatch(setlistsHydrated(folders));
+      return renderWithStore(<LibraryScreen />, store);
+    }
+
+    beforeEach(() => {
+      // Not just the resolved values: without clearing, one test's export
+      // shows up in the next one's call count - and the "while playing" test
+      // below spies on the engine, which would otherwise stay 'playing' for
+      // every test after it and silently block them all.
+      jest.clearAllMocks();
+      (writeBundleToCache as jest.Mock).mockResolvedValue(bundleFile);
+      (shareBundle as jest.Mock).mockResolvedValue(undefined);
+    });
+
+    afterEach(() => jest.restoreAllMocks());
+
+    it('packs a folder with every song in it, then opens the share sheet', async () => {
+      renderWithFolders(
+        [folder('sunday', 'Sunday Set', ['a', 'b'])],
+        [song('a'), song('b'), song('loose')]
+      );
+
+      fireEvent.press(screen.getByTestId('folder-row-sunday-menu'));
+      fireEvent.press(screen.getByTestId('export-folder-sunday'));
+
+      await waitFor(() => expect(shareBundle).toHaveBeenCalledWith(bundleFile, expect.any(String)));
+      const [contents, label] = (writeBundleToCache as jest.Mock).mock.calls[0];
+      // The folder travels with its songs, so the far end can rebuild the set.
+      expect(contents.projects.map((p: LibraryProjectEntry) => p.id)).toEqual(['a', 'b']);
+      expect(contents.folders[0].id).toBe('sunday');
+      expect(label).toBe('Sunday Set');
+    });
+
+    it('refuses to export an empty folder rather than writing an empty bundle', async () => {
+      renderWithFolders([folder('sunday', 'Sunday Set')], [song('loose')]);
+
+      fireEvent.press(screen.getByTestId('folder-row-sunday-menu'));
+      fireEvent.press(screen.getByTestId('export-folder-sunday'));
+
+      await waitFor(() => expect(screen.getByText(/no songs to export/)).toBeTruthy());
+      expect(writeBundleToCache).not.toHaveBeenCalled();
+    });
+
+    // Moving hundreds of megabytes competes with playback for the JS thread.
+    it('will not export while the transport is playing', async () => {
+      jest.spyOn(audioEngine, 'getTransportState').mockReturnValue('playing');
+      renderWithFolders([folder('sunday', 'Sunday Set', ['a'])], [song('a')]);
+
+      fireEvent.press(screen.getByTestId('folder-row-sunday-menu'));
+      fireEvent.press(screen.getByTestId('export-folder-sunday'));
+
+      await waitFor(() => expect(screen.getByText(/Stop playback/)).toBeTruthy());
+      expect(writeBundleToCache).not.toHaveBeenCalled();
+    });
+
+    it('imports a bundle picked from anywhere the file picker can see', async () => {
+      (getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///cache/shared.vvs', name: 'shared.vvs' }],
+      });
+      (importBundle as jest.Mock).mockResolvedValue({
+        projects: [song('from-drive', 'From Drive')],
+        folders: [folder('their-set', 'Their Set', ['from-drive'])],
+        skippedProjectIds: [],
+      });
+      const { store } = renderWithFolders([], []);
+
+      fireEvent.press(screen.getByTestId('library-menu'));
+      fireEvent.press(screen.getByTestId('menu-import-bundle'));
+
+      await waitFor(() => expect(store.getState().projects.entities['from-drive']).toBeTruthy());
+      expect(store.getState().setlists.entities['their-set']?.songs).toEqual(['from-drive']);
+      expect(await screen.findByText('From Drive')).toBeTruthy();
+    });
+
+    it('accepts any file type, because a bundle has no MIME type of its own', async () => {
+      (getDocumentAsync as jest.Mock).mockResolvedValue({ canceled: true, assets: null });
+      renderWithFolders([], []);
+
+      fireEvent.press(screen.getByTestId('library-menu'));
+      fireEvent.press(screen.getByTestId('menu-import-bundle'));
+
+      await waitFor(() => expect(getDocumentAsync).toHaveBeenCalled());
+      expect((getDocumentAsync as jest.Mock).mock.calls[0][0]).toMatchObject({ type: '*/*' });
+    });
+
+    it('does nothing when the picker is dismissed', async () => {
+      (getDocumentAsync as jest.Mock).mockResolvedValue({ canceled: true, assets: null });
+      renderWithFolders([], []);
+
+      fireEvent.press(screen.getByTestId('library-menu'));
+      fireEvent.press(screen.getByTestId('menu-import-bundle'));
+
+      await waitFor(() => expect(getDocumentAsync).toHaveBeenCalled());
+      expect(importBundle).not.toHaveBeenCalled();
+    });
+
+    it('says so when the bundle held nothing new, instead of looking like it failed', async () => {
+      (getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///cache/again.vvs', name: 'again.vvs' }],
+      });
+      (importBundle as jest.Mock).mockResolvedValue({
+        projects: [],
+        folders: [],
+        skippedProjectIds: ['a', 'b'],
+      });
+      renderWithFolders([], [song('a'), song('b')]);
+
+      fireEvent.press(screen.getByTestId('library-menu'));
+      fireEvent.press(screen.getByTestId('menu-import-bundle'));
+
+      expect(await screen.findByText(/already in your library/)).toBeTruthy();
+    });
+
+    it('surfaces a damaged bundle rather than failing silently', async () => {
+      (getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///cache/song.mp3', name: 'song.mp3' }],
+      });
+      (importBundle as jest.Mock).mockRejectedValue(new Error('Not a Virtual VS bundle.'));
+      renderWithFolders([], []);
+
+      fireEvent.press(screen.getByTestId('library-menu'));
+      fireEvent.press(screen.getByTestId('menu-import-bundle'));
+
+      expect(await screen.findByText('Not a Virtual VS bundle.')).toBeTruthy();
     });
   });
 });

@@ -17,6 +17,19 @@ export {
   readProjectManifest,
 } from './projectLoader';
 export {
+  bundleFileName,
+  importBundle,
+  planBundle,
+  plannedBundleSize,
+  readBundleHeader,
+  writeBundle,
+  writeBundleToCache,
+  type BundleContents,
+  type ImportedBundle,
+} from './bundle';
+export { BUNDLE_EXTENSION, BundleFormatError, type BundleHeader } from './bundleFormat';
+export { shareBundle } from './share';
+export {
   createSetlist,
   deleteSetlist,
   listSetlists,

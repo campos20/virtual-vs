@@ -27,6 +27,13 @@ export const ptBR: TranslationDictionary = {
     moveUp: 'Mover para cima',
     moveDown: 'Mover para baixo',
     newFolder: '+ Pasta',
+    importBundle: 'Importar um backup…',
+    lockedWhilePlaying: 'Pare a reprodução antes de mover arquivos.',
+    exportEmptyFolder: 'Esta pasta ainda não tem músicas para exportar.',
+    importAlreadyHere: (count: number) =>
+      count === 1
+        ? 'Essa música já está na sua biblioteca, então nada foi alterado.'
+        : `Essas ${count} músicas já estão na sua biblioteca, então nada foi alterado.`,
   },
   folder: {
     defaultName: 'Nova pasta',
@@ -43,6 +50,7 @@ export const ptBR: TranslationDictionary = {
     deleteConfirmConfirm: 'Excluir',
     addTo: (name: string) => `Adicionar a ${name}`,
     removeFrom: 'Remover da pasta',
+    export: 'Exportar…',
     songOptions: 'Opções da música',
     folderOptions: 'Opções da pasta',
   },
@@ -86,6 +94,10 @@ export const ptBR: TranslationDictionary = {
       `Decodificando faixas (${current} de ${total})…`,
     building: 'Montando o mixer…',
     waveforms: 'Desenhando as ondas…',
+    exporting: (name: string, current: number, total: number) =>
+      `Empacotando ${name} (${current} de ${total})…`,
+    importing: (name: string, current: number, total: number) =>
+      `Desempacotando ${name} (${current} de ${total})…`,
   },
   nowPlaying: {
     heading: 'Tocando Agora',

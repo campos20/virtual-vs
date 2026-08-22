@@ -24,6 +24,8 @@ interface MixerDrawerProps {
    * a button that silently does nothing.
    */
   editDisabledReason?: string;
+  /** Packs this project into a `.vvs` bundle and hands it to the share sheet. */
+  onExport?: () => void;
 }
 
 /**
@@ -46,6 +48,7 @@ export function MixerDrawer({
   onClickEnabledChange,
   onEdit,
   editDisabledReason,
+  onExport,
 }: MixerDrawerProps) {
   const { t } = useTranslation();
 
@@ -64,6 +67,9 @@ export function MixerDrawer({
             {/* Living behind the mixer drawer rather than on the main header means it takes a
                 deliberate tap to reach, not a stray one during a set - see AGENTS.md-adjacent
                 intent: the mixer already exists to keep rarely-touched controls out of the way. */}
+            {onExport && (
+              <HeaderButton label={t.folder.export} onPress={onExport} testID="export-project-button" />
+            )}
             {onEdit &&
               (editDisabledReason ? (
                 <Text style={styles.editLocked} testID="edit-locked-reason">

@@ -4,7 +4,12 @@ import { Alert, ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "@/i18n";
 import { useNowPlaying } from "@/hooks/useNowPlaying";
-import { createDraftProject } from "@/storage";
+import { File } from "expo-file-system";
+import { getDocumentAsync } from "expo-document-picker";
+import { createDraftProject, shareBundle, writeBundleToCache } from "@/storage";
+import { audioEngine } from "@/engine";
+import type { ProgressUpdate } from "@/storage/progress";
+import { importBundleIntoLibrary } from "@/store/persistBundle";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   addSongToFolder,
@@ -15,7 +20,11 @@ import {
   renameFolder,
   reorderFolderSongs,
 } from "@/store/persistFolders";
-import { projectAdded, projectsSelectors } from "@/store/projectsSlice";
+import {
+  projectAdded,
+  projectsSelectors,
+  type LibraryProjectEntry,
+} from "@/store/projectsSlice";
 import { setlistsSelectors } from "@/store/setlistsSlice";
 import { FolderRow } from "@/ui/components/FolderRow";
 import { KebabIcon, OverflowMenu, type OverflowMenuItem } from "@/ui/components/OverflowMenu";
@@ -40,6 +49,8 @@ export function LibraryScreen() {
   const nowPlayingProjectId = useNowPlaying().projectId;
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** What a running export/import is doing, so a multi-minute one isn't a frozen screen. */
+  const [status, setStatus] = useState<string | null>(null);
   /**
    * Collapsed folder ids, so the default is *expanded*: a folder hides the
    * songs it holds, and someone opening the Library mid-set needs to see
@@ -69,6 +80,89 @@ export function LibraryScreen() {
   ) {
     const reordered = moveId(songIds, index, direction);
     if (reordered !== songIds) dispatch(reorderFolderSongs(folderId, reordered));
+  }
+
+  /**
+   * Moving hundreds of megabytes is exactly the kind of work that must never
+   * run under a live set - it competes for the JS thread with everything the
+   * player does. Same lock the project screen's edit paths use.
+   */
+  function transportIsRunning() {
+    return audioEngine.getTransportState() === "playing";
+  }
+
+  function describeProgress(update: ProgressUpdate): string {
+    const name = update.name ?? "";
+    const current = update.current ?? 0;
+    const total = update.total ?? 0;
+    return update.phase === "importing"
+      ? t.progress.importing(name, current, total)
+      : t.progress.exporting(name, current, total);
+  }
+
+  /**
+   * Packs a folder and everything in it into one `.vvs` file, then hands it to
+   * the OS share sheet - which is where "Save to Drive" lives. The app never
+   * talks to Google: the user's own Drive app owns the account and the upload,
+   * and a bundle shared back the other way arrives through the file picker
+   * below like any other file.
+   */
+  async function handleExportFolder(folderId: string, name: string, songs: LibraryProjectEntry[]) {
+    if (transportIsRunning()) {
+      setError(t.library.lockedWhilePlaying);
+      return;
+    }
+    if (songs.length === 0) {
+      setError(t.library.exportEmptyFolder);
+      return;
+    }
+
+    setError(null);
+    try {
+      const folderManifest = folders.find((candidate) => candidate.id === folderId);
+      const bundle = await writeBundleToCache(
+        { projects: songs, folders: folderManifest ? [folderManifest] : [] },
+        name,
+        (update) => setStatus(describeProgress(update)),
+      );
+      setStatus(null);
+      await shareBundle(bundle, t.folder.export);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setStatus(null);
+    }
+  }
+
+  /** Reads a `.vvs` back in - from Drive, a chat app, a cable, anywhere the picker can see. */
+  async function handleImportBundle() {
+    if (transportIsRunning()) {
+      setError(t.library.lockedWhilePlaying);
+      return;
+    }
+
+    setError(null);
+    try {
+      // Bundles have no registered MIME type of their own, so the picker has
+      // to accept anything - a narrower filter would grey them out in Drive.
+      const picked = await getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
+      if (picked.canceled || !picked.assets[0]) return;
+
+      const result = await dispatch(
+        importBundleIntoLibrary(new File(picked.assets[0].uri), (update) =>
+          setStatus(describeProgress(update)),
+        ),
+      );
+      setStatus(null);
+
+      if (result.projects.length === 0 && result.skippedProjectIds.length > 0) {
+        setError(t.library.importAlreadyHere(result.skippedProjectIds.length));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setStatus(null);
+    }
   }
 
   function handleNewFolder() {
@@ -159,6 +253,12 @@ export function LibraryScreen() {
 
   const menuItems = [
     {
+      key: "import",
+      label: t.library.importBundle,
+      onPress: handleImportBundle,
+      testID: "menu-import-bundle",
+    },
+    {
       key: "about",
       label: t.menu.about,
       onPress: () => router.push("/about"),
@@ -202,6 +302,7 @@ export function LibraryScreen() {
           </OverflowMenu>
         </View>
       </View>
+      {status && <Text style={styles.status} testID="library-status">{status}</Text>}
       {error && <Text style={styles.error}>{error}</Text>}
       <ScrollView contentContainerStyle={styles.list}>
         {!hydrated ? (
@@ -242,6 +343,12 @@ export function LibraryScreen() {
                         label: t.folder.rename,
                         onPress: () => setRenamingFolderId(folder.id),
                         testID: `rename-folder-${folder.id}`,
+                      },
+                      {
+                        key: "export",
+                        label: t.folder.export,
+                        onPress: () => handleExportFolder(folder.id, folder.name, songs),
+                        testID: `export-folder-${folder.id}`,
                       },
                       {
                         key: "delete",
@@ -381,6 +488,12 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 15,
     fontWeight: "700",
+  },
+  status: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
   },
   folderGroup: {
     gap: spacing.sm,
