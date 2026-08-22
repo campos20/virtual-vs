@@ -3,6 +3,7 @@ import type { DocumentPickerAsset } from 'expo-document-picker';
 import type { LibraryProjectEntry } from '@/store/projectsSlice';
 import type { ProjectManifest, TrackManifest } from '@/types/project';
 import { mixChannelsToStereo } from './downmix';
+import { report, type ProgressReporter } from './progress';
 import { projectDirectory } from './paths';
 import { readProjectManifest } from './projectLoader';
 import type { BaseAudioContext } from './types';
@@ -71,10 +72,16 @@ function existingNames(manifest: ProjectManifest): {
  */
 async function foldStemToStereoInPlace(
   context: BaseAudioContext,
-  file: File
+  file: File,
+  onProgress?: ProgressReporter,
+  name?: string
 ): Promise<void> {
   const channels = readWavChannelCount(file);
   if (channels === null || channels <= 2) return;
+
+  // Folding and re-encoding are synchronous and take seconds on a long
+  // multi-channel file, so say what's happening and let it paint first.
+  await report(onProgress, { phase: 'converting', name });
 
   const decoded = await context.decodeAudioData(file.uri);
   const sources = Array.from({ length: decoded.numberOfChannels }, (_, channel) =>
@@ -90,16 +97,27 @@ async function copyStems(
   files: DocumentPickerAsset[],
   usedFileNames: Set<string>,
   usedTrackIds: Set<string>,
-  context?: BaseAudioContext
+  context?: BaseAudioContext,
+  onProgress?: ProgressReporter
 ): Promise<TrackManifest[]> {
   const tracks: TrackManifest[] = [];
+  let index = 0;
   for (const asset of files) {
+    index += 1;
     const fileName = dedupe(asset.name, usedFileNames);
     const destination = new File(directory, fileName);
+    // Copying is where a file picked from a cloud provider is actually
+    // pulled down, so it can be the longest wait of the whole import.
+    await report(onProgress, {
+      phase: 'copying',
+      name: asset.name,
+      current: index,
+      total: files.length,
+    });
     await new File(asset.uri).copy(destination);
     if (context) {
       try {
-        await foldStemToStereoInPlace(context, destination);
+        await foldStemToStereoInPlace(context, destination, onProgress, asset.name);
       } catch (error) {
         // Keep the original file: it still plays, just slower to load.
         console.warn(`Could not fold ${fileName} to stereo on import`, error);
@@ -161,13 +179,14 @@ export async function addStemsToProject(
   sourceDir: string,
   files: DocumentPickerAsset[],
   /** When given, multi-channel stems are folded to stereo on the way in. */
-  context?: BaseAudioContext
+  context?: BaseAudioContext,
+  onProgress?: ProgressReporter
 ): Promise<ProjectManifest> {
   const directory = new Directory(sourceDir);
   const manifest = await readProjectManifest(directory);
   const used = existingNames(manifest);
 
-  const added = await copyStems(directory, files, used.files, used.trackIds, context);
+  const added = await copyStems(directory, files, used.files, used.trackIds, context, onProgress);
   const updated: ProjectManifest = { ...manifest, tracks: [...manifest.tracks, ...added] };
 
   new File(directory, 'manifest.json').write(JSON.stringify(updated, null, 2));

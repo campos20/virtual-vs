@@ -18,6 +18,12 @@ interface MixerDrawerProps {
   onClickEnabledChange: (enabled: boolean) => void;
   /** Omitted for projects that can't be edited (the bundled demo) - matches the old header's `canEdit` check. */
   onEdit?: () => void;
+  /**
+   * When set, Edit is shown but inert, with this as the explanation. Editing
+   * rebuilds the audio graph, so it's unavailable mid-song - saying why beats
+   * a button that silently does nothing.
+   */
+  editDisabledReason?: string;
 }
 
 /**
@@ -39,6 +45,7 @@ export function MixerDrawer({
   clickEnabled,
   onClickEnabledChange,
   onEdit,
+  editDisabledReason,
 }: MixerDrawerProps) {
   const { t } = useTranslation();
 
@@ -57,7 +64,14 @@ export function MixerDrawer({
             {/* Living behind the mixer drawer rather than on the main header means it takes a
                 deliberate tap to reach, not a stray one during a set - see AGENTS.md-adjacent
                 intent: the mixer already exists to keep rarely-touched controls out of the way. */}
-            {onEdit && <HeaderButton label={t.project.edit} onPress={onEdit} testID="edit-button" />}
+            {onEdit &&
+              (editDisabledReason ? (
+                <Text style={styles.editLocked} testID="edit-locked-reason">
+                  {editDisabledReason}
+                </Text>
+              ) : (
+                <HeaderButton label={t.project.edit} onPress={onEdit} testID="edit-button" />
+              ))}
             <Pressable
               onPress={onClose}
               hitSlop={8}
@@ -95,6 +109,13 @@ export function MixerDrawer({
 }
 
 const styles = StyleSheet.create({
+  editLocked: {
+    color: colors.textTertiary,
+    fontSize: 12,
+    fontWeight: '600',
+    maxWidth: 160,
+    textAlign: 'right',
+  },
   sheet: {
     marginTop: 'auto',
     maxHeight: '80%',

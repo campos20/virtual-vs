@@ -23,6 +23,14 @@ const LOOKAHEAD_SEC = 0.15;
  * loop's real overhead for the track counts this app deals with.
  */
 const STOP_LOOKAHEAD_SEC = 0.01;
+/**
+ * How long a primed source is left running. Long enough to guarantee the
+ * node actually renders a block (a zero-length window can be optimised away,
+ * which would defeat the point of priming), short enough to stay well inside
+ * the lookahead of any real playback. It is inaudible regardless - primed
+ * sources run into a silent gain that reaches neither bus.
+ */
+const PRIME_DURATION_SEC = 0.005;
 /** Ramp time for volume/mute/solo changes, short enough to feel instant but long enough to avoid zipper clicks. */
 const GAIN_RAMP_SEC = 0.015;
 
@@ -203,7 +211,53 @@ export class AudioEngine {
 
     this.playheadOffsetSec = 0;
     this.pausedAtSec = 0;
+    this.primeSources();
     this.setTransportState('stopped');
+  }
+
+  /**
+   * Silently starts and stops every stem's (and the click's) buffer once,
+   * right here at load time - before the user's first real, transport-
+   * visible `play()`. Something on a buffer's very first schedule (exact
+   * layer unconfirmed - JS/Hermes JIT warm-up or the native audio bridge
+   * are both candidates) can pay a one-time cost that eats into
+   * `LOOKAHEAD_SEC` and lands that one track's actual start a few ms late
+   * relative to its siblings - self-correcting on the next pause/resume,
+   * since every buffer has by then already been scheduled once. Priming
+   * exercises the identical `createBufferSource` -> `.start` -> `.stop`
+   * path here instead, at zero gain and disconnected from both buses, so
+   * real playback's first `play()` is never also anything's *first*
+   * schedule. Does not touch `transportState` or notify listeners.
+   */
+  private primeSources(): void {
+    if (this.tracks.size === 0 && !this.clickBuffer) return;
+
+    // Nudged into the future rather than bare `currentTime`, for the same
+    // reason stopSources() is: the clock keeps advancing while this loop
+    // runs, so an un-offset value is already in the past by the time a later
+    // iteration reaches the audio thread - which silently degrades to "ASAP"
+    // for only *some* of the nodes. Priming exists precisely to give every
+    // buffer the same first-schedule treatment, so a `when` that means
+    // something different per node defeats it. See AGENTS.md
+    // "Stems stay sample-locked".
+    const primeAt = this.ctx.currentTime + STOP_LOOKAHEAD_SEC;
+    const primeUntil = primeAt + PRIME_DURATION_SEC;
+    const silent = this.ctx.createGain();
+    silent.gain.value = 0;
+    silent.connect(this.ctx.destination);
+
+    const prime = (buffer: AudioBuffer) => {
+      const source = this.ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(silent);
+      source.start(primeAt);
+      source.stop(primeUntil);
+    };
+
+    for (const node of this.tracks.values()) prime(node.buffer);
+    if (this.clickBuffer) prime(this.clickBuffer);
+
+    setTimeout(() => silent.disconnect(), 50);
   }
 
   private disposeTracks(): void {

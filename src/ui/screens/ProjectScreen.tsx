@@ -1,6 +1,6 @@
 import { getDocumentAsync, type DocumentPickerAsset } from "expo-document-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,8 +12,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { audioEngine } from "@/engine";
 import { useTranslation } from "@/i18n";
+import type { ProgressUpdate } from "@/storage/progress";
 import { useNowPlaying } from "@/hooks/useNowPlaying";
 import { usePlayhead } from "@/hooks/usePlayhead";
+import { useTransportState } from "@/hooks/useTransportState";
 import { nowPlayingStore } from "@/playback/nowPlayingStore";
 import {
   addStemsToProject,
@@ -83,8 +85,88 @@ export function ProjectScreen() {
   const [editing, setEditing] = useState((entry?.tracks.length ?? 0) === 0);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // What the current slow operation is doing, so a multi-second import or
+  // decode says so instead of showing an empty screen.
+  const [status, setStatus] = useState<string | null>(null);
 
   const { seconds: playheadSec, stop: stopPlayhead } = usePlayhead();
+
+  /**
+   * Anything that edits a project ends in nowPlayingStore.reload(), and
+   * AudioEngine.loadProject() opens with stop() + disposeTracks() - so an
+   * import or a save mid-song would cut the song off and tear the graph
+   * down. Nothing that can do that is reachable while the transport is
+   * running. Guarded at the handlers, not just the buttons, so a stale tap
+   * or a race can't get past it.
+   *
+   * Deliberately keyed on the transport being *playing at all*, not on this
+   * project being the one playing: reload() loads this project into the one
+   * shared engine, so editing project A would stop project B just the same.
+   */
+  const transportState = useTransportState();
+  const isPlaying = transportState === "playing";
+
+  /**
+   * The handlers ask the engine directly rather than reading `isPlaying`
+   * above. React state trails the engine by a render - a tap landing in that
+   * window would otherwise sail straight through the guard and rebuild the
+   * graph mid-song. `isPlaying` drives the UI; this decides.
+   */
+  function transportIsRunning() {
+    return audioEngine.getTransportState() === "playing";
+  }
+
+  const describeProgress = useCallback(
+    (update: ProgressUpdate): string => {
+      switch (update.phase) {
+        case 'copying':
+          return update.total && update.total > 1 && update.current
+            ? t.progress.copyingOf(update.name ?? '', update.current, update.total)
+            : t.progress.copying(update.name ?? '');
+        case 'converting':
+          return update.name
+            ? t.progress.converting(update.name)
+            : t.progress.convertingGeneric;
+        case 'decoding':
+          return update.total && update.total > 1 && update.current
+            ? t.progress.decodingOf(update.current, update.total)
+            : t.progress.decoding;
+        case 'building':
+          return t.progress.building;
+        case 'waveforms':
+          return t.progress.waveforms;
+      }
+    },
+    [t]
+  );
+
+  /**
+   * Every slow path here (open/reload/import) keeps running after the user
+   * navigates away - that's deliberate, nowPlayingStore owns it, not this
+   * screen. So their callbacks and their `finally` blocks can land on a
+   * screen that is already unmounting, and a setState committing while the
+   * navigator tears this screen's native views down is exactly the class of
+   * Fabric crash AGENTS.md documents. Redux dispatches are left alone: the
+   * store outlives the screen and those writes are the point of the work.
+   *
+   * Re-armed on mount rather than only initialised, so a remounted screen
+   * (StrictMode's double-invoke, a fast route re-entry) isn't left inert.
+   */
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const onProgress = useCallback(
+    (update: ProgressUpdate) => {
+      if (!mountedRef.current) return;
+      setStatus(describeProgress(update));
+    },
+    [describeProgress]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -99,10 +181,11 @@ export function ProjectScreen() {
       setLoading(true);
       setError(null);
       try {
-        const { manifest } = await nowPlayingStore.openProject(entry, {
-          monitorMode,
-          clickEnabled,
-        });
+        const { manifest } = await nowPlayingStore.openProject(
+          entry,
+          { monitorMode, clickEnabled },
+          onProgress,
+        );
         if (cancelled) return;
         dispatch(
           tracksInitializedForProject({ projectId: entry.id, tracks: manifest.tracks }),
@@ -110,7 +193,10 @@ export function ProjectScreen() {
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setStatus(null);
+        }
       }
     }
 
@@ -124,9 +210,13 @@ export function ProjectScreen() {
   /** Forces a fresh reload of the current project (its content actually changed) and re-seeds the store's mixer state from the result. */
   const reloadAndSeed = useCallback(async () => {
     if (!entry) return;
-    const { manifest } = await nowPlayingStore.reload(entry, { monitorMode, clickEnabled });
+    const { manifest } = await nowPlayingStore.reload(
+      entry,
+      { monitorMode, clickEnabled },
+      onProgress,
+    );
     dispatch(tracksInitializedForProject({ projectId: entry.id, tracks: manifest.tracks }));
-  }, [entry, monitorMode, clickEnabled, dispatch]);
+  }, [entry, monitorMode, clickEnabled, dispatch, onProgress]);
 
   // Kills this screen's own rAF-driven waveform re-render loop before
   // navigating away - independent of whether the engine itself keeps
@@ -157,6 +247,7 @@ export function ProjectScreen() {
   }
 
   function handleStartEditing() {
+    if (transportIsRunning()) return;
     setFormError(null);
     setEditing(true);
     // Otherwise cancelling out of the form would land back on the mixer
@@ -174,23 +265,39 @@ export function ProjectScreen() {
   }
 
   async function handleAddStems() {
+    if (transportIsRunning()) {
+      setFormError(t.project.lockedWhilePlayingBody);
+      return;
+    }
     setFormError(null);
     try {
       const assets = await pickFiles();
       if (!assets || !entry?.sourceDir) return;
 
       setBusy(true);
-      const updated = await addStemsToProject(entry.sourceDir, assets, audioEngine.context);
+      const updated = await addStemsToProject(
+        entry.sourceDir,
+        assets,
+        audioEngine.context,
+        onProgress,
+      );
       dispatch(projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }));
       await reloadAndSeed();
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : String(e));
+      if (mountedRef.current) setFormError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false);
+      if (mountedRef.current) {
+        setBusy(false);
+        setStatus(null);
+      }
     }
   }
 
   async function handleRemoveStem(stemId: string) {
+    if (transportIsRunning()) {
+      setFormError(t.project.lockedWhilePlayingBody);
+      return;
+    }
     setFormError(null);
     if (!entry?.sourceDir) return;
     setBusy(true);
@@ -199,9 +306,9 @@ export function ProjectScreen() {
       dispatch(projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }));
       await reloadAndSeed();
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : String(e));
+      if (mountedRef.current) setFormError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false);
+      if (mountedRef.current) setBusy(false);
     }
   }
 
@@ -215,6 +322,9 @@ export function ProjectScreen() {
    * new name optimistically and needs to revert it if this resolves false,
    * rather than drifting out of sync with what's actually on disk.
    */
+  // Not blocked while playing, unlike the others: renaming only rewrites a
+  // label in the manifest and patches the snapshot in place - it never calls
+  // reload(), so the engine graph and the running transport are untouched.
   async function handleRenameStem(stemId: string, name: string): Promise<boolean> {
     setFormError(null);
     if (!entry?.sourceDir) return false;
@@ -224,12 +334,16 @@ export function ProjectScreen() {
       nowPlayingStore.renameTrackLocal(stemId, name);
       return true;
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : String(e));
+      if (mountedRef.current) setFormError(e instanceof Error ? e.message : String(e));
       return false;
     }
   }
 
   async function handleSubmit(values: ProjectFormValues) {
+    if (transportIsRunning()) {
+      setFormError(t.project.lockedWhilePlayingBody);
+      return;
+    }
     if (!entry?.sourceDir) return;
     setBusy(true);
     setFormError(null);
@@ -240,9 +354,9 @@ export function ProjectScreen() {
       // bpm may have changed, which adds or removes the click entirely.
       await reloadAndSeed();
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : String(e));
+      if (mountedRef.current) setFormError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false);
+      if (mountedRef.current) setBusy(false);
     }
   }
 
@@ -272,6 +386,11 @@ export function ProjectScreen() {
    * first. If this is the project currently loaded/playing, that's stopped
    * and cleared before the files disappear underneath it.
    */
+  // Not blocked while playing, unlike the rebuilding paths: deleting
+  // deliberately *stops* the engine and clears the project rather than
+  // reloading underneath a running transport, so it's safe - and being
+  // unable to delete a project without first stopping it would be a strange
+  // restriction.
   function handleDelete() {
     if (!entry?.sourceDir) return;
     Alert.alert(
@@ -370,6 +489,7 @@ export function ProjectScreen() {
           }}
           stems={formStems}
           busy={busy}
+          status={status}
           error={formError}
           onAddStems={handleAddStems}
           onRemoveStem={handleRemoveStem}
@@ -397,6 +517,11 @@ export function ProjectScreen() {
         {renderHeader()}
         <View style={styles.centeredBody}>
           <ActivityIndicator color={colors.accent} />
+          {status ? (
+            <Text style={styles.loadingStatus} testID="loading-status">
+              {status}
+            </Text>
+          ) : null}
         </View>
       </SafeAreaView>
     );
@@ -440,6 +565,7 @@ export function ProjectScreen() {
         clickEnabled={clickEnabled}
         onClickEnabledChange={handleClickEnabledChange}
         onEdit={canEdit ? handleStartEditing : undefined}
+        editDisabledReason={isPlaying ? t.project.lockedWhilePlaying : undefined}
       />
     </SafeAreaView>
   );
@@ -449,6 +575,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  loadingStatus: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    marginTop: 14,
+    textAlign: "center",
+    paddingHorizontal: 32,
   },
   centeredBody: {
     flex: 1,

@@ -38,6 +38,9 @@ export const ptBR: TranslationDictionary = {
       `"${title}" e ${stemCount} ${stemCount === 1 ? 'faixa' : 'faixas'} serão excluídos permanentemente deste aparelho.`,
     deleteConfirmConfirm: 'Excluir',
     mixer: 'Mixer',
+    lockedWhilePlaying: 'Pare a reprodução para editar',
+    lockedWhilePlayingBody:
+      'Editar reconstrói o motor de áudio, o que cortaria a música. Pare a reprodução primeiro.',
   },
   projectForm: {
     titleLabel: 'TÍTULO',
@@ -53,6 +56,18 @@ export const ptBR: TranslationDictionary = {
     noStemsYet: 'Nenhuma faixa ainda.',
     remove: 'Remover',
     deleteProject: 'Excluir Projeto',
+  },
+  progress: {
+    copying: (name: string) => `Copiando ${name}…`,
+    copyingOf: (name: string, current: number, total: number) =>
+      `Copiando ${name} (${current} de ${total})…`,
+    converting: (name: string) => `Convertendo ${name} para estéreo…`,
+    convertingGeneric: 'Convertendo para estéreo…',
+    decoding: 'Decodificando faixas…',
+    decodingOf: (current: number, total: number) =>
+      `Decodificando faixas (${current} de ${total})…`,
+    building: 'Montando o mixer…',
+    waveforms: 'Desenhando as ondas…',
   },
   nowPlaying: {
     heading: 'Tocando Agora',

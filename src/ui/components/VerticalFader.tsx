@@ -1,6 +1,11 @@
-import { useCallback, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PanResponder, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { colors, glow, radii } from '@/ui/theme';
+import {
+  UNITY_GAIN,
+  classifyGestureEnd,
+  valueFromDrag,
+} from './faderGesture';
 
 interface VerticalFaderProps {
   /** Committed value from the store; only reflected while not actively dragging. */
@@ -12,6 +17,8 @@ interface VerticalFaderProps {
   onCommit: (value: number) => void;
   disabled?: boolean;
   accentColor: string;
+  /** Applied to the touch-handling track, so gestures can be driven in tests. */
+  testID?: string;
 }
 
 /**
@@ -22,49 +29,114 @@ interface VerticalFaderProps {
  * tracks touch position locally and calls `onLiveChange` on every move; the
  * store's committed `value` is only re-applied once the drag ends, so it
  * can't fight the live gesture.
+ *
+ * The drag is *relative*: the cap moves by however far the finger moved from
+ * where it grabbed, rather than jumping to wherever the finger is. Two
+ * reasons. Absolute positioning has to read `locationY`, which is measured
+ * against whichever view reports the touch - so it shifts reference frame
+ * mid-drag (and once the finger leaves the track entirely) and the cap
+ * visibly jumps. And on stage, a stray tap on a fader should never slam that
+ * channel to a new level; with relative dragging a tap moves nothing.
+ *
+ * Double-tapping resets the channel to unity, the marked line on the track.
  */
-export function VerticalFader({ value, maxValue = 1.2, onLiveChange, onCommit, disabled, accentColor }: VerticalFaderProps) {
+export function VerticalFader({
+  value,
+  maxValue = 1.2,
+  onLiveChange,
+  onCommit,
+  disabled,
+  accentColor,
+  testID,
+}: VerticalFaderProps) {
   const heightRef = useRef(0);
   const draggingValueRef = useRef(value);
+  /** Value the finger grabbed at, which the drag delta is applied to. */
+  const startValueRef = useRef(value);
+  const lastTapAtRef = useRef(0);
   // Non-null while actively dragging (tracks touch position); null means
   // "not dragging", so display falls back to the committed `value` prop -
   // no effect needed to sync committed state into local state.
   const [liveValue, setLiveValue] = useState<number | null>(null);
 
-  const updateFromLocationY = useCallback(
-    (y: number) => {
+  /**
+   * The gesture handlers are built once (see below), so they can't close over
+   * a given render's props - they read them from here. Synced in an effect
+   * rather than during render: a touch can only arrive after the render has
+   * been committed, so the effect has always run by then.
+   */
+  const latest = useRef({ value, maxValue, onLiveChange, onCommit, disabled });
+  useEffect(() => {
+    latest.current = { value, maxValue, onLiveChange, onCommit, disabled };
+  });
+
+  /**
+   * Created exactly once. PanResponder keeps a gesture's origin (`y0`) and
+   * its running `dy` inside the instance it hands to these handlers, so
+   * building a new one every render - and a drag re-renders on every move -
+   * throws that accumulation away: `dy` stops being the distance travelled
+   * since the finger went down, and the cap lurches around mid-drag instead
+   * of following it.
+   */
+  /* eslint-disable react-hooks/refs, react-hooks/purity, react-hooks/preserve-manual-memoization --
+   * Everything in this block runs from native touch events, never during
+   * render: the refs hold live gesture state that must not lag a render, and
+   * Date.now() is read fresh to tell a double-tap from two separate taps.
+   * The empty dep list is load-bearing rather than an optimisation - see the
+   * comment above - so the compiler must not be allowed to rebuild it. */
+  const panResponder = useMemo(() => {
+    function applyDelta(dy: number) {
       const height = heightRef.current;
       if (height <= 0) return;
-      // y grows downward from the top of the track; louder = higher up = smaller y.
-      const ratio = Math.max(0, Math.min(1, 1 - y / height));
-      const next = ratio * maxValue;
+      const next = valueFromDrag(startValueRef.current, dy, height, latest.current.maxValue);
       draggingValueRef.current = next;
       setLiveValue(next);
-      onLiveChange(next);
-    },
-    [maxValue, onLiveChange]
-  );
+      latest.current.onLiveChange(next);
+    }
 
-  /* eslint-disable react-hooks/refs -- these callbacks run on later native
-   * touch responder events, never during render; reading refs synchronously
-   * here (not React state) is what guarantees onPanResponderRelease/
-   * Terminate see the very latest dragged value even if it fires faster
-   * than React re-renders. */
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => !disabled,
-    onMoveShouldSetPanResponder: () => !disabled,
-    onPanResponderGrant: (event) => updateFromLocationY(event.nativeEvent.locationY),
-    onPanResponderMove: (event) => updateFromLocationY(event.nativeEvent.locationY),
-    onPanResponderRelease: () => {
+    function resetToUnity() {
+      const unity = Math.min(UNITY_GAIN, latest.current.maxValue);
+      draggingValueRef.current = unity;
+      latest.current.onLiveChange(unity);
+      latest.current.onCommit(unity);
+    }
+
+    /** A double-tap resets, a drag commits, a lone tap changes nothing. */
+    function endGesture(dy: number) {
       setLiveValue(null);
-      onCommit(draggingValueRef.current);
-    },
-    onPanResponderTerminate: () => {
-      setLiveValue(null);
-      onCommit(draggingValueRef.current);
-    },
-  });
-  /* eslint-enable react-hooks/refs */
+      const now = Date.now();
+
+      switch (classifyGestureEnd(dy, now, lastTapAtRef.current)) {
+        case 'drag':
+          lastTapAtRef.current = 0;
+          latest.current.onCommit(draggingValueRef.current);
+          return;
+        case 'double-tap':
+          lastTapAtRef.current = 0;
+          resetToUnity();
+          return;
+        case 'tap':
+          // A single tap moved nothing, so there is nothing to write back -
+          // this keeps a stray touch from rewriting the project's manifest.
+          lastTapAtRef.current = now;
+      }
+    }
+
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => !latest.current.disabled,
+      onMoveShouldSetPanResponder: () => !latest.current.disabled,
+      onPanResponderGrant: () => {
+        // Grab from wherever the cap currently is - not from the touch point.
+        const from = latest.current.value;
+        startValueRef.current = draggingValueRef.current = from;
+        setLiveValue(from);
+      },
+      onPanResponderMove: (_event, gesture) => applyDelta(gesture.dy),
+      onPanResponderRelease: (_event, gesture) => endGesture(gesture.dy),
+      onPanResponderTerminate: (_event, gesture) => endGesture(gesture.dy),
+    });
+  }, []);
+  /* eslint-enable react-hooks/refs, react-hooks/purity, react-hooks/preserve-manual-memoization */
 
   function handleLayout(event: LayoutChangeEvent) {
     heightRef.current = event.nativeEvent.layout.height;
@@ -81,7 +153,12 @@ export function VerticalFader({ value, maxValue = 1.2, onLiveChange, onCommit, d
       <View style={[styles.readout, dragging && glow(accentColor, 6)]}>
         <Text style={[styles.readoutText, dragging && { color: accentColor }]}>{Math.round(ratio * 100)}</Text>
       </View>
-      <View style={styles.track} onLayout={handleLayout} {...panResponder.panHandlers}>
+      <View
+        style={styles.track}
+        onLayout={handleLayout}
+        testID={testID}
+        {...panResponder.panHandlers}
+      >
         <View style={styles.groove} pointerEvents="none" />
         {/* Unity-gain (1.0) reference mark, like the 0 dB tick on a real fader. */}
         <View style={[styles.unityTick, { bottom: unityPercent }]} pointerEvents="none" />
