@@ -54,6 +54,18 @@ export const ptBR: TranslationDictionary = {
     remove: 'Remover',
     deleteProject: 'Excluir Projeto',
   },
+  progress: {
+    copying: (name: string) => `Copiando ${name}…`,
+    copyingOf: (name: string, current: number, total: number) =>
+      `Copiando ${name} (${current} de ${total})…`,
+    converting: (name: string) => `Convertendo ${name} para estéreo…`,
+    convertingGeneric: 'Convertendo para estéreo…',
+    decoding: 'Decodificando faixas…',
+    decodingOf: (current: number, total: number) =>
+      `Decodificando faixas (${current} de ${total})…`,
+    building: 'Montando o mixer…',
+    waveforms: 'Desenhando as ondas…',
+  },
   nowPlaying: {
     heading: 'Tocando Agora',
     goToSong: (title: string) => `Tocando agora: ${title}. Ir para a música.`,

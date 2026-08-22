@@ -27,6 +27,8 @@ interface ProjectFormProps {
   initial: ProjectFormValues;
   stems: ProjectFormStem[];
   busy?: boolean;
+  /** What the busy work is currently doing, shown next to the spinner. */
+  status?: string | null;
   error?: string | null;
   onAddStems: () => void;
   onRemoveStem: (stemId: string) => void;
@@ -102,6 +104,7 @@ export function ProjectForm({
   initial,
   stems,
   busy = false,
+  status,
   error,
   onAddStems,
   onRemoveStem,
@@ -168,6 +171,13 @@ export function ProjectForm({
       >
         <Text style={styles.pickButtonText}>{t.projectForm.addAudioFiles}</Text>
       </Pressable>
+
+      {busy && status ? (
+        <View style={styles.statusRow} testID="import-status">
+          <ActivityIndicator color={colors.accent} size="small" />
+          <Text style={styles.statusText}>{status}</Text>
+        </View>
+      ) : null}
 
       {stems.length === 0 ? (
         <Text style={styles.emptyText}>{t.projectForm.noStemsYet}</Text>
@@ -295,6 +305,17 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontSize: 13,
     fontWeight: '600',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+  },
+  statusText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    flex: 1,
   },
   emptyText: {
     color: colors.textTertiary,

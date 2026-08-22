@@ -2,6 +2,7 @@ import { audioEngine, type MonitorMode } from '@/engine';
 import { trackRuntimeStatesFromManifest } from '@/engine/trackRuntimeState';
 import { computeWaveformPeaks, waveformBarCount } from '@/engine/waveform';
 import { decodeProjectAudio, getProjectSourceForEntry } from '@/storage';
+import { report, type ProgressReporter } from '@/storage/progress';
 import type { LibraryProjectEntry } from '@/store/projectsSlice';
 import type { ProjectManifest } from '@/types/project';
 import type { StemWaveform } from '@/ui/components/WaveformView';
@@ -74,29 +75,38 @@ class NowPlayingStore {
    * leaving playback completely untouched. That's the core of "audio
    * survives navigating back to the same project".
    */
-  async openProject(entry: LibraryProjectEntry, options: EngineOptions): Promise<LoadResult> {
+  async openProject(
+    entry: LibraryProjectEntry,
+    options: EngineOptions,
+    onProgress?: ProgressReporter
+  ): Promise<LoadResult> {
     if (entry.id === this.snapshot.projectId && this.snapshot.manifest) {
       return { manifest: this.snapshot.manifest, durationSec: this.snapshot.durationSec };
     }
-    return this.loadFresh(entry, options);
+    return this.loadFresh(entry, options, onProgress);
   }
 
   /**
    * Forces a fresh decode of `entry` even if it's already current - used
    * after add/remove-stem or a bpm edit, since the content itself changed.
    */
-  async reload(entry: LibraryProjectEntry, options: EngineOptions): Promise<LoadResult> {
-    return this.loadFresh(entry, options);
+  async reload(
+    entry: LibraryProjectEntry,
+    options: EngineOptions,
+    onProgress?: ProgressReporter
+  ): Promise<LoadResult> {
+    return this.loadFresh(entry, options, onProgress);
   }
 
   private async loadFresh(
     entry: LibraryProjectEntry,
-    { monitorMode, clickEnabled }: EngineOptions
+    { monitorMode, clickEnabled }: EngineOptions,
+    onProgress?: ProgressReporter
   ): Promise<LoadResult> {
     const requestId = ++this.requestId;
 
     const source = await getProjectSourceForEntry(entry);
-    const decoded = await decodeProjectAudio(audioEngine.context, source);
+    const decoded = await decodeProjectAudio(audioEngine.context, source, onProgress);
 
     // A slower, now-superseded request resolving after a newer one already
     // committed must never win - most importantly, must never clobber a
@@ -106,6 +116,9 @@ class NowPlayingStore {
       throw new Error('Superseded by a newer openProject/reload call');
     }
 
+    // Building the graph also generates the click track, which is a
+    // synchronous pass over the whole project length.
+    await report(onProgress, { phase: 'building' });
     audioEngine.loadProject(decoded, trackRuntimeStatesFromManifest(source.manifest.tracks));
     audioEngine.setMonitorMode(monitorMode);
     audioEngine.setClickEnabled(clickEnabled);
@@ -115,6 +128,8 @@ class NowPlayingStore {
       0
     );
 
+    // Peak computation walks every sample of every stem, synchronously.
+    await report(onProgress, { phase: 'waveforms' });
     const waveformStems = source.manifest.tracks.slice(0, MAX_WAVEFORM_STEMS);
     const laneBarCount = waveformBarCount(durationSec, waveformStems.length);
     const waveformTracks: StemWaveform[] = waveformStems.map((track, index) => ({

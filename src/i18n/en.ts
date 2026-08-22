@@ -45,6 +45,17 @@ export const en = {
     remove: 'Remove',
     deleteProject: 'Delete Project',
   },
+  progress: {
+    copying: (name: string) => `Copying ${name}…`,
+    copyingOf: (name: string, current: number, total: number) =>
+      `Copying ${name} (${current} of ${total})…`,
+    converting: (name: string) => `Converting ${name} to stereo…`,
+    convertingGeneric: 'Converting to stereo…',
+    decoding: 'Decoding stems…',
+    decodingOf: (current: number, total: number) => `Decoding stems (${current} of ${total})…`,
+    building: 'Building the mixer…',
+    waveforms: 'Drawing waveforms…',
+  },
   nowPlaying: {
     heading: 'Now Playing',
     goToSong: (title: string) => `Now playing: ${title}. Go to song.`,

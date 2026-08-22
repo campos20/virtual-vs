@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { audioEngine } from "@/engine";
 import { useTranslation } from "@/i18n";
+import type { ProgressUpdate } from "@/storage/progress";
 import { useNowPlaying } from "@/hooks/useNowPlaying";
 import { usePlayhead } from "@/hooks/usePlayhead";
 import { nowPlayingStore } from "@/playback/nowPlayingStore";
@@ -83,8 +84,40 @@ export function ProjectScreen() {
   const [editing, setEditing] = useState((entry?.tracks.length ?? 0) === 0);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // What the current slow operation is doing, so a multi-second import or
+  // decode says so instead of showing an empty screen.
+  const [status, setStatus] = useState<string | null>(null);
 
   const { seconds: playheadSec, stop: stopPlayhead } = usePlayhead();
+
+  const describeProgress = useCallback(
+    (update: ProgressUpdate): string => {
+      switch (update.phase) {
+        case 'copying':
+          return update.total && update.total > 1 && update.current
+            ? t.progress.copyingOf(update.name ?? '', update.current, update.total)
+            : t.progress.copying(update.name ?? '');
+        case 'converting':
+          return update.name
+            ? t.progress.converting(update.name)
+            : t.progress.convertingGeneric;
+        case 'decoding':
+          return update.total && update.total > 1 && update.current
+            ? t.progress.decodingOf(update.current, update.total)
+            : t.progress.decoding;
+        case 'building':
+          return t.progress.building;
+        case 'waveforms':
+          return t.progress.waveforms;
+      }
+    },
+    [t]
+  );
+
+  const onProgress = useCallback(
+    (update: ProgressUpdate) => setStatus(describeProgress(update)),
+    [describeProgress]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -99,10 +132,11 @@ export function ProjectScreen() {
       setLoading(true);
       setError(null);
       try {
-        const { manifest } = await nowPlayingStore.openProject(entry, {
-          monitorMode,
-          clickEnabled,
-        });
+        const { manifest } = await nowPlayingStore.openProject(
+          entry,
+          { monitorMode, clickEnabled },
+          onProgress,
+        );
         if (cancelled) return;
         dispatch(
           tracksInitializedForProject({ projectId: entry.id, tracks: manifest.tracks }),
@@ -110,7 +144,10 @@ export function ProjectScreen() {
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setStatus(null);
+        }
       }
     }
 
@@ -124,9 +161,13 @@ export function ProjectScreen() {
   /** Forces a fresh reload of the current project (its content actually changed) and re-seeds the store's mixer state from the result. */
   const reloadAndSeed = useCallback(async () => {
     if (!entry) return;
-    const { manifest } = await nowPlayingStore.reload(entry, { monitorMode, clickEnabled });
+    const { manifest } = await nowPlayingStore.reload(
+      entry,
+      { monitorMode, clickEnabled },
+      onProgress,
+    );
     dispatch(tracksInitializedForProject({ projectId: entry.id, tracks: manifest.tracks }));
-  }, [entry, monitorMode, clickEnabled, dispatch]);
+  }, [entry, monitorMode, clickEnabled, dispatch, onProgress]);
 
   // Kills this screen's own rAF-driven waveform re-render loop before
   // navigating away - independent of whether the engine itself keeps
@@ -180,13 +221,19 @@ export function ProjectScreen() {
       if (!assets || !entry?.sourceDir) return;
 
       setBusy(true);
-      const updated = await addStemsToProject(entry.sourceDir, assets, audioEngine.context);
+      const updated = await addStemsToProject(
+        entry.sourceDir,
+        assets,
+        audioEngine.context,
+        onProgress,
+      );
       dispatch(projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }));
       await reloadAndSeed();
     } catch (e) {
       setFormError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+      setStatus(null);
     }
   }
 
@@ -370,6 +417,7 @@ export function ProjectScreen() {
           }}
           stems={formStems}
           busy={busy}
+          status={status}
           error={formError}
           onAddStems={handleAddStems}
           onRemoveStem={handleRemoveStem}
@@ -397,6 +445,11 @@ export function ProjectScreen() {
         {renderHeader()}
         <View style={styles.centeredBody}>
           <ActivityIndicator color={colors.accent} />
+          {status ? (
+            <Text style={styles.loadingStatus} testID="loading-status">
+              {status}
+            </Text>
+          ) : null}
         </View>
       </SafeAreaView>
     );
@@ -449,6 +502,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  loadingStatus: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    marginTop: 14,
+    textAlign: "center",
+    paddingHorizontal: 32,
   },
   centeredBody: {
     flex: 1,

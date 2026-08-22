@@ -3,6 +3,7 @@ import type { LibraryProjectEntry } from '@/store/projectsSlice';
 import type { ProjectManifest } from '@/types/project';
 import { getDemoProjectSource } from './demoProject';
 import { foldToStereo } from './downmix';
+import { report, type ProgressReporter } from './progress';
 import type { BaseAudioContext, DecodedProject, ProjectSource } from './types';
 
 export async function readProjectManifest(directory: Directory): Promise<ProjectManifest> {
@@ -38,14 +39,25 @@ export async function getProjectSourceForEntry(entry: LibraryProjectEntry): Prom
  */
 export async function decodeProjectAudio(
   context: BaseAudioContext,
-  source: ProjectSource
+  source: ProjectSource,
+  onProgress?: ProgressReporter
 ): Promise<DecodedProject> {
   const { manifest } = source;
+
+  // Decoding stays parallel - it's native work off the JS thread, and running
+  // stems one at a time to report finer progress would make the wait longer
+  // for the sake of a nicer label. Progress is reported as each one lands.
+  let done = 0;
+  const total = manifest.tracks.length;
+  await report(onProgress, { phase: 'decoding', current: 0, total });
 
   const trackEntries = await Promise.all(
     manifest.tracks.map(async (track) => {
       const buffer = await context.decodeAudioData(source.resolveFile(track.file));
-      return [track.id, foldToStereo(context, buffer)] as const;
+      const folded = foldToStereo(context, buffer);
+      done += 1;
+      onProgress?.({ phase: 'decoding', name: track.name, current: done, total });
+      return [track.id, folded] as const;
     })
   );
 

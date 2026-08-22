@@ -326,6 +326,39 @@ describe('ProjectScreen - editing in place', () => {
     );
   });
 
+  // A cloud-picked file can take many seconds to copy, convert and decode.
+  // Without this the screen just sat there blank, so the phase label is the
+  // whole point of the feature - assert the user actually sees it.
+  it('shows what the import is doing while it runs', async () => {
+    pickerMock.mockResolvedValue({
+      canceled: false,
+      assets: [asset('gtr.wav', 'file:///tmp/gtr.wav')],
+    });
+
+    let finishImport: () => void = () => {};
+    const importDone = new Promise<void>((resolve) => {
+      finishImport = resolve;
+    });
+    (addStemsToProject as jest.Mock).mockImplementation(
+      async (_dir: string, _files: unknown, _ctx: unknown, onProgress?: (u: unknown) => void) => {
+        onProgress?.({ phase: 'copying', name: 'gtr.wav' });
+        await importDone;
+        return { ...filesystemProject, tracks: filesystemProject.tracks };
+      }
+    );
+
+    renderEditable();
+    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('edit-button'));
+    fireEvent.press(screen.getByTestId('pick-files-button'));
+
+    await waitFor(() => expect(screen.getByTestId('import-status')).toBeTruthy());
+    expect(screen.getByText('Copying gtr.wav…')).toBeTruthy();
+
+    finishImport();
+    await waitFor(() => expect(screen.queryByTestId('import-status')).toBeNull());
+  });
+
   it('adds stems through to the project folder', async () => {
     (addStemsToProject as jest.Mock).mockResolvedValue({
       ...filesystemProject,
