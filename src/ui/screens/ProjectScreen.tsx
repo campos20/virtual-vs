@@ -15,6 +15,7 @@ import { useTranslation } from "@/i18n";
 import type { ProgressUpdate } from "@/storage/progress";
 import { useNowPlaying } from "@/hooks/useNowPlaying";
 import { usePlayhead } from "@/hooks/usePlayhead";
+import { useTransportState } from "@/hooks/useTransportState";
 import { nowPlayingStore } from "@/playback/nowPlayingStore";
 import {
   addStemsToProject,
@@ -89,6 +90,31 @@ export function ProjectScreen() {
   const [status, setStatus] = useState<string | null>(null);
 
   const { seconds: playheadSec, stop: stopPlayhead } = usePlayhead();
+
+  /**
+   * Anything that edits a project ends in nowPlayingStore.reload(), and
+   * AudioEngine.loadProject() opens with stop() + disposeTracks() - so an
+   * import or a save mid-song would cut the song off and tear the graph
+   * down. Nothing that can do that is reachable while the transport is
+   * running. Guarded at the handlers, not just the buttons, so a stale tap
+   * or a race can't get past it.
+   *
+   * Deliberately keyed on the transport being *playing at all*, not on this
+   * project being the one playing: reload() loads this project into the one
+   * shared engine, so editing project A would stop project B just the same.
+   */
+  const transportState = useTransportState();
+  const isPlaying = transportState === "playing";
+
+  /**
+   * The handlers ask the engine directly rather than reading `isPlaying`
+   * above. React state trails the engine by a render - a tap landing in that
+   * window would otherwise sail straight through the guard and rebuild the
+   * graph mid-song. `isPlaying` drives the UI; this decides.
+   */
+  function transportIsRunning() {
+    return audioEngine.getTransportState() === "playing";
+  }
 
   const describeProgress = useCallback(
     (update: ProgressUpdate): string => {
@@ -198,6 +224,7 @@ export function ProjectScreen() {
   }
 
   function handleStartEditing() {
+    if (transportIsRunning()) return;
     setFormError(null);
     setEditing(true);
     // Otherwise cancelling out of the form would land back on the mixer
@@ -215,6 +242,10 @@ export function ProjectScreen() {
   }
 
   async function handleAddStems() {
+    if (transportIsRunning()) {
+      setFormError(t.project.lockedWhilePlayingBody);
+      return;
+    }
     setFormError(null);
     try {
       const assets = await pickFiles();
@@ -238,6 +269,10 @@ export function ProjectScreen() {
   }
 
   async function handleRemoveStem(stemId: string) {
+    if (transportIsRunning()) {
+      setFormError(t.project.lockedWhilePlayingBody);
+      return;
+    }
     setFormError(null);
     if (!entry?.sourceDir) return;
     setBusy(true);
@@ -262,6 +297,9 @@ export function ProjectScreen() {
    * new name optimistically and needs to revert it if this resolves false,
    * rather than drifting out of sync with what's actually on disk.
    */
+  // Not blocked while playing, unlike the others: renaming only rewrites a
+  // label in the manifest and patches the snapshot in place - it never calls
+  // reload(), so the engine graph and the running transport are untouched.
   async function handleRenameStem(stemId: string, name: string): Promise<boolean> {
     setFormError(null);
     if (!entry?.sourceDir) return false;
@@ -277,6 +315,10 @@ export function ProjectScreen() {
   }
 
   async function handleSubmit(values: ProjectFormValues) {
+    if (transportIsRunning()) {
+      setFormError(t.project.lockedWhilePlayingBody);
+      return;
+    }
     if (!entry?.sourceDir) return;
     setBusy(true);
     setFormError(null);
@@ -319,6 +361,11 @@ export function ProjectScreen() {
    * first. If this is the project currently loaded/playing, that's stopped
    * and cleared before the files disappear underneath it.
    */
+  // Not blocked while playing, unlike the rebuilding paths: deleting
+  // deliberately *stops* the engine and clears the project rather than
+  // reloading underneath a running transport, so it's safe - and being
+  // unable to delete a project without first stopping it would be a strange
+  // restriction.
   function handleDelete() {
     if (!entry?.sourceDir) return;
     Alert.alert(
@@ -493,6 +540,7 @@ export function ProjectScreen() {
         clickEnabled={clickEnabled}
         onClickEnabledChange={handleClickEnabledChange}
         onEdit={canEdit ? handleStartEditing : undefined}
+        editDisabledReason={isPlaying ? t.project.lockedWhilePlaying : undefined}
       />
     </SafeAreaView>
   );

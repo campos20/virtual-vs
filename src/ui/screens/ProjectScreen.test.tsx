@@ -356,7 +356,7 @@ describe('ProjectScreen - editing in place', () => {
     expect(screen.getByText('Copying gtr.wav…')).toBeTruthy();
 
     finishImport();
-    await waitFor(() => expect(screen.queryByTestId('import-status')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('Copying gtr.wav…')).toBeNull());
   });
 
   it('adds stems through to the project folder', async () => {
@@ -542,6 +542,102 @@ describe('ProjectScreen - a brand-new (stemless) project', () => {
   });
 });
 
+// AudioEngine.loadProject() opens with stop() + disposeTracks(), and every
+// edit path ends in a reload() that calls it - so an edit mid-song cuts the
+// song off and tears the graph down. On stage that is the worst possible
+// failure, so nothing that rebuilds is reachable while the transport runs.
+describe('ProjectScreen - locked while playing', () => {
+  /** A project that both loads (so there's a mixer) and is editable (so Edit exists). */
+  function renderEditing() {
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: filesystemProject,
+      resolveFile: () => 0,
+    });
+    mockParams = { projectId: 'my-song' };
+    const store = createStore();
+    store.dispatch(projectAdded(filesystemProject));
+    store.dispatch(
+      tracksInitializedForProject({
+        projectId: filesystemProject.id,
+        tracks: filesystemProject.tracks,
+      })
+    );
+    return renderWithStore(<ProjectScreen />, store);
+  }
+
+  afterEach(() => {
+    audioEngine.stop();
+  });
+
+  it('offers no Edit button while the transport is running', async () => {
+    renderEditing();
+    await waitForMixer();
+    audioEngine.play();
+
+    openMixer();
+
+    expect(screen.queryByTestId('edit-button')).toBeNull();
+    expect(screen.getByTestId('edit-locked-reason')).toBeTruthy();
+  });
+
+  it('offers Edit when the transport is stopped', async () => {
+    renderEditing();
+    await waitForMixer();
+
+    openMixer();
+
+    expect(screen.getByTestId('edit-button')).toBeTruthy();
+    expect(screen.queryByTestId('edit-locked-reason')).toBeNull();
+  });
+
+  // The buttons are hidden, but a stale tap or a race must not get through
+  // either - these are guarded at the handler, which is what actually calls
+  // reload().
+  it('refuses to import, remove or save while playing, even if invoked directly', async () => {
+    renderEditing();
+    await waitForMixer();
+    openMixer();
+    fireEvent.press(screen.getByTestId('edit-button'));
+
+    audioEngine.play();
+    pickerMock.mockResolvedValue({
+      canceled: false,
+      assets: [asset('gtr.wav', 'file:///tmp/gtr.wav')],
+    });
+
+    fireEvent.press(screen.getByTestId('pick-files-button'));
+    fireEvent.press(screen.getByTestId('remove-stem-bass'));
+    fireEvent.press(screen.getByTestId('save-button'));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Stop playback first/)).toBeTruthy()
+    );
+    expect(addStemsToProject).not.toHaveBeenCalled();
+    expect(removeStemFromProject).not.toHaveBeenCalled();
+    expect(updateProjectMetadata).not.toHaveBeenCalled();
+    // The whole point: the song kept playing.
+    expect(audioEngine.getTransportState()).toBe('playing');
+  });
+
+  // Renaming only rewrites a label and patches the snapshot - it never
+  // reloads, so blocking it would be needless restriction mid-set.
+  it('still allows renaming a stem while playing', async () => {
+    (renameStemInProject as jest.Mock).mockResolvedValue(filesystemProject);
+    renderEditing();
+    await waitForMixer();
+    openMixer();
+    fireEvent.press(screen.getByTestId('edit-button'));
+
+    audioEngine.play();
+    const field = screen.getByTestId('rename-stem-bass');
+    fireEvent.changeText(field, 'Low End');
+    fireEvent(field, 'blur');
+
+    await waitFor(() => expect(renameStemInProject).toHaveBeenCalled());
+    expect(audioEngine.getTransportState()).toBe('playing');
+  });
+});
+
 describe('ProjectScreen - deleting', () => {
   async function renderEditableInEditMode() {
     mockParams = { projectId: 'my-song' };
@@ -642,9 +738,12 @@ describe('ProjectScreen - deleting', () => {
     store.dispatch(projectAdded(filesystemProject));
     renderWithStore(<ProjectScreen />, store);
     await waitForMixer();
-    audioEngine.play();
+    // Edit can't be opened mid-song any more (see "locked while playing"), so
+    // open it first and start playback after - what's under test is that
+    // deleting a *playing* project stops the engine, not how Edit was reached.
     openMixer();
     fireEvent.press(screen.getByTestId('edit-button'));
+    audioEngine.play();
 
     fireEvent.press(screen.getByTestId('delete-project-button'));
 
