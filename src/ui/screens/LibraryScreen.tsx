@@ -271,6 +271,7 @@ export function LibraryScreen() {
                           key={song.id}
                           testID={`project-row-${song.id}`}
                           nested
+                          position={songIndex + 1}
                           title={song.title}
                           bpm={song.bpm}
                           musicalKey={song.key}

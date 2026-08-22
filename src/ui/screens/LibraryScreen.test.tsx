@@ -271,6 +271,36 @@ describe('LibraryScreen', () => {
       expect(screen.getByText('Sunday Set')).toBeTruthy();
     });
 
+    // A folder is a setlist, so its songs are found by position on stage.
+    it('numbers songs inside a folder from 1', () => {
+      renderWithFolders(
+        [folder('sunday', 'Sunday Set', ['first', 'second', 'third'])],
+        [song('first'), song('second'), song('third')]
+      );
+
+      expect(screen.getByTestId('project-row-first-position')).toHaveTextContent('1');
+      expect(screen.getByTestId('project-row-second-position')).toHaveTextContent('2');
+      expect(screen.getByTestId('project-row-third-position')).toHaveTextContent('3');
+    });
+
+    it('renumbers after a reorder, so the numbers are positions and not labels', () => {
+      renderWithFolders(
+        [folder('sunday', 'Sunday Set', ['first', 'second'])],
+        [song('first'), song('second')]
+      );
+
+      fireEvent.press(screen.getByTestId('project-row-second-move-up'));
+
+      expect(screen.getByTestId('project-row-second-position')).toHaveTextContent('1');
+      expect(screen.getByTestId('project-row-first-position')).toHaveTextContent('2');
+    });
+
+    it('leaves loose songs unnumbered - there is no set for them to be fourth in', () => {
+      renderWithFolders([folder('sunday', 'Sunday Set')], [song('loose')]);
+
+      expect(screen.queryByTestId('project-row-loose-position')).toBeNull();
+    });
+
     it('opens a song from inside a folder', () => {
       renderWithFolders([folder('sunday', 'Sunday Set', ['filed'])], [song('filed', 'Filed Song')]);
 

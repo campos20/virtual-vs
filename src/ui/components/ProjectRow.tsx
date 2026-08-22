@@ -24,6 +24,13 @@ interface ProjectRowProps {
   menuAccessibilityLabel?: string;
   /** Indents the row and drops its shadow, for a song shown inside a folder. */
   nested?: boolean;
+  /**
+   * 1-based position within its folder. A folder is a setlist, and a setlist
+   * is read by position - "we're on 4" - so the number is what the row is
+   * found by on stage, not decoration. Omitted at the top level, where there
+   * is no set to be fourth in.
+   */
+  position?: number;
   testID?: string;
 }
 
@@ -54,6 +61,7 @@ export function ProjectRow({
   menuItems,
   menuAccessibilityLabel,
   nested,
+  position,
   testID,
 }: ProjectRowProps) {
   return (
@@ -70,6 +78,16 @@ export function ProjectRow({
             isNowPlaying && glow(accentColor, 8),
           ]}
         />
+        {position !== undefined && (
+          <Text
+            style={styles.position}
+            // Fixed width + tabular figures so the titles stay aligned as the
+            // count crosses into double digits mid-set.
+            testID={testID ? `${testID}-position` : undefined}
+          >
+            {position}
+          </Text>
+        )}
         <View style={styles.rowBody}>
           <View style={styles.titleRow}>
             {isNowPlaying && (
@@ -155,6 +173,15 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     borderRadius: 2,
     marginRight: spacing.md,
+  },
+  position: {
+    color: colors.textTertiary,
+    fontSize: 15,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+    minWidth: 18,
+    marginRight: spacing.sm,
+    textAlign: 'right',
   },
   rowBody: {
     flex: 1,
