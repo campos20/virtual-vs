@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
-import { getDemoLibraryEntry, listSetlists, loadProjectLibrary } from '@/storage';
+import { listSetlists, loadProjectLibrary } from '@/storage';
 import { useAppDispatch } from '@/store/hooks';
 import { projectsHydrated } from '@/store/projectsSlice';
 import { setlistsHydrated } from '@/store/setlistsSlice';
@@ -29,9 +29,9 @@ export function ProjectLibraryGate({ children }: { children: ReactNode }) {
       })
       .catch((error) => {
         console.warn('Failed to read the project library', error);
-        // Still hydrate, with the bundled demo at least: without this the
-        // Library would spin forever instead of showing something openable.
-        if (!cancelled) dispatch(projectsHydrated([getDemoLibraryEntry()]));
+        // Still hydrate, empty: the Library then shows its empty state rather
+        // than spinning forever on a scan that already failed.
+        if (!cancelled) dispatch(projectsHydrated([]));
       });
 
     listSetlists()

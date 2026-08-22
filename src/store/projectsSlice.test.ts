@@ -13,12 +13,12 @@ const initialState = reducer(undefined, { type: '@@INIT' });
 function buildEntry(overrides: Partial<LibraryProjectEntry> = {}): LibraryProjectEntry {
   return {
     id: 'proj1',
-    title: 'Demo Set',
+    title: 'My Song',
     bpm: 120,
     key: 'C',
     tracks: [],
     sections: [],
-    origin: 'bundled',
+    origin: 'filesystem',
     ...overrides,
   };
 }
@@ -26,7 +26,7 @@ function buildEntry(overrides: Partial<LibraryProjectEntry> = {}): LibraryProjec
 describe('projectsSlice', () => {
   it('adds a project', () => {
     const state = reducer(initialState, projectAdded(buildEntry()));
-    expect(projectsSelectors.selectById(state, 'proj1')).toMatchObject({ title: 'Demo Set' });
+    expect(projectsSelectors.selectById(state, 'proj1')).toMatchObject({ title: 'My Song' });
   });
 
   it('upserts an existing project in place', () => {
@@ -39,7 +39,7 @@ describe('projectsSlice', () => {
   it('applies a partial update', () => {
     const added = reducer(initialState, projectAdded(buildEntry()));
     const updated = reducer(added, projectUpdated({ id: 'proj1', changes: { bpm: 140 } }));
-    expect(projectsSelectors.selectById(updated, 'proj1')).toMatchObject({ bpm: 140, title: 'Demo Set' });
+    expect(projectsSelectors.selectById(updated, 'proj1')).toMatchObject({ bpm: 140, title: 'My Song' });
   });
 
   it('removes a project', () => {

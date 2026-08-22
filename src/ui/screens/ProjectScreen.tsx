@@ -473,16 +473,6 @@ export function ProjectScreen() {
   }
 
   if (editing) {
-    // Bundled projects live in the app bundle with no writable manifest.
-    if (entry?.origin === "bundled") {
-      return (
-        <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-          {renderHeader()}
-          <Text style={styles.notice}>{t.project.bundledNotice}</Text>
-        </SafeAreaView>
-      );
-    }
-
     return (
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
         {renderHeader()}

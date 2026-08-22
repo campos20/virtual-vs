@@ -1,7 +1,6 @@
 import { Directory } from 'expo-file-system';
 import type { LibraryProjectEntry } from '@/store/projectsSlice';
 import { readAppSettings } from './appSettings';
-import { getDemoLibraryEntry } from './demoProject';
 import { ensureProjectsDirectoryExists, projectsDirectory } from './paths';
 import { readProjectManifest } from './projectLoader';
 
@@ -59,8 +58,7 @@ export function applyPersistedOrder(
   return [...ordered, ...remaining];
 }
 
-/** The bundled demo plus everything found on disk, in the order the Library shows them. */
+/** Everything found on disk, in the order the Library shows it. */
 export async function loadProjectLibrary(): Promise<LibraryProjectEntry[]> {
-  const entries = [getDemoLibraryEntry(), ...(await listFilesystemProjects())];
-  return applyPersistedOrder(entries, readAppSettings().projectOrder);
+  return applyPersistedOrder(await listFilesystemProjects(), readAppSettings().projectOrder);
 }

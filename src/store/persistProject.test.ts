@@ -71,9 +71,10 @@ describe('persistProjectMixer', () => {
     expect(store.getState().projects.entities.song?.tracks[0]).toMatchObject({ gain: 0.3 });
   });
 
-  // The bundled demo has no writable manifest, so it keeps its mix in memory.
+  // Defensive: nothing produces a sourceDir-less entry now that the bundled
+  // demo is gone, but the write path still refuses to guess a path.
   it('writes nothing for a project with no source directory', () => {
-    const store = storeWithProject({ origin: 'bundled', sourceDir: undefined });
+    const store = storeWithProject({ sourceDir: undefined });
 
     store.dispatch(persistProjectMixer('song'));
 
@@ -106,7 +107,7 @@ describe('persistProjectClick', () => {
   });
 
   it('still updates the entry for a project it cannot write', () => {
-    const store = storeWithProject({ origin: 'bundled', sourceDir: undefined });
+    const store = storeWithProject({ sourceDir: undefined });
 
     store.dispatch(persistProjectClick('song', false));
 

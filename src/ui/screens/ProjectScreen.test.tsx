@@ -5,8 +5,6 @@ import { audioEngine } from '@/engine';
 import {
   addStemsToProject,
   deleteProjectDirectory,
-  getDemoLibraryEntry,
-  getDemoProjectSource,
   getProjectSourceForEntry,
   removeStemFromProject,
   renameStemInProject,
@@ -14,7 +12,7 @@ import {
 } from '@/storage';
 import { nowPlayingStore } from '@/playback/nowPlayingStore';
 import { createStore } from '@/store';
-import { projectAdded } from '@/store/projectsSlice';
+import { projectAdded, type LibraryProjectEntry } from '@/store/projectsSlice';
 import { trackEntityId, tracksInitializedForProject } from '@/store/tracksSlice';
 import { renderWithStore } from '@/test-utils/renderWithStore';
 import { ProjectScreen } from './ProjectScreen';
@@ -59,7 +57,7 @@ beforeEach(() => {
   mockParams = {};
   // nowPlayingStore's whole point is skipping a reload when a project is
   // already current - which would silently leak across tests that reuse the
-  // same project id (most of them use 'demo-sync-test') unless reset here.
+  // same project id (most of them use 'sync-test') unless reset here.
   nowPlayingStore.resetForTests();
   // Real behaviour by default; individual tests override it.
   (getProjectSourceForEntry as jest.Mock).mockImplementation(
@@ -85,10 +83,36 @@ const filesystemProject = {
   sourceDir: 'file:///mock/document/projects/my-song',
 };
 
-function renderDemo() {
-  mockParams = { projectId: 'demo-sync-test' };
+/**
+ * Three stems with one routed to cue and a bpm so there's a click - the shape
+ * the bundled demo project provided before it was removed. Unlike
+ * `filesystemProject` above, tests using this stub `getProjectSourceForEntry`,
+ * so the load actually succeeds and the mixer renders.
+ */
+const threeStemProject: LibraryProjectEntry = {
+  id: 'sync-test',
+  title: 'Sync Test',
+  bpm: 120,
+  key: 'A minor',
+  tracks: [
+    { id: 'bass', name: 'Bass', file: 'bass.wav', gain: 0.85, bus: 'main' },
+    { id: 'keys', name: 'Keys', file: 'keys.wav', gain: 0.85, bus: 'main' },
+    { id: 'guide', name: 'Guide Vocal', file: 'guide.wav', gain: 0.9, bus: 'cue' },
+  ],
+  sections: [],
+  origin: 'filesystem',
+  sourceDir: 'file:///mock/document/projects/sync-test',
+};
+
+function renderLoaded(manifest: LibraryProjectEntry = threeStemProject) {
+  (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+    manifest,
+    // The audio mock decodes any ref, so the stems never have to exist.
+    resolveFile: () => 0,
+  });
+  mockParams = { projectId: threeStemProject.id };
   const store = createStore();
-  store.dispatch(projectAdded(getDemoLibraryEntry()));
+  store.dispatch(projectAdded(threeStemProject));
   return renderWithStore(<ProjectScreen />, store);
 }
 
@@ -103,10 +127,10 @@ function openMixer() {
 
 describe('ProjectScreen - playing', () => {
   it('loads a project and renders a channel strip per track', async () => {
-    renderDemo();
+    renderLoaded();
     await waitForMixer();
 
-    expect(screen.getByText('Demo: Sync Test')).toBeTruthy();
+    expect(screen.getByText('Sync Test')).toBeTruthy();
     expect(screen.getByText('120 BPM')).toBeTruthy();
     // The waveform view labels each stem's lane too, so "Keys" is already on screen.
     expect(screen.getByText('Keys')).toBeTruthy();
@@ -121,7 +145,7 @@ describe('ProjectScreen - playing', () => {
   // (see NowPlayingBar.test.tsx) - this screen only loads a project in and
   // lets the shared engine transport drive its waveform.
   it('loads the project into the engine, ready to play', async () => {
-    renderDemo();
+    renderLoaded();
     await waitForMixer();
 
     expect(audioEngine.getManifestTrackIds().length).toBeGreaterThan(0);
@@ -131,7 +155,7 @@ describe('ProjectScreen - playing', () => {
   });
 
   it('toggling mute commits to the engine and the store', async () => {
-    const { store } = renderDemo();
+    const { store } = renderLoaded();
     await waitForMixer();
     openMixer();
 
@@ -140,7 +164,7 @@ describe('ProjectScreen - playing', () => {
 
     expect(audioEngine.getTrackState('bass')?.muted).toBe(true);
     expect(
-      store.getState().tracks.entities[trackEntityId('demo-sync-test', 'bass')]?.muted
+      store.getState().tracks.entities[trackEntityId('sync-test', 'bass')]?.muted
     ).toBe(true);
   });
 
@@ -149,22 +173,16 @@ describe('ProjectScreen - playing', () => {
   // state for hardcodes them off, so a screen that fails to pass the manifest
   // mix through would show a muted channel while playing it at full level.
   it('seeds the engine with the mix stored in the project manifest', async () => {
-    const demo = getDemoProjectSource();
-    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
-      ...demo,
-      manifest: {
-        ...demo.manifest,
-        tracks: demo.manifest.tracks.map((track) =>
-          track.id === 'bass'
-            ? { ...track, gain: 0.25, bus: 'both' as const, muted: true }
-            : track.id === 'keys'
-              ? { ...track, soloed: true }
-              : track
-        ),
-      },
+    renderLoaded({
+      ...threeStemProject,
+      tracks: threeStemProject.tracks.map((track) =>
+        track.id === 'bass'
+          ? { ...track, gain: 0.25, bus: 'both' as const, muted: true }
+          : track.id === 'keys'
+            ? { ...track, soloed: true }
+            : track
+      ),
     });
-
-    renderDemo();
     await waitForMixer();
 
     expect(audioEngine.getTrackState('bass')?.muted).toBe(true);
@@ -180,7 +198,7 @@ describe('ProjectScreen - playing', () => {
   it('keeps playing across unmount, instead of stopping like it used to', async () => {
     const stopSpy = jest.spyOn(audioEngine, 'stop');
 
-    const { unmount } = renderDemo();
+    const { unmount } = renderLoaded();
     await waitForMixer();
     audioEngine.play();
     stopSpy.mockClear();
@@ -193,13 +211,13 @@ describe('ProjectScreen - playing', () => {
   });
 
   it('does not re-decode or restart playback when re-opening the same project', async () => {
-    const { unmount } = renderDemo();
+    const { unmount } = renderLoaded();
     await waitForMixer();
     audioEngine.play();
     unmount();
 
     (getProjectSourceForEntry as jest.Mock).mockClear();
-    renderDemo();
+    renderLoaded();
     await waitForMixer();
 
     expect(getProjectSourceForEntry).not.toHaveBeenCalled();
@@ -211,7 +229,7 @@ describe('ProjectScreen - playing', () => {
   // still supposed to interrupt whatever was playing (unlike Back/Edit/
   // re-opening the same project, which no longer do).
   it('opening a different project stops the previous one and replaces it', async () => {
-    const { unmount } = renderDemo();
+    const { unmount } = renderLoaded();
     await waitForMixer();
     audioEngine.play();
     unmount();
@@ -238,14 +256,6 @@ describe('ProjectScreen - editing in place', () => {
     store.dispatch(projectAdded(filesystemProject));
     return renderWithStore(<ProjectScreen />, store);
   }
-
-  it('offers no Edit button for the bundled demo project, even from the mixer', async () => {
-    renderDemo();
-    await waitForMixer();
-    openMixer();
-
-    expect(screen.queryByTestId('edit-button')).toBeNull();
-  });
 
   // Edit lives behind the mixer drawer now, not in the main header, so a
   // stray tap during a set can't land on it - it takes opening the mixer first.
@@ -665,10 +675,27 @@ describe('ProjectScreen - deleting', () => {
     });
   }
 
-  it('is not offered for the bundled demo project', async () => {
-    renderDemo();
-    await waitForMixer();
+  // Deleting needs a folder to delete. Nothing produces a sourceDir-less
+  // entry now that the bundled demo is gone, but the guard is still there and
+  // a project the app can't locate must not offer to destroy it.
+  it('is not offered for a project with no source directory', () => {
+    mockParams = { projectId: 'no-dir' };
+    const store = createStore();
+    store.dispatch(
+      projectAdded({
+        id: 'no-dir',
+        title: 'No Directory',
+        key: '',
+        tracks: [],
+        sections: [],
+        origin: 'filesystem',
+      })
+    );
+    renderWithStore(<ProjectScreen />, store);
 
+    // A stemless project opens straight into the form - the only view that
+    // ever offers delete.
+    expect(screen.getByTestId('save-button')).toBeTruthy();
     expect(screen.queryByTestId('delete-project-button')).toBeNull();
   });
 

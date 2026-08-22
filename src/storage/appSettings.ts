@@ -5,10 +5,10 @@ export interface PersistedAppSettings {
   /** Manually chosen language, overriding the device locale. Absent means "follow the device". */
   languageOverride?: Locale;
   /**
-   * Project ids in the user's chosen Library order. Lives here rather than
-   * on each project's own manifest.json because it has to cover the bundled
-   * demo project too, which has no writable manifest - see
-   * storage/projectLibrary.ts for how a fresh scan is reconciled against it.
+   * Project ids in the user's chosen Library order. Lives here rather than on
+   * each project's own manifest.json because it is a property of the Library,
+   * not of any one project - see storage/projectLibrary.ts for how a fresh
+   * scan is reconciled against it.
    *
    * Superseded by `libraryOrder` below, and only read when that is absent -
    * kept so an install from before folders existed doesn't lose the order

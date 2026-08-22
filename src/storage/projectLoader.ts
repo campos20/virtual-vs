@@ -1,7 +1,6 @@
 import { Directory, File } from 'expo-file-system';
 import type { LibraryProjectEntry } from '@/store/projectsSlice';
 import type { ProjectManifest } from '@/types/project';
-import { getDemoProjectSource } from './demoProject';
 import { foldToStereo } from './downmix';
 import { report, type ProgressReporter } from './progress';
 import type { BaseAudioContext, DecodedProject, ProjectSource } from './types';
@@ -20,11 +19,8 @@ export async function createFilesystemProjectSource(directory: Directory): Promi
   };
 }
 
-/** Resolves a Library entry back to a decodable `ProjectSource`, regardless of where it lives. */
+/** Resolves a Library entry back to a decodable `ProjectSource`. */
 export async function getProjectSourceForEntry(entry: LibraryProjectEntry): Promise<ProjectSource> {
-  if (entry.origin === 'bundled') {
-    return getDemoProjectSource();
-  }
   if (!entry.sourceDir) {
     throw new Error(`Filesystem project "${entry.id}" is missing its sourceDir`);
   }

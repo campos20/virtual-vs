@@ -107,12 +107,12 @@ devtools.
 ### Storage (`storage/`)
 
 `ProjectSource` is a small abstraction over "where a project's manifest and
-stems came from" - a bundled demo project resolves its stems to `require()`
-asset module ids (`storage/demoProject.ts`); a filesystem project (created
-by the user - see `storage/importProject.ts`) resolves them to
-`file://` URIs via `expo-file-system`'s v57 `File`/`Directory` API. Either
-way, `storage/projectLoader.ts`'s `decodeProjectAudio()` runs every stem
-through the engine's `AudioContext.decodeAudioData()` once, up front.
+stems came from". Every project is one the user built (see
+`storage/importProject.ts`), resolving its stems to `file://` URIs via
+`expo-file-system`'s v57 `File`/`Directory` API; the abstraction is what would
+let a project resolve them from somewhere else without the decoder knowing.
+`storage/projectLoader.ts`'s `decodeProjectAudio()` runs every stem through
+the engine's `AudioContext.decodeAudioData()` once, up front.
 
 ### Data model
 
@@ -164,21 +164,6 @@ See `src/types/project.ts` and `src/types/setlist.ts`.
   audio files; importing a pre-packaged `.zip` of manifest + stems is still
   TODO (see the notes at the top of `storage/importProject.ts`).
 
-## Demo project
-
-A bundled demo project (`assets/demo/`) ships with the app so there's
-something to open on first launch without any file import: three
-procedurally-generated test-tone WAV stems at different pitches (bass, keys,
-and a guide vocal routed cue-only) plus a `manifest.json`, all pulsing on
-the beat grid so sample-lock sync is audible. Regenerate them with:
-
-```bash
-node scripts/generate-demo-assets.js
-```
-
-(The stems themselves are checked in; you don't need to regenerate them to
-run the app - this is only for tweaking the tones/tempo/duration.)
-
 ## Running the app
 
 This needs an **Expo development build** - `react-native-audio-api` is a
@@ -200,12 +185,12 @@ scripts) reconnects to the same dev client for fast JS-only reloads - you
 only need to re-run `expo run:*` when native config (e.g. `app.json`
 plugins) or a native dependency changes.
 
-On launch, the Library screen seeds itself with the bundled demo project;
-tap it to open the Player, hit Play, and all three stems (plus the
-generated click, audible if you route a track to `cue` and are on a
-split/monitor setup) should play back perfectly in sync. Try dragging a
-fader, muting/soloing a track, changing its bus routing, and toggling
-monitor/split.
+The Library starts empty. Tap **+ New**, then add stems from the file picker
+to build a project - two or more files that are meant to line up, so you can
+hear that they stay in sync. Set a tempo if you want the generated click
+(audible if you route a track to `cue` and are on a split/monitor setup).
+Then try dragging a fader, muting/soloing a track, changing its bus routing,
+and toggling monitor/split. **+ Folder** groups projects together.
 
 ## Downloading a release
 

@@ -6,9 +6,11 @@ export type AudioFileRef = number | string;
 
 /**
  * Where a project's manifest + stem files came from, and how to resolve a
- * manifest `file` field (track/pad) to something decodable. Bundled demo
- * projects resolve to `require()` asset module ids; filesystem projects
- * resolve to `file://` URIs.
+ * manifest `file` field (track/pad) to something decodable. Filesystem
+ * projects resolve to `file://` URIs. The abstraction survives the bundled
+ * demo project it was written for, because it's also what would let a project
+ * resolve its stems from somewhere else (an asset module id, a cache) without
+ * the decoder knowing.
  */
 export interface ProjectSource {
   manifest: ProjectManifest;

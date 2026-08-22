@@ -3,8 +3,13 @@ import type { ProjectManifest } from '@/types/project';
 
 /** A project's library entry - its manifest plus where its audio actually lives. */
 export interface LibraryProjectEntry extends ProjectManifest {
-  origin: 'bundled' | 'filesystem';
-  /** `file://` directory URI; only set for `origin: 'filesystem'` projects. */
+  /**
+   * Every project is now one the user imported. The `'bundled'` variant went
+   * with the demo project it existed for; this stays as the seam to add
+   * app-bundled content back, and as what makes `sourceDir` optional.
+   */
+  origin: 'filesystem';
+  /** `file://` directory URI of the project's folder. */
   sourceDir?: string;
 }
 
@@ -20,7 +25,7 @@ const projectsSlice = createSlice({
   // so the Library can wait instead of flashing its empty state on launch.
   initialState: projectsAdapter.getInitialState({ hydrated: false }),
   reducers: {
-    /** Replaces the library with what was just read off disk (plus the bundled demo). */
+    /** Replaces the library with what was just read off disk. */
     projectsHydrated(state, action: PayloadAction<LibraryProjectEntry[]>) {
       projectsAdapter.setAll(state, action.payload);
       state.hydrated = true;

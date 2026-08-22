@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { nowPlayingStore } from '@/playback/nowPlayingStore';
-import { createDraftProject, getDemoLibraryEntry } from '@/storage';
+import { createDraftProject, getProjectSourceForEntry } from '@/storage';
 import { createStore } from '@/store';
 import { projectsHydrated, type LibraryProjectEntry } from '@/store/projectsSlice';
 import { setlistsHydrated } from '@/store/setlistsSlice';
@@ -17,6 +17,7 @@ jest.mock('expo-router', () => ({
 jest.mock('@/storage', () => ({
   ...jest.requireActual('@/storage'),
   createDraftProject: jest.fn(),
+  getProjectSourceForEntry: jest.fn(),
 }));
 
 beforeEach(() => {
@@ -29,9 +30,25 @@ beforeEach(() => {
  * off disk at app start and dispatches it - so these tests hand it an
  * already-hydrated store.
  */
+/** A fully-specified project, so the row has a tempo, a key and a stem count to show. */
+const syncTest: LibraryProjectEntry = {
+  id: 'sync-test',
+  title: 'Sync Test',
+  bpm: 120,
+  key: 'A minor',
+  tracks: [
+    { id: 'bass', name: 'Bass', file: 'bass.wav', gain: 0.85, bus: 'main' },
+    { id: 'keys', name: 'Keys', file: 'keys.wav', gain: 0.85, bus: 'main' },
+    { id: 'guide', name: 'Guide Vocal', file: 'guide.wav', gain: 0.9, bus: 'cue' },
+  ],
+  sections: [],
+  origin: 'filesystem',
+  sourceDir: 'file:///mock/document/projects/sync-test',
+};
+
 function renderHydrated(extra: LibraryProjectEntry[] = []) {
   const store = createStore();
-  store.dispatch(projectsHydrated([getDemoLibraryEntry(), ...extra]));
+  store.dispatch(projectsHydrated([syncTest, ...extra]));
   return renderWithStore(<LibraryScreen />, store);
 }
 
@@ -52,10 +69,10 @@ function folder(id: string, name: string, songs: string[] = []): SetlistManifest
 }
 
 describe('LibraryScreen', () => {
-  it('shows the bundled demo project once the library is hydrated', () => {
+  it('shows a project once the library is hydrated', () => {
     renderHydrated();
 
-    expect(screen.getByText('Demo: Sync Test')).toBeTruthy();
+    expect(screen.getByText('Sync Test')).toBeTruthy();
     expect(screen.getByText('120 BPM')).toBeTruthy();
     expect(screen.getByText('A minor')).toBeTruthy();
     expect(screen.getByText('3 stems')).toBeTruthy();
@@ -64,11 +81,11 @@ describe('LibraryScreen', () => {
   it('navigates to the project screen when a row is pressed', () => {
     renderHydrated();
 
-    fireEvent.press(screen.getByText('Demo: Sync Test'));
+    fireEvent.press(screen.getByText('Sync Test'));
 
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/project/[projectId]',
-      params: { projectId: 'demo-sync-test' },
+      params: { projectId: 'sync-test' },
     });
   });
 
@@ -123,7 +140,7 @@ describe('LibraryScreen', () => {
     renderWithStore(<LibraryScreen />, createStore());
 
     expect(screen.queryByText('No projects yet')).toBeNull();
-    expect(screen.queryByText('Demo: Sync Test')).toBeNull();
+    expect(screen.queryByText('Sync Test')).toBeNull();
   });
 
   it('shows the empty state once hydration finds nothing', () => {
@@ -132,12 +149,6 @@ describe('LibraryScreen', () => {
     renderWithStore(<LibraryScreen />, store);
 
     expect(screen.getByText('No projects yet')).toBeTruthy();
-  });
-
-  it('offers no edit affordance for the bundled demo project', () => {
-    renderHydrated();
-
-    expect(screen.queryByTestId('edit-project-demo-sync-test')).toBeNull();
   });
 
   it('opens the overflow menu and navigates to About', () => {
@@ -151,11 +162,11 @@ describe('LibraryScreen', () => {
 
   it('reorders projects with the move up/down buttons and persists it, without navigating', () => {
     const store = createStore();
-    store.dispatch(projectsHydrated([getDemoLibraryEntry(), song('second-song')]));
+    store.dispatch(projectsHydrated([syncTest, song('second-song')]));
     renderWithStore(<LibraryScreen />, store);
 
     // The first row can't move further up, the second can't move further down.
-    expect(screen.getByTestId('project-row-demo-sync-test-move-up').props.accessibilityState?.disabled).toBe(true);
+    expect(screen.getByTestId('project-row-sync-test-move-up').props.accessibilityState?.disabled).toBe(true);
     expect(screen.getByTestId('project-row-second-song-move-down').props.accessibilityState?.disabled).toBe(true);
 
     fireEvent.press(screen.getByTestId('project-row-second-song-move-up'));
@@ -164,7 +175,7 @@ describe('LibraryScreen', () => {
     // rather than in the projects slice's own `ids`.
     expect(store.getState().settings.libraryOrder).toEqual([
       'project:second-song',
-      'project:demo-sync-test',
+      'project:sync-test',
     ]);
     // Reordering must never also trigger the row's own tap-to-open handler.
     expect(mockPush).not.toHaveBeenCalled();
@@ -182,20 +193,26 @@ describe('LibraryScreen', () => {
         sourceDir: 'file:///mock/document/projects/second-song',
       },
     ]);
-    await nowPlayingStore.openProject(getDemoLibraryEntry(), {
+    // Loads for real, so it needs a source it can decode - the stems
+    // themselves never have to exist, the audio mock decodes any ref.
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: syncTest,
+      resolveFile: () => 0,
+    });
+    await nowPlayingStore.openProject(syncTest, {
       monitorMode: 'split',
       clickEnabled: true,
     });
 
           await waitFor(() =>
-      expect(screen.getByTestId('project-row-demo-sync-test-now-playing')).toBeTruthy()
+      expect(screen.getByTestId('project-row-sync-test-now-playing')).toBeTruthy()
     );
     expect(screen.queryByTestId('project-row-second-song-now-playing')).toBeNull();
 
     // A plain View isn't an accessibility element by default, so a screen
     // reader would silently skip right over the indicator (and its label)
     // without these - see ProjectRow.
-    const dot = screen.getByTestId('project-row-demo-sync-test-now-playing');
+    const dot = screen.getByTestId('project-row-sync-test-now-playing');
     expect(dot.props.accessible).toBe(true);
     expect(dot.props.accessibilityRole).toBe('image');
     expect(dot.props.accessibilityLabel).toBeTruthy();
@@ -285,7 +302,7 @@ describe('LibraryScreen', () => {
     it('offers no song menu at all until a folder exists to file it in', () => {
       renderHydrated();
 
-      expect(screen.queryByTestId('project-row-demo-sync-test-menu')).toBeNull();
+      expect(screen.queryByTestId('project-row-sync-test-menu')).toBeNull();
     });
 
     it('files a loose song into a folder from the song menu', async () => {

@@ -41,7 +41,6 @@ export const en = {
   project: {
     backToLibrary: 'Library',
     edit: 'Edit',
-    bundledNotice: "The bundled demo project can't be edited.",
     notFound: 'Project not found.',
     loadFailed: 'Failed to load project.',
     deleteConfirmTitle: 'Delete project?',

@@ -16,7 +16,7 @@ interface MixerDrawerProps {
   onMonitorModeChange: (mode: MonitorMode) => void;
   clickEnabled: boolean;
   onClickEnabledChange: (enabled: boolean) => void;
-  /** Omitted for projects that can't be edited (the bundled demo) - matches the old header's `canEdit` check. */
+  /** Omitted for a project that can't be edited - matches the old header's `canEdit` check. */
   onEdit?: () => void;
   /**
    * When set, Edit is shown but inert, with this as the explanation. Editing

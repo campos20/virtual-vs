@@ -49,7 +49,6 @@ export const ptBR: TranslationDictionary = {
   project: {
     backToLibrary: 'Biblioteca',
     edit: 'Editar',
-    bundledNotice: 'O projeto de demonstração não pode ser editado.',
     notFound: 'Projeto não encontrado.',
     loadFailed: 'Falha ao carregar o projeto.',
     deleteConfirmTitle: 'Excluir projeto?',
