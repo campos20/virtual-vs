@@ -1,6 +1,6 @@
 import { getDocumentAsync, type DocumentPickerAsset } from "expo-document-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -140,8 +140,31 @@ export function ProjectScreen() {
     [t]
   );
 
+  /**
+   * Every slow path here (open/reload/import) keeps running after the user
+   * navigates away - that's deliberate, nowPlayingStore owns it, not this
+   * screen. So their callbacks and their `finally` blocks can land on a
+   * screen that is already unmounting, and a setState committing while the
+   * navigator tears this screen's native views down is exactly the class of
+   * Fabric crash AGENTS.md documents. Redux dispatches are left alone: the
+   * store outlives the screen and those writes are the point of the work.
+   *
+   * Re-armed on mount rather than only initialised, so a remounted screen
+   * (StrictMode's double-invoke, a fast route re-entry) isn't left inert.
+   */
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const onProgress = useCallback(
-    (update: ProgressUpdate) => setStatus(describeProgress(update)),
+    (update: ProgressUpdate) => {
+      if (!mountedRef.current) return;
+      setStatus(describeProgress(update));
+    },
     [describeProgress]
   );
 
@@ -261,10 +284,12 @@ export function ProjectScreen() {
       dispatch(projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }));
       await reloadAndSeed();
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : String(e));
+      if (mountedRef.current) setFormError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false);
-      setStatus(null);
+      if (mountedRef.current) {
+        setBusy(false);
+        setStatus(null);
+      }
     }
   }
 
@@ -281,9 +306,9 @@ export function ProjectScreen() {
       dispatch(projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }));
       await reloadAndSeed();
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : String(e));
+      if (mountedRef.current) setFormError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false);
+      if (mountedRef.current) setBusy(false);
     }
   }
 
@@ -309,7 +334,7 @@ export function ProjectScreen() {
       nowPlayingStore.renameTrackLocal(stemId, name);
       return true;
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : String(e));
+      if (mountedRef.current) setFormError(e instanceof Error ? e.message : String(e));
       return false;
     }
   }
@@ -329,9 +354,9 @@ export function ProjectScreen() {
       // bpm may have changed, which adds or removes the click entirely.
       await reloadAndSeed();
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : String(e));
+      if (mountedRef.current) setFormError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false);
+      if (mountedRef.current) setBusy(false);
     }
   }
 

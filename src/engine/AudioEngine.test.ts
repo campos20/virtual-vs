@@ -121,13 +121,24 @@ describe('AudioEngine keeps every stem sample-locked', () => {
 
   it('primes every stem and the click once at load, before any real play()', () => {
     const engine = new AudioEngine();
-    const { starts } = recordScheduling(engine); // wraps createBufferSource before loadProject primes
+    const { starts, stops } = recordScheduling(engine); // wraps createBufferSource before loadProject primes
 
     engine.loadProject(decoded(engine, manifest({ bpm: 120, tracks: THREE_STEM_TRACKS })));
 
     // 3 stems + click, all scheduled - loadProject() must not leave any of
     // them for the user's first play() to discover cold.
     expectSampleLocked(starts, 4);
+    expectSampleLocked(stops, 4);
+    // Same reason stop() is checked against the clock above: a bare
+    // `currentTime` is already in the past for the later iterations of the
+    // priming loop, so only some nodes would get the shared time and the
+    // rest would fall back to "ASAP" - priming the very thing unevenly that
+    // it exists to make even.
+    expect(starts[0]).toBeGreaterThan(engine.context.currentTime);
+    // And each primed source must actually be left running long enough to
+    // render: start and stop at the same instant is a zero-length window
+    // that can be skipped entirely.
+    expect(stops[0]!).toBeGreaterThan(starts[0]!);
     // Priming must never flip the transport to 'playing' or notify listeners.
     expect(engine.getTransportState()).toBe('stopped');
   });
