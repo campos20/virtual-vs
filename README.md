@@ -5,6 +5,7 @@
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Android%20%7C%20iOS-lightgrey)](#running-the-app)
 [![Expo SDK](https://img.shields.io/badge/Expo-SDK%2057-000020?logo=expo&logoColor=white)](https://docs.expo.dev/versions/v57.0.0/)
+[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/campos20)
 
 <!-- The CI and release badges read live GitHub state, so until the first
      workflow run and the first tagged release they read "no status" and "no
@@ -337,9 +338,26 @@ see [docs/RELEASING.md](docs/RELEASING.md#continuous-integration).
 A free Apple ID works, but the resulting build's provisioning profile
 expires after 7 days, after which the app stops opening on the phone until
 you rebuild and reinstall from Xcode/`expo run:ios` again. A paid Apple
-Developer Program membership ($99/year) removes that limit. In case you want
-to sponsor the project and help me get a paid membership, let me know.
-I'll set up sponsorship via GitHub Sponsors later.
+Developer Program membership ($99/year) removes that limit - see
+[Sponsor](#sponsor) if you'd like to help fund it.
+
+## Sponsor
+
+[![Sponsor via GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-%E2%9D%A4-ea4aaa?logo=githubsponsors&logoColor=white&style=for-the-badge)](https://github.com/sponsors/campos20)
+
+Virtual VS is free and GPL-licensed, and it stays that way. If it earns its
+place on your stage, sponsorship helps in one concrete way right now: an
+**Apple Developer Program membership ($99/year)**. Without it, iOS builds
+signed with a free Apple ID expire after 7 days and have to be reinstalled
+from Xcode - which is the single biggest thing standing between this project
+and a usable iOS release.
+
+You can also sponsor from the **Sponsor** button at the top of the
+[repository page](https://github.com/campos20/virtual-vs).
+
+Not in a position to sponsor? Reporting a bug from a real gig is worth a lot
+too - the crash and playback fixes in this project all came from someone
+actually using it.
 
 ## License
 
