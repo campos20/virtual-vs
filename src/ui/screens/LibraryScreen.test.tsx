@@ -2,7 +2,9 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { nowPlayingStore } from '@/playback/nowPlayingStore';
 import { createDraftProject, getDemoLibraryEntry } from '@/storage';
 import { createStore } from '@/store';
-import { projectsHydrated, projectsSelectors, type LibraryProjectEntry } from '@/store/projectsSlice';
+import { projectsHydrated, type LibraryProjectEntry } from '@/store/projectsSlice';
+import { setlistsHydrated } from '@/store/setlistsSlice';
+import type { SetlistManifest } from '@/types/setlist';
 import { renderWithStore } from '@/test-utils/renderWithStore';
 import { LibraryScreen } from './LibraryScreen';
 
@@ -31,6 +33,22 @@ function renderHydrated(extra: LibraryProjectEntry[] = []) {
   const store = createStore();
   store.dispatch(projectsHydrated([getDemoLibraryEntry(), ...extra]));
   return renderWithStore(<LibraryScreen />, store);
+}
+
+function song(id: string, title = id): LibraryProjectEntry {
+  return {
+    id,
+    title,
+    key: '',
+    tracks: [],
+    sections: [],
+    origin: 'filesystem',
+    sourceDir: `file:///mock/document/projects/${id}`,
+  };
+}
+
+function folder(id: string, name: string, songs: string[] = []): SetlistManifest {
+  return { id, name, songs, advance: 'manual', padBetween: false };
 }
 
 describe('LibraryScreen', () => {
@@ -71,9 +89,7 @@ describe('LibraryScreen', () => {
     fireEvent.press(screen.getByTestId('new-project-button'));
 
     await waitFor(() => expect(createDraftProject).toHaveBeenCalled());
-    await waitFor(() =>
-      expect(store.getState().projects.entities['untitled-abc']).toBeTruthy()
-    );
+          expect(store.getState().projects.entities['untitled-abc']).toBeTruthy()
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/project/[projectId]',
       params: { projectId: 'untitled-abc' },
@@ -135,20 +151,7 @@ describe('LibraryScreen', () => {
 
   it('reorders projects with the move up/down buttons and persists it, without navigating', () => {
     const store = createStore();
-    store.dispatch(
-      projectsHydrated([
-        getDemoLibraryEntry(),
-        {
-          id: 'second-song',
-          title: 'Second Song',
-          key: '',
-          tracks: [],
-          sections: [],
-          origin: 'filesystem',
-          sourceDir: 'file:///mock/document/projects/second-song',
-        },
-      ])
-    );
+    store.dispatch(projectsHydrated([getDemoLibraryEntry(), song('second-song')]));
     renderWithStore(<LibraryScreen />, store);
 
     // The first row can't move further up, the second can't move further down.
@@ -157,7 +160,12 @@ describe('LibraryScreen', () => {
 
     fireEvent.press(screen.getByTestId('project-row-second-song-move-up'));
 
-    expect(projectsSelectors.selectIds(store.getState().projects)).toEqual(['second-song', 'demo-sync-test']);
+    // The order covers folders as well as songs now, so it lives in settings
+    // rather than in the projects slice's own `ids`.
+    expect(store.getState().settings.libraryOrder).toEqual([
+      'project:second-song',
+      'project:demo-sync-test',
+    ]);
     // Reordering must never also trigger the row's own tap-to-open handler.
     expect(mockPush).not.toHaveBeenCalled();
   });
@@ -179,7 +187,7 @@ describe('LibraryScreen', () => {
       clickEnabled: true,
     });
 
-    await waitFor(() =>
+          await waitFor(() =>
       expect(screen.getByTestId('project-row-demo-sync-test-now-playing')).toBeTruthy()
     );
     expect(screen.queryByTestId('project-row-second-song-now-playing')).toBeNull();
@@ -208,5 +216,163 @@ describe('LibraryScreen', () => {
     ]);
 
     expect(screen.queryByTestId('edit-project-my-song')).toBeNull();
+  });
+
+  // Folders are setlists (types/setlist.ts) shown as a Postman-style tree:
+  // folders and loose songs in one list, a song filed in a folder shown
+  // inside it rather than in both places.
+  describe('folders', () => {
+    function renderWithFolders(folders: SetlistManifest[], songs: LibraryProjectEntry[]) {
+      const store = createStore();
+      store.dispatch(projectsHydrated(songs));
+      store.dispatch(setlistsHydrated(folders));
+      return renderWithStore(<LibraryScreen />, store);
+    }
+
+    it('shows a folder with its songs nested inside, and loose songs outside', () => {
+      renderWithFolders(
+        [folder('sunday', 'Sunday Set', ['filed'])],
+        [song('filed', 'Filed Song'), song('loose', 'Loose Song')]
+      );
+
+      expect(screen.getByText('Sunday Set')).toBeTruthy();
+      expect(screen.getByText('1 song')).toBeTruthy();
+      expect(screen.getByTestId('project-row-filed')).toBeTruthy();
+      expect(screen.getByTestId('project-row-loose')).toBeTruthy();
+    });
+
+    it('starts expanded, and collapsing hides the songs it holds', () => {
+      renderWithFolders([folder('sunday', 'Sunday Set', ['filed'])], [song('filed')]);
+
+      // Expanded by default: a folder hides songs, and someone opening the
+      // Library mid-set must not have to remember where each song is filed.
+      expect(screen.getByTestId('project-row-filed')).toBeTruthy();
+
+      fireEvent.press(screen.getByTestId('folder-row-sunday'));
+
+      expect(screen.queryByTestId('project-row-filed')).toBeNull();
+      expect(screen.getByText('Sunday Set')).toBeTruthy();
+    });
+
+    it('opens a song from inside a folder', () => {
+      renderWithFolders([folder('sunday', 'Sunday Set', ['filed'])], [song('filed', 'Filed Song')]);
+
+      fireEvent.press(screen.getByText('Filed Song'));
+
+      expect(mockPush).toHaveBeenCalledWith({
+        pathname: '/project/[projectId]',
+        params: { projectId: 'filed' },
+      });
+    });
+
+    it('says a folder is empty rather than looking broken', () => {
+      renderWithFolders([folder('sunday', 'Sunday Set')], [song('loose')]);
+
+      expect(screen.getByText('0 songs')).toBeTruthy();
+      expect(screen.getByText(/Empty/)).toBeTruthy();
+    });
+
+    // The empty state is about having nothing at all, not about having no
+    // *songs*: a folder is something, and hiding it behind "No projects yet"
+    // would make a folder the user just created look like it vanished.
+    it('shows a folder even when there are no songs anywhere yet', () => {
+      renderWithFolders([folder('sunday', 'Sunday Set')], []);
+
+      expect(screen.getByText('Sunday Set')).toBeTruthy();
+      expect(screen.queryByText('No projects yet')).toBeNull();
+    });
+
+    it('offers no song menu at all until a folder exists to file it in', () => {
+      renderHydrated();
+
+      expect(screen.queryByTestId('project-row-demo-sync-test-menu')).toBeNull();
+    });
+
+    it('files a loose song into a folder from the song menu', async () => {
+      const { store } = renderWithFolders([folder('sunday', 'Sunday Set')], [song('loose')]);
+
+      fireEvent.press(screen.getByTestId('project-row-loose-menu'));
+      fireEvent.press(screen.getByTestId('add-to-folder-sunday'));
+
+              expect(store.getState().setlists.entities.sunday?.songs).toEqual(['loose'])
+    });
+
+    it('takes a song back out of a folder, leaving the song itself alone', async () => {
+      const { store } = renderWithFolders(
+        [folder('sunday', 'Sunday Set', ['filed'])],
+        [song('filed')]
+      );
+
+      fireEvent.press(screen.getByTestId('project-row-filed-menu'));
+      fireEvent.press(screen.getByTestId('remove-from-folder-sunday'));
+
+      expect(store.getState().setlists.entities.sunday?.songs).toEqual([]);
+      // The project is untouched - folders hold ids, not audio.
+      expect(store.getState().projects.entities.filed).toBeTruthy();
+    });
+
+    it('lets the same song be filed in two folders at once', async () => {
+      const { store } = renderWithFolders(
+        [folder('sunday', 'Sunday Set', ['shared']), folder('wedding', 'Wedding Gig')],
+        [song('shared')]
+      );
+
+      // The song is inside "Sunday Set", and its menu still offers the other
+      // folder - one song genuinely belongs to two sets.
+      fireEvent.press(screen.getByTestId('project-row-shared-menu'));
+      fireEvent.press(screen.getByTestId('add-to-folder-wedding'));
+
+              expect(store.getState().setlists.entities.wedding?.songs).toEqual(['shared'])
+      expect(store.getState().setlists.entities.sunday?.songs).toEqual(['shared']);
+    });
+
+    it('reorders songs within a folder without touching the top-level order', async () => {
+      const { store } = renderWithFolders(
+        [folder('sunday', 'Sunday Set', ['first', 'second'])],
+        [song('first'), song('second')]
+      );
+
+      fireEvent.press(screen.getByTestId('project-row-second-move-up'));
+
+              expect(store.getState().setlists.entities.sunday?.songs).toEqual(['second', 'first'])
+      expect(store.getState().settings.libraryOrder).toEqual([]);
+    });
+
+    it('renames a folder in place', async () => {
+      const { store } = renderWithFolders([folder('sunday', 'Sunday Set')], []);
+
+      fireEvent.press(screen.getByTestId('folder-row-sunday-menu'));
+      fireEvent.press(screen.getByTestId('rename-folder-sunday'));
+      fireEvent(screen.getByTestId('folder-row-sunday-rename-input'), 'submitEditing', {
+        nativeEvent: { text: 'Wedding Gig' },
+      });
+
+              expect(store.getState().setlists.entities.sunday?.name).toBe('Wedding Gig')
+    });
+
+    it('ignores a rename to blank rather than leaving a nameless folder', async () => {
+      const { store } = renderWithFolders([folder('sunday', 'Sunday Set')], []);
+
+      fireEvent.press(screen.getByTestId('folder-row-sunday-menu'));
+      fireEvent.press(screen.getByTestId('rename-folder-sunday'));
+      fireEvent(screen.getByTestId('folder-row-sunday-rename-input'), 'submitEditing', {
+        nativeEvent: { text: '   ' },
+      });
+
+      expect(store.getState().setlists.entities.sunday?.name).toBe('Sunday Set');
+    });
+
+    it('creates a folder at the top of the library and opens it for renaming', async () => {
+      const { store } = renderWithFolders([], [song('loose')]);
+
+      fireEvent.press(screen.getByTestId('new-folder-button'));
+
+      const ids = Object.keys(store.getState().setlists.entities);
+      expect(ids).toHaveLength(1);
+      // First in the order, so it isn't created out of sight below the songs.
+      expect(store.getState().settings.libraryOrder[0]).toBe(`folder:${ids[0]}`);
+      // Straight into the rename field: "New folder" is never what was meant.
+      expect(screen.getByTestId(`folder-row-${ids[0]}-rename-input`)).toBeTruthy();
+    });
   });
 });

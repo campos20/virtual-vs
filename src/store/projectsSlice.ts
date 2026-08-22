@@ -10,6 +10,10 @@ export interface LibraryProjectEntry extends ProjectManifest {
 
 const projectsAdapter = createEntityAdapter<LibraryProjectEntry>();
 
+// The Library's display order is deliberately not here. It now covers folders
+// as well as projects (see ui/libraryTree.ts), so it can't be this slice's
+// `ids` - it lives in settingsSlice's `libraryOrder`.
+
 const projectsSlice = createSlice({
   name: 'projects',
   // `hydrated` distinguishes "no projects on disk" from "haven't looked yet",
@@ -30,16 +34,6 @@ const projectsSlice = createSlice({
     ) {
       projectsAdapter.updateOne(state, { id: action.payload.id, changes: action.payload.changes });
     },
-    /**
-     * State-only, like languageOverrideSet - disk persistence is a side
-     * effect handled by the persistProjectsReordered thunk
-     * (store/persistProjectOrder.ts) that dispatches this, not by callers
-     * directly. There's no dedicated adapter method for reordering; setting
-     * `ids` directly is RTK's documented way to do it.
-     */
-    projectsReordered(state, action: PayloadAction<string[]>) {
-      state.ids = action.payload;
-    },
   },
 });
 
@@ -49,7 +43,6 @@ export const {
   projectUpserted,
   projectRemoved,
   projectUpdated,
-  projectsReordered,
 } = projectsSlice.actions;
 export const projectsSelectors = projectsAdapter.getSelectors();
 export default projectsSlice.reducer;

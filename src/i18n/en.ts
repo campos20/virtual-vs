@@ -17,6 +17,26 @@ export const en = {
     stemsCount: (count: number) => `${count} stem${count === 1 ? '' : 's'}`,
     moveUp: 'Move up',
     moveDown: 'Move down',
+    newFolder: '+ Folder',
+  },
+  folder: {
+    /** Name a new folder carries until it's renamed. User data, so it's written in the user's language. */
+    defaultName: 'New folder',
+    songsCount: (count: number) => `${count} song${count === 1 ? '' : 's'}`,
+    empty: 'Empty — add songs from a song\u2019s menu',
+    expand: 'Show songs',
+    collapse: 'Hide songs',
+    rename: 'Rename',
+    renamePlaceholder: 'Folder name',
+    delete: 'Delete folder',
+    deleteConfirmTitle: 'Delete folder?',
+    deleteConfirmBody: (name: string, songCount: number) =>
+      `"${name}" will be deleted. Its ${songCount} song${songCount === 1 ? '' : 's'} stay on this device and return to the library.`,
+    deleteConfirmConfirm: 'Delete',
+    addTo: (name: string) => `Add to ${name}`,
+    removeFrom: 'Remove from folder',
+    songOptions: 'Song options',
+    folderOptions: 'Folder options',
   },
   project: {
     backToLibrary: 'Library',

@@ -4,7 +4,6 @@ import reducer, {
   projectUpdated,
   projectUpserted,
   projectsHydrated,
-  projectsReordered,
   projectsSelectors,
   type LibraryProjectEntry,
 } from './projectsSlice';
@@ -55,19 +54,19 @@ describe('projectsSlice', () => {
     expect(projectsSelectors.selectById(state, 'proj2')?.sourceDir).toBe('file:///projects/proj2');
   });
 
-  it('reorders the library by id without touching any entity data', () => {
+  // Was only covered incidentally by the reorder test, which went away with
+  // projectsReordered when the Library's order moved to settingsSlice.
+  it('replaces the library on hydration and records that the disk was read', () => {
     const hydrated = reducer(
       initialState,
-      projectsHydrated([
-        buildEntry({ id: 'a' }),
-        buildEntry({ id: 'b' }),
-        buildEntry({ id: 'c' }),
-      ])
+      projectsHydrated([buildEntry({ id: 'a' }), buildEntry({ id: 'b' })])
     );
+    expect(projectsSelectors.selectIds(hydrated)).toEqual(['a', 'b']);
+    expect(hydrated.hydrated).toBe(true);
 
-    const reordered = reducer(hydrated, projectsReordered(['c', 'a', 'b']));
-
-    expect(projectsSelectors.selectIds(reordered)).toEqual(['c', 'a', 'b']);
-    expect(projectsSelectors.selectById(reordered, 'a')).toMatchObject({ id: 'a', title: 'Demo Set' });
+    // A second scan replaces rather than merges - a project deleted on disk
+    // must not survive in the store.
+    const rescanned = reducer(hydrated, projectsHydrated([buildEntry({ id: 'b' })]));
+    expect(projectsSelectors.selectIds(rescanned)).toEqual(['b']);
   });
 });

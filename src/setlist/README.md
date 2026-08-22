@@ -1,9 +1,20 @@
-# Setlist mode (not implemented)
+# Setlist mode (controller not implemented)
 
-This folder is a placeholder for the multi-song setlist controller described
-in AGENTS.md. The data model already exists and is persisted
-(`src/types/setlist.ts`, `src/store/setlistsSlice.ts`), but nothing in this
-folder runs yet.
+This folder is a placeholder for the multi-song setlist *controller*
+described in AGENTS.md. Nothing in this folder runs yet.
+
+The data model is no longer just persisted - it ships. A `SetlistManifest` is
+what the Library shows as a **folder**: `src/storage/setlistLibrary.ts` reads
+and writes one `Documents/setlists/<id>.json` per folder,
+`src/store/persistFolders.ts` mutates them, and `src/ui/libraryTree.ts` turns
+them plus the project list into the tree the Library renders. A folder holds
+song *ids*, so a song can be in several folders and reorganising never moves
+audio.
+
+What that means for the controller: `songs` is already a real, user-curated,
+ordered list by the time you get here, and `advance`/`padBetween` are the two
+fields nothing reads yet. Building this feature is wiring up playback for a
+folder the user already has - not introducing setlists.
 
 ## TODO when this gets built
 
@@ -23,5 +34,7 @@ folder runs yet.
   outlives individual `loadProject()` calls, with a scheduled linear
   crossfade (`AudioParam.linearRampToValueAtTime`) between songs instead of
   a hard cut.
-- Wire a Setlist screen into `src/app/` once the controller exists (list of
-  setlists -> song queue view, reusing `PlayerScreen`'s track rows).
+- Give a Library folder a "play this set" affordance once the controller
+  exists. There is deliberately no separate Setlist screen to build: the
+  folder tree in the Library *is* the setlist list, so this is a play button
+  on `FolderRow` plus a queue view, not a new section of the app.

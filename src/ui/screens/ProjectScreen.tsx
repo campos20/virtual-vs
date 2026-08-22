@@ -27,6 +27,7 @@ import {
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { projectRemoved, projectUpdated, projectsSelectors } from "@/store/projectsSlice";
 import { persistProjectClick } from "@/store/persistProject";
+import { removeSongFromAllFolders } from "@/store/persistFolders";
 import { monitorModeSet } from "@/store/settingsSlice";
 import {
   tracksInitializedForProject,
@@ -411,6 +412,10 @@ export function ProjectScreen() {
             nowPlayingStore.closeIfCurrent(entry.id);
             dispatch(projectRemoved(entry.id));
             dispatch(tracksRemovedForProject(entry.id));
+            // Folders hold song ids, so any that listed this project would be
+            // left pointing at nothing. The Library hides unresolvable ids
+            // anyway; this keeps the files on disk honest.
+            dispatch(removeSongFromAllFolders(entry.id));
             teardownAndNavigate(() => router.back());
           },
         },

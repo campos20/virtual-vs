@@ -1,5 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, elevation, glow, radii, spacing } from '@/ui/theme';
+import { MoveColumn } from './MoveColumn';
+import { KebabIcon, OverflowMenu, type OverflowMenuItem } from './OverflowMenu';
 
 interface ProjectRowProps {
   title: string;
@@ -17,6 +19,11 @@ interface ProjectRowProps {
   /** This is the project currently loaded in the engine (see nowPlayingStore) - highlighted so it reads apart from the rest of the list. */
   isNowPlaying?: boolean;
   nowPlayingAccessibilityLabel?: string;
+  /** Row-level actions (add to a folder, remove from one). Omitted means no kebab at all. */
+  menuItems?: OverflowMenuItem[];
+  menuAccessibilityLabel?: string;
+  /** Indents the row and drops its shadow, for a song shown inside a folder. */
+  nested?: boolean;
   testID?: string;
 }
 
@@ -44,10 +51,13 @@ export function ProjectRow({
   moveDownAccessibilityLabel,
   isNowPlaying,
   nowPlayingAccessibilityLabel,
+  menuItems,
+  menuAccessibilityLabel,
+  nested,
   testID,
 }: ProjectRowProps) {
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, nested && styles.nested]}>
       <Pressable
         onPress={onPress}
         testID={testID}
@@ -95,30 +105,27 @@ export function ProjectRow({
         <Text style={styles.chevron}>›</Text>
       </Pressable>
 
-      <View style={styles.moveColumn}>
-        <Pressable
-          onPress={onMoveUp}
-          disabled={!canMoveUp}
-          hitSlop={6}
-          accessibilityRole="button"
-          accessibilityLabel={moveUpAccessibilityLabel}
-          testID={testID ? `${testID}-move-up` : undefined}
-          style={({ pressed }) => [styles.moveButton, pressed && canMoveUp && styles.pressed]}
-        >
-          <View style={[styles.arrowUp, !canMoveUp && styles.arrowDisabled]} />
-        </Pressable>
-        <Pressable
-          onPress={onMoveDown}
-          disabled={!canMoveDown}
-          hitSlop={6}
-          accessibilityRole="button"
-          accessibilityLabel={moveDownAccessibilityLabel}
-          testID={testID ? `${testID}-move-down` : undefined}
-          style={({ pressed }) => [styles.moveButton, pressed && canMoveDown && styles.pressed]}
-        >
-          <View style={[styles.arrowDown, !canMoveDown && styles.arrowDisabled]} />
-        </Pressable>
-      </View>
+      {menuItems && menuItems.length > 0 && (
+        <View style={styles.menuColumn}>
+          <OverflowMenu
+            items={menuItems}
+            accessibilityLabel={menuAccessibilityLabel ?? ''}
+            testID={testID ? `${testID}-menu` : undefined}
+          >
+            <KebabIcon />
+          </OverflowMenu>
+        </View>
+      )}
+
+      <MoveColumn
+        canMoveUp={canMoveUp}
+        canMoveDown={canMoveDown}
+        onMoveUp={onMoveUp}
+        onMoveDown={onMoveDown}
+        moveUpAccessibilityLabel={moveUpAccessibilityLabel}
+        moveDownAccessibilityLabel={moveDownAccessibilityLabel}
+        testID={testID}
+      />
     </View>
   );
 }
@@ -186,44 +193,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.2,
   },
+  nested: {
+    // Reads as contained by the folder above it rather than as another
+    // top-level row: pulled in from the left, flatter, no drop shadow.
+    marginLeft: spacing.lg,
+    backgroundColor: colors.panelRaised,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  menuColumn: {
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
   chevron: {
     color: colors.textTertiary,
     fontSize: 22,
     fontWeight: '600',
     marginLeft: spacing.sm,
-  },
-  moveColumn: {
-    justifyContent: 'center',
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: colors.border,
-  },
-  moveButton: {
-    width: 40,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  arrowUp: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 5,
-    borderRightWidth: 5,
-    borderBottomWidth: 7,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderBottomColor: colors.textSecondary,
-  },
-  arrowDown: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 5,
-    borderRightWidth: 5,
-    borderTopWidth: 7,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: colors.textSecondary,
-  },
-  arrowDisabled: {
-    opacity: 0.25,
   },
 });

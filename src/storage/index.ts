@@ -17,5 +17,19 @@ export {
   getProjectSourceForEntry,
   readProjectManifest,
 } from './projectLoader';
-export { ensureProjectsDirectoryExists, projectDirectory, projectsDirectory } from './paths';
+export {
+  createSetlist,
+  deleteSetlist,
+  listSetlists,
+  writeSetlist,
+  DRAFT_FOLDER_NAME,
+} from './setlistLibrary';
+export {
+  ensureProjectsDirectoryExists,
+  ensureSetlistsDirectoryExists,
+  projectDirectory,
+  projectsDirectory,
+  setlistFile,
+  setlistsDirectory,
+} from './paths';
 export type { AudioFileRef, DecodedProject, ProjectSource } from './types';
