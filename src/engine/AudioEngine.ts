@@ -203,7 +203,48 @@ export class AudioEngine {
 
     this.playheadOffsetSec = 0;
     this.pausedAtSec = 0;
+    this.primeSources();
     this.setTransportState('stopped');
+  }
+
+  /**
+   * Silently starts and stops every stem's (and the click's) buffer once,
+   * right here at load time - before the user's first real, transport-
+   * visible `play()`. Something on a buffer's very first schedule (exact
+   * layer unconfirmed - JS/Hermes JIT warm-up or the native audio bridge
+   * are both candidates) can pay a one-time cost that eats into
+   * `LOOKAHEAD_SEC` and lands that one track's actual start a few ms late
+   * relative to its siblings - self-correcting on the next pause/resume,
+   * since every buffer has by then already been scheduled once. Priming
+   * exercises the identical `createBufferSource` -> `.start` -> `.stop`
+   * path here instead, at zero gain and disconnected from both buses, so
+   * real playback's first `play()` is never also anything's *first*
+   * schedule. Does not touch `transportState` or notify listeners.
+   */
+  private primeSources(): void {
+    if (this.tracks.size === 0 && !this.clickBuffer) return;
+
+    const now = this.ctx.currentTime;
+    const silent = this.ctx.createGain();
+    silent.gain.value = 0;
+    silent.connect(this.ctx.destination);
+
+    for (const node of this.tracks.values()) {
+      const source = this.ctx.createBufferSource();
+      source.buffer = node.buffer;
+      source.connect(silent);
+      source.start(now);
+      source.stop(now);
+    }
+    if (this.clickBuffer) {
+      const source = this.ctx.createBufferSource();
+      source.buffer = this.clickBuffer;
+      source.connect(silent);
+      source.start(now);
+      source.stop(now);
+    }
+
+    setTimeout(() => silent.disconnect(), 50);
   }
 
   private disposeTracks(): void {

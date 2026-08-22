@@ -119,6 +119,19 @@ describe('AudioEngine keeps every stem sample-locked', () => {
     expect(stops[0]).toBeGreaterThan(engine.context.currentTime);
   });
 
+  it('primes every stem and the click once at load, before any real play()', () => {
+    const engine = new AudioEngine();
+    const { starts } = recordScheduling(engine); // wraps createBufferSource before loadProject primes
+
+    engine.loadProject(decoded(engine, manifest({ bpm: 120, tracks: THREE_STEM_TRACKS })));
+
+    // 3 stems + click, all scheduled - loadProject() must not leave any of
+    // them for the user's first play() to discover cold.
+    expectSampleLocked(starts, 4);
+    // Priming must never flip the transport to 'playing' or notify listeners.
+    expect(engine.getTransportState()).toBe('stopped');
+  });
+
   it('never re-schedules any stem for a volume/mute/solo change - those are gain automation only', () => {
     const engine = new AudioEngine();
     engine.loadProject(decoded(engine, manifest({ tracks: THREE_STEM_TRACKS })));
