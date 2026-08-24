@@ -160,9 +160,41 @@ See `src/types/project.ts` and `src/types/setlist.ts`.
   install + Expo config-plugin steps, including the BLE-MIDI GATT
   service/characteristic UUIDs, so adding it later is a known quantity
   rather than a research project.
-- **Zip project import/export** - projects are built by picking individual
-  audio files; importing a pre-packaged `.zip` of manifest + stems is still
-  TODO (see the notes at the top of `storage/importProject.ts`).
+- **Automatic cloud backup** - backing up is a deliberate tap today (see
+  *Backup and sharing* below). Uploading on its own, in the background, would
+  need a Google/Microsoft OAuth client per build and token refresh; the
+  share-sheet route deliberately avoids both.
+
+## Backup and sharing
+
+A project or a whole folder can be packed into a single **`.vvs` bundle** -
+manifests, the mix, and every stem - and handed to the OS share sheet. That is
+how a set reaches Google Drive: Drive, OneDrive, Dropbox, AirDrop and a USB
+cable are all just targets in the same sheet, so the app never needs a Google
+account, an API key, or an OAuth client of its own. The user's own Drive app
+owns the upload.
+
+Coming back the other way needs nothing extra either. A bundle someone shares
+from their Drive arrives through the ordinary file picker: **⋯ → Import a
+backup…**, pick the file, and its projects *and* the folder that grouped them
+land in the library.
+
+- **Folder → ⋯ → Export…** packs that folder and its songs.
+- **Project → mixer drawer → Export…** packs one project.
+- A project whose id is already in the library is left alone, so re-importing
+  your own backup changes nothing and a shared set can't overwrite your mixes.
+- A folder that already exists is *merged* - existing order kept, new songs
+  appended - so someone can send you an updated set without wiping the songs
+  you added to your copy.
+
+The container is documented at the top of `storage/bundleFormat.ts`. It is
+deliberately not a zip: that would mean a native archive dependency or
+compressing hundreds of megabytes on the JS thread, for almost no size win on
+audio that is already compressed. Both ends stream in chunks, so a bundle is
+never held in memory.
+
+Exporting and importing are blocked while the transport is playing, like every
+other path that rebuilds files under a live set.
 
 ## Running the app
 
