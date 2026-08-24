@@ -82,26 +82,26 @@ describe('listFilesystemProjects', () => {
 });
 
 describe('loadProjectLibrary', () => {
-  it('always includes the bundled demo alongside disk projects', async () => {
+  it('returns what is on disk, and nothing else', async () => {
     listMock.mockReturnValue([directoryAt('file:///projects/a')]);
     readManifestMock.mockResolvedValue(manifestFor('a'));
 
     const projects = await loadProjectLibrary();
 
-    expect(projects[0].origin).toBe('bundled');
-    expect(projects.map((p) => p.id)).toContain('a');
+    expect(projects.map((p) => p.id)).toEqual(['a']);
+    expect(projects[0].origin).toBe('filesystem');
   });
 
-  it('applies a saved drag order, including reordering the bundled demo', async () => {
+  it('applies a saved drag order', async () => {
     listMock.mockReturnValue([directoryAt('file:///projects/a'), directoryAt('file:///projects/b')]);
     readManifestMock.mockImplementation(async (dir: Directory) =>
       manifestFor(dir.uri.endsWith('/a') ? 'a' : 'b')
     );
-    readSettingsMock.mockReturnValue({ projectOrder: ['b', 'demo-sync-test', 'a'] });
+    readSettingsMock.mockReturnValue({ projectOrder: ['b', 'a'] });
 
     const projects = await loadProjectLibrary();
 
-    expect(projects.map((p) => p.id)).toEqual(['b', 'demo-sync-test', 'a']);
+    expect(projects.map((p) => p.id)).toEqual(['b', 'a']);
   });
 });
 

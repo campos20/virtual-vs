@@ -17,11 +17,39 @@ export const en = {
     stemsCount: (count: number) => `${count} stem${count === 1 ? '' : 's'}`,
     moveUp: 'Move up',
     moveDown: 'Move down',
+    newFolder: '+ Folder',
+    importBundle: 'Import a backup…',
+    lockedWhilePlaying: 'Stop playback before moving files around.',
+    exportEmptyFolder: 'This folder has no songs to export yet.',
+    importAlreadyHere: (count: number) =>
+      count === 1
+        ? 'That song is already in your library, so nothing was changed.'
+        : `Those ${count} songs are already in your library, so nothing was changed.`,
+  },
+  folder: {
+    /** Name a new folder carries until it's renamed. User data, so it's written in the user's language. */
+    defaultName: 'New folder',
+    createFailed: "Couldn't create the folder. Check that this device has free space.",
+    songsCount: (count: number) => `${count} song${count === 1 ? '' : 's'}`,
+    empty: 'Empty — add songs from a song\u2019s menu',
+    expand: 'Show songs',
+    collapse: 'Hide songs',
+    rename: 'Rename',
+    renamePlaceholder: 'Folder name',
+    delete: 'Delete folder',
+    deleteConfirmTitle: 'Delete folder?',
+    deleteConfirmBody: (name: string, songCount: number) =>
+      `"${name}" will be deleted. Its ${songCount} song${songCount === 1 ? '' : 's'} stay on this device and return to the library.`,
+    deleteConfirmConfirm: 'Delete',
+    addTo: (name: string) => `Add to ${name}`,
+    removeFrom: 'Remove from folder',
+    export: 'Export…',
+    songOptions: 'Song options',
+    folderOptions: 'Folder options',
   },
   project: {
     backToLibrary: 'Library',
     edit: 'Edit',
-    bundledNotice: "The bundled demo project can't be edited.",
     notFound: 'Project not found.',
     loadFailed: 'Failed to load project.',
     deleteConfirmTitle: 'Delete project?',
@@ -58,6 +86,10 @@ export const en = {
     decodingOf: (current: number, total: number) => `Decoding stems (${current} of ${total})…`,
     building: 'Building the mixer…',
     waveforms: 'Drawing waveforms…',
+    exporting: (name: string, current: number, total: number) =>
+      `Packing ${name} (${current} of ${total})…`,
+    importing: (name: string, current: number, total: number) =>
+      `Unpacking ${name} (${current} of ${total})…`,
   },
   nowPlaying: {
     heading: 'Now Playing',

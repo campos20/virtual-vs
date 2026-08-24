@@ -14,7 +14,11 @@ export type ProgressPhase =
   | 'converting'
   | 'decoding'
   | 'building'
-  | 'waveforms';
+  | 'waveforms'
+  // Writing a project (audio included) into a .vvs bundle, and unpacking one.
+  // Both move hundreds of megabytes a chunk at a time - see storage/bundle.ts.
+  | 'exporting'
+  | 'importing';
 
 export interface ProgressUpdate {
   phase: ProgressPhase;

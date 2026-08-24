@@ -2,6 +2,7 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import type { MonitorMode } from '@/engine';
 import type { Locale } from '@/i18n';
 import { readAppSettings } from '@/storage/appSettings';
+import { resolveLibraryOrder } from '@/ui/libraryTree';
 
 export interface SettingsState {
   /**
@@ -12,11 +13,18 @@ export interface SettingsState {
   monitorMode: MonitorMode;
   /** Manually picked on the About screen. `null` means "follow the device locale". */
   languageOverride: Locale | null;
+  /**
+   * The Library's top-level order, as `folder:`/`project:` keys (see
+   * ui/libraryTree.ts). It can't live in projectsSlice's `ids` the way the
+   * old project-only order did, because folders aren't projects.
+   */
+  libraryOrder: string[];
 }
 
 const initialState: SettingsState = {
   monitorMode: 'split',
   languageOverride: readAppSettings().languageOverride ?? null,
+  libraryOrder: resolveLibraryOrder(readAppSettings()),
 };
 
 const settingsSlice = createSlice({
@@ -35,8 +43,12 @@ const settingsSlice = createSlice({
     languageOverrideSet(state, action: PayloadAction<Locale | null>) {
       state.languageOverride = action.payload;
     },
+    /** State-only, like the above; persisted by the persistLibraryOrder thunk. */
+    libraryOrderSet(state, action: PayloadAction<string[]>) {
+      state.libraryOrder = action.payload;
+    },
   },
 });
 
-export const { monitorModeSet, languageOverrideSet } = settingsSlice.actions;
+export const { monitorModeSet, languageOverrideSet, libraryOrderSet } = settingsSlice.actions;
 export default settingsSlice.reducer;

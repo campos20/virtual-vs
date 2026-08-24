@@ -5,12 +5,24 @@ export interface PersistedAppSettings {
   /** Manually chosen language, overriding the device locale. Absent means "follow the device". */
   languageOverride?: Locale;
   /**
-   * Project ids in the user's chosen Library order. Lives here rather than
-   * on each project's own manifest.json because it has to cover the bundled
-   * demo project too, which has no writable manifest - see
-   * storage/projectLibrary.ts for how a fresh scan is reconciled against it.
+   * Project ids in the user's chosen Library order. Lives here rather than on
+   * each project's own manifest.json because it is a property of the Library,
+   * not of any one project - see storage/projectLibrary.ts for how a fresh
+   * scan is reconciled against it.
+   *
+   * Superseded by `libraryOrder` below, and only read when that is absent -
+   * kept so an install from before folders existed doesn't lose the order
+   * its owner dragged it into.
    */
   projectOrder?: string[];
+  /**
+   * The Library's top-level order over *both* folders and loose songs, as
+   * prefixed keys (`folder:x`, `project:y`) - see ui/libraryTree.ts. One list
+   * rather than two because the two kinds interleave on screen. The order of
+   * songs *within* a folder is not here; it lives in that folder's own
+   * manifest, next to the membership it belongs to.
+   */
+  libraryOrder?: string[];
 }
 
 const settingsFile = new File(Paths.document, 'settings.json');

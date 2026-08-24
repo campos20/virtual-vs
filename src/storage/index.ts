@@ -1,4 +1,3 @@
-export { getDemoLibraryEntry, getDemoProjectSource } from './demoProject';
 export { listFilesystemProjects, loadProjectLibrary } from './projectLibrary';
 export {
   addStemsToProject,
@@ -17,5 +16,32 @@ export {
   getProjectSourceForEntry,
   readProjectManifest,
 } from './projectLoader';
-export { ensureProjectsDirectoryExists, projectDirectory, projectsDirectory } from './paths';
+export {
+  bundleFileName,
+  importBundle,
+  planBundle,
+  plannedBundleSize,
+  readBundleHeader,
+  writeBundle,
+  writeBundleToCache,
+  type BundleContents,
+  type ImportedBundle,
+} from './bundle';
+export { BUNDLE_EXTENSION, BundleFormatError, type BundleHeader } from './bundleFormat';
+export { shareBundle } from './share';
+export {
+  createSetlist,
+  deleteSetlist,
+  listSetlists,
+  writeSetlist,
+  DRAFT_FOLDER_NAME,
+} from './setlistLibrary';
+export {
+  ensureProjectsDirectoryExists,
+  ensureSetlistsDirectoryExists,
+  projectDirectory,
+  projectsDirectory,
+  setlistFile,
+  setlistsDirectory,
+} from './paths';
 export type { AudioFileRef, DecodedProject, ProjectSource } from './types';

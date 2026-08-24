@@ -4,7 +4,6 @@ import reducer, {
   projectUpdated,
   projectUpserted,
   projectsHydrated,
-  projectsReordered,
   projectsSelectors,
   type LibraryProjectEntry,
 } from './projectsSlice';
@@ -14,12 +13,12 @@ const initialState = reducer(undefined, { type: '@@INIT' });
 function buildEntry(overrides: Partial<LibraryProjectEntry> = {}): LibraryProjectEntry {
   return {
     id: 'proj1',
-    title: 'Demo Set',
+    title: 'My Song',
     bpm: 120,
     key: 'C',
     tracks: [],
     sections: [],
-    origin: 'bundled',
+    origin: 'filesystem',
     ...overrides,
   };
 }
@@ -27,7 +26,7 @@ function buildEntry(overrides: Partial<LibraryProjectEntry> = {}): LibraryProjec
 describe('projectsSlice', () => {
   it('adds a project', () => {
     const state = reducer(initialState, projectAdded(buildEntry()));
-    expect(projectsSelectors.selectById(state, 'proj1')).toMatchObject({ title: 'Demo Set' });
+    expect(projectsSelectors.selectById(state, 'proj1')).toMatchObject({ title: 'My Song' });
   });
 
   it('upserts an existing project in place', () => {
@@ -40,7 +39,7 @@ describe('projectsSlice', () => {
   it('applies a partial update', () => {
     const added = reducer(initialState, projectAdded(buildEntry()));
     const updated = reducer(added, projectUpdated({ id: 'proj1', changes: { bpm: 140 } }));
-    expect(projectsSelectors.selectById(updated, 'proj1')).toMatchObject({ bpm: 140, title: 'Demo Set' });
+    expect(projectsSelectors.selectById(updated, 'proj1')).toMatchObject({ bpm: 140, title: 'My Song' });
   });
 
   it('removes a project', () => {
@@ -55,19 +54,19 @@ describe('projectsSlice', () => {
     expect(projectsSelectors.selectById(state, 'proj2')?.sourceDir).toBe('file:///projects/proj2');
   });
 
-  it('reorders the library by id without touching any entity data', () => {
+  // Was only covered incidentally by the reorder test, which went away with
+  // projectsReordered when the Library's order moved to settingsSlice.
+  it('replaces the library on hydration and records that the disk was read', () => {
     const hydrated = reducer(
       initialState,
-      projectsHydrated([
-        buildEntry({ id: 'a' }),
-        buildEntry({ id: 'b' }),
-        buildEntry({ id: 'c' }),
-      ])
+      projectsHydrated([buildEntry({ id: 'a' }), buildEntry({ id: 'b' })])
     );
+    expect(projectsSelectors.selectIds(hydrated)).toEqual(['a', 'b']);
+    expect(hydrated.hydrated).toBe(true);
 
-    const reordered = reducer(hydrated, projectsReordered(['c', 'a', 'b']));
-
-    expect(projectsSelectors.selectIds(reordered)).toEqual(['c', 'a', 'b']);
-    expect(projectsSelectors.selectById(reordered, 'a')).toMatchObject({ id: 'a', title: 'Demo Set' });
+    // A second scan replaces rather than merges - a project deleted on disk
+    // must not survive in the store.
+    const rescanned = reducer(hydrated, projectsHydrated([buildEntry({ id: 'b' })]));
+    expect(projectsSelectors.selectIds(rescanned)).toEqual(['b']);
   });
 });

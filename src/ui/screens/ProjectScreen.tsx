@@ -22,11 +22,14 @@ import {
   deleteProjectDirectory,
   removeStemFromProject,
   renameStemInProject,
+  shareBundle,
   updateProjectMetadata,
+  writeBundleToCache,
 } from "@/storage";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { projectRemoved, projectUpdated, projectsSelectors } from "@/store/projectsSlice";
 import { persistProjectClick } from "@/store/persistProject";
+import { removeSongFromAllFolders } from "@/store/persistFolders";
 import { monitorModeSet } from "@/store/settingsSlice";
 import {
   tracksInitializedForProject,
@@ -135,6 +138,10 @@ export function ProjectScreen() {
           return t.progress.building;
         case 'waveforms':
           return t.progress.waveforms;
+        case 'exporting':
+          return t.progress.exporting(update.name ?? '', update.current ?? 0, update.total ?? 0);
+        case 'importing':
+          return t.progress.importing(update.name ?? '', update.current ?? 0, update.total ?? 0);
       }
     },
     [t]
@@ -262,6 +269,35 @@ export function ProjectScreen() {
       copyToCacheDirectory: true,
     });
     return result.canceled ? null : result.assets;
+  }
+
+  /**
+   * Packs this one project - manifest, mix and every stem - into a `.vvs`
+   * file and hands it to the OS share sheet, which is where "Save to Drive"
+   * lives. Blocked mid-song for the same reason editing is: moving hundreds
+   * of megabytes competes with playback for the JS thread.
+   */
+  async function handleExport() {
+    if (transportIsRunning()) {
+      setFormError(t.project.lockedWhilePlayingBody);
+      return;
+    }
+    if (!entry) return;
+
+    setFormError(null);
+    setBusy(true);
+    try {
+      const bundle = await writeBundleToCache({ projects: [entry], folders: [] }, entry.title, onProgress);
+      if (mountedRef.current) setStatus(null);
+      await shareBundle(bundle, t.folder.export);
+    } catch (e) {
+      if (mountedRef.current) setFormError(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (mountedRef.current) {
+        setBusy(false);
+        setStatus(null);
+      }
+    }
   }
 
   async function handleAddStems() {
@@ -411,6 +447,10 @@ export function ProjectScreen() {
             nowPlayingStore.closeIfCurrent(entry.id);
             dispatch(projectRemoved(entry.id));
             dispatch(tracksRemovedForProject(entry.id));
+            // Folders hold song ids, so any that listed this project would be
+            // left pointing at nothing. The Library hides unresolvable ids
+            // anyway; this keeps the files on disk honest.
+            dispatch(removeSongFromAllFolders(entry.id));
             teardownAndNavigate(() => router.back());
           },
         },
@@ -468,16 +508,6 @@ export function ProjectScreen() {
   }
 
   if (editing) {
-    // Bundled projects live in the app bundle with no writable manifest.
-    if (entry?.origin === "bundled") {
-      return (
-        <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-          {renderHeader()}
-          <Text style={styles.notice}>{t.project.bundledNotice}</Text>
-        </SafeAreaView>
-      );
-    }
-
     return (
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
         {renderHeader()}
@@ -566,6 +596,10 @@ export function ProjectScreen() {
         onClickEnabledChange={handleClickEnabledChange}
         onEdit={canEdit ? handleStartEditing : undefined}
         editDisabledReason={isPlaying ? t.project.lockedWhilePlaying : undefined}
+        // Hidden rather than disabled while playing: unlike Edit, which sits
+        // in the same row and explains itself, an export is a thing you do
+        // between sets - there's nothing useful to say about it mid-song.
+        onExport={entry?.sourceDir && !isPlaying ? handleExport : undefined}
       />
     </SafeAreaView>
   );

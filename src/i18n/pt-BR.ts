@@ -26,11 +26,38 @@ export const ptBR: TranslationDictionary = {
     stemsCount: (count: number) => `${count} ${count === 1 ? 'faixa' : 'faixas'}`,
     moveUp: 'Mover para cima',
     moveDown: 'Mover para baixo',
+    newFolder: '+ Pasta',
+    importBundle: 'Importar um backup…',
+    lockedWhilePlaying: 'Pare a reprodução antes de mover arquivos.',
+    exportEmptyFolder: 'Esta pasta ainda não tem músicas para exportar.',
+    importAlreadyHere: (count: number) =>
+      count === 1
+        ? 'Essa música já está na sua biblioteca, então nada foi alterado.'
+        : `Essas ${count} músicas já estão na sua biblioteca, então nada foi alterado.`,
+  },
+  folder: {
+    defaultName: 'Nova pasta',
+    createFailed: 'Não foi possível criar a pasta. Verifique se há espaço livre no dispositivo.',
+    songsCount: (count: number) => `${count} ${count === 1 ? 'música' : 'músicas'}`,
+    empty: 'Vazia — adicione músicas pelo menu da música',
+    expand: 'Mostrar músicas',
+    collapse: 'Ocultar músicas',
+    rename: 'Renomear',
+    renamePlaceholder: 'Nome da pasta',
+    delete: 'Excluir pasta',
+    deleteConfirmTitle: 'Excluir pasta?',
+    deleteConfirmBody: (name: string, songCount: number) =>
+      `"${name}" será excluída. ${songCount === 1 ? 'A música dela continua' : `As ${songCount} músicas dela continuam`} neste dispositivo e ${songCount === 1 ? 'volta' : 'voltam'} para a biblioteca.`,
+    deleteConfirmConfirm: 'Excluir',
+    addTo: (name: string) => `Adicionar a ${name}`,
+    removeFrom: 'Remover da pasta',
+    export: 'Exportar…',
+    songOptions: 'Opções da música',
+    folderOptions: 'Opções da pasta',
   },
   project: {
     backToLibrary: 'Biblioteca',
     edit: 'Editar',
-    bundledNotice: 'O projeto de demonstração não pode ser editado.',
     notFound: 'Projeto não encontrado.',
     loadFailed: 'Falha ao carregar o projeto.',
     deleteConfirmTitle: 'Excluir projeto?',
@@ -68,6 +95,10 @@ export const ptBR: TranslationDictionary = {
       `Decodificando faixas (${current} de ${total})…`,
     building: 'Montando o mixer…',
     waveforms: 'Desenhando as ondas…',
+    exporting: (name: string, current: number, total: number) =>
+      `Empacotando ${name} (${current} de ${total})…`,
+    importing: (name: string, current: number, total: number) =>
+      `Desempacotando ${name} (${current} de ${total})…`,
   },
   nowPlaying: {
     heading: 'Tocando Agora',

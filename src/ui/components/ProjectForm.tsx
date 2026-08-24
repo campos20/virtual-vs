@@ -36,7 +36,7 @@ interface ProjectFormProps {
   onRenameStem: (stemId: string, name: string) => Promise<boolean>;
   onSubmit: (values: ProjectFormValues) => void;
   onCancel: () => void;
-  /** Omitted for projects that can't be deleted (the bundled demo). */
+  /** Omitted for a project that can't be deleted. */
   onDelete?: () => void;
 }
 

@@ -107,12 +107,12 @@ devtools.
 ### Storage (`storage/`)
 
 `ProjectSource` is a small abstraction over "where a project's manifest and
-stems came from" - a bundled demo project resolves its stems to `require()`
-asset module ids (`storage/demoProject.ts`); a filesystem project (created
-by the user - see `storage/importProject.ts`) resolves them to
-`file://` URIs via `expo-file-system`'s v57 `File`/`Directory` API. Either
-way, `storage/projectLoader.ts`'s `decodeProjectAudio()` runs every stem
-through the engine's `AudioContext.decodeAudioData()` once, up front.
+stems came from". Every project is one the user built (see
+`storage/importProject.ts`), resolving its stems to `file://` URIs via
+`expo-file-system`'s v57 `File`/`Directory` API; the abstraction is what would
+let a project resolve them from somewhere else without the decoder knowing.
+`storage/projectLoader.ts`'s `decodeProjectAudio()` runs every stem through
+the engine's `AudioContext.decodeAudioData()` once, up front.
 
 ### Data model
 
@@ -160,24 +160,41 @@ See `src/types/project.ts` and `src/types/setlist.ts`.
   install + Expo config-plugin steps, including the BLE-MIDI GATT
   service/characteristic UUIDs, so adding it later is a known quantity
   rather than a research project.
-- **Zip project import/export** - projects are built by picking individual
-  audio files; importing a pre-packaged `.zip` of manifest + stems is still
-  TODO (see the notes at the top of `storage/importProject.ts`).
+- **Automatic cloud backup** - backing up is a deliberate tap today (see
+  *Backup and sharing* below). Uploading on its own, in the background, would
+  need a Google/Microsoft OAuth client per build and token refresh; the
+  share-sheet route deliberately avoids both.
 
-## Demo project
+## Backup and sharing
 
-A bundled demo project (`assets/demo/`) ships with the app so there's
-something to open on first launch without any file import: three
-procedurally-generated test-tone WAV stems at different pitches (bass, keys,
-and a guide vocal routed cue-only) plus a `manifest.json`, all pulsing on
-the beat grid so sample-lock sync is audible. Regenerate them with:
+A project or a whole folder can be packed into a single **`.vvs` bundle** -
+manifests, the mix, and every stem - and handed to the OS share sheet. That is
+how a set reaches Google Drive: Drive, OneDrive, Dropbox, AirDrop and a USB
+cable are all just targets in the same sheet, so the app never needs a Google
+account, an API key, or an OAuth client of its own. The user's own Drive app
+owns the upload.
 
-```bash
-node scripts/generate-demo-assets.js
-```
+Coming back the other way needs nothing extra either. A bundle someone shares
+from their Drive arrives through the ordinary file picker: **⋯ → Import a
+backup…**, pick the file, and its projects *and* the folder that grouped them
+land in the library.
 
-(The stems themselves are checked in; you don't need to regenerate them to
-run the app - this is only for tweaking the tones/tempo/duration.)
+- **Folder → ⋯ → Export…** packs that folder and its songs.
+- **Project → mixer drawer → Export…** packs one project.
+- A project whose id is already in the library is left alone, so re-importing
+  your own backup changes nothing and a shared set can't overwrite your mixes.
+- A folder that already exists is *merged* - existing order kept, new songs
+  appended - so someone can send you an updated set without wiping the songs
+  you added to your copy.
+
+The container is documented at the top of `storage/bundleFormat.ts`. It is
+deliberately not a zip: that would mean a native archive dependency or
+compressing hundreds of megabytes on the JS thread, for almost no size win on
+audio that is already compressed. Both ends stream in chunks, so a bundle is
+never held in memory.
+
+Exporting and importing are blocked while the transport is playing, like every
+other path that rebuilds files under a live set.
 
 ## Running the app
 
@@ -200,12 +217,12 @@ scripts) reconnects to the same dev client for fast JS-only reloads - you
 only need to re-run `expo run:*` when native config (e.g. `app.json`
 plugins) or a native dependency changes.
 
-On launch, the Library screen seeds itself with the bundled demo project;
-tap it to open the Player, hit Play, and all three stems (plus the
-generated click, audible if you route a track to `cue` and are on a
-split/monitor setup) should play back perfectly in sync. Try dragging a
-fader, muting/soloing a track, changing its bus routing, and toggling
-monitor/split.
+The Library starts empty. Tap **+ New**, then add stems from the file picker
+to build a project - two or more files that are meant to line up, so you can
+hear that they stay in sync. Set a tempo if you want the generated click
+(audible if you route a track to `cue` and are on a split/monitor setup).
+Then try dragging a fader, muting/soloing a track, changing its bus routing,
+and toggling monitor/split. **+ Folder** groups projects together.
 
 ## Downloading a release
 

@@ -85,6 +85,18 @@ Concretely:
 - Test/dev-only tooling (Jest, Testing Library, etc.) doesn't ship in the
   built app and isn't a stability concern the same way - this principle is
   about runtime dependencies.
+- `expo-sharing` is the one dependency added for backup/sharing, and it is
+  deliberately the *only* one. It opens the OS share sheet for a local file
+  and does nothing else - no background work, no rendering, no native views.
+  Everything else that feature needs was already in `expo-file-system`:
+  `FileHandle.readBytes`/`writeBytes` for streaming, and the file picker for
+  reading a bundle back. Notably there is **no zip library and no OAuth/HTTP
+  client**: the `.vvs` container is written by hand (see
+  `storage/bundleFormat.ts`) and Google Drive is reached through the share
+  sheet rather than through an API the app would have to hold credentials
+  for. Keep it that way unless there's a concrete reason not to - "upload
+  automatically in the background" is the only thing the current design
+  can't do, and it costs an OAuth client per build plus token refresh.
 
 # Stems stay sample-locked
 
