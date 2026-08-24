@@ -29,6 +29,7 @@ export const en = {
   folder: {
     /** Name a new folder carries until it's renamed. User data, so it's written in the user's language. */
     defaultName: 'New folder',
+    createFailed: "Couldn't create the folder. Check that this device has free space.",
     songsCount: (count: number) => `${count} song${count === 1 ? '' : 's'}`,
     empty: 'Empty — add songs from a song\u2019s menu',
     expand: 'Show songs',

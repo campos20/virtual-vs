@@ -214,10 +214,42 @@ export function readBundleHeader(file: File): { header: BundleHeader; payloadOff
   const handle = file.open(FileMode.ReadOnly);
   try {
     const { headerLength } = decodeBundlePreamble(handle.readBytes(BUNDLE_PREAMBLE_BYTES));
+
+    // decodeBundlePreamble already refuses an absurd length (MAX_HEADER_BYTES),
+    // but the file itself is the tighter bound: a header can never run past the
+    // end of the bundle carrying it. Checking here means a truncated or
+    // mislabelled file is rejected before any large read is attempted, rather
+    // than after.
+    const fileSize = file.size ?? 0;
+    if (fileSize > 0 && BUNDLE_PREAMBLE_BYTES + headerLength > fileSize) {
+      throw new BundleFormatError("This bundle's index is damaged and can't be read.");
+    }
+
     const header = decodeBundleHeader(handle.readBytes(headerLength));
     return { header, payloadOffset: BUNDLE_PREAMBLE_BYTES + headerLength };
   } finally {
     handle.close();
+  }
+}
+
+/**
+ * Whether a directory already holds a project the Library can actually see.
+ *
+ * Deliberately the same test `listFilesystemProjects` applies - a readable
+ * manifest - and not merely "the directory is there". An import that died
+ * partway leaves a directory with audio but no manifest yet (the manifest is
+ * written last, on purpose); treating that as an existing project would make
+ * it permanently invisible *and* permanently un-importable, since every later
+ * attempt would skip it too.
+ */
+function holdsVisibleProject(directory: Directory): boolean {
+  const manifest = new File(directory, 'manifest.json');
+  if (!manifest.exists) return false;
+  try {
+    JSON.parse(manifest.textSync());
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -242,7 +274,12 @@ export async function importBundle(
 
   const { header, payloadOffset } = readBundleHeader(file);
   const entries = bundleEntries(header, payloadOffset);
-  const byProject = new Map(header.projects.map((project) => [project.manifest.id, project]));
+  // Keyed lookup rather than a scan per file: a bundle of a whole set can hold
+  // hundreds of stems, and a find() inside the loop makes unpacking quadratic
+  // in that count. NUL can't occur in either half, so the key is unambiguous.
+  const entriesByFile = new Map(
+    entries.map((entry) => [`${entry.projectId}\u0000${entry.name}`, entry])
+  );
 
   const imported: LibraryProjectEntry[] = [];
   const skippedProjectIds: string[] = [];
@@ -255,16 +292,19 @@ export async function importBundle(
       const id = project.manifest.id;
       const directory = projectDirectory(id);
 
-      if (directory.exists) {
+      if (holdsVisibleProject(directory)) {
         skippedProjectIds.push(id);
         done += project.files.length;
         continue;
       }
 
-      directory.create({ intermediates: true });
+      // Either brand new, or the leftovers of an import that died partway -
+      // in which case its files are overwritten below and it finally gets the
+      // manifest that makes it real.
+      if (!directory.exists) directory.create({ intermediates: true });
 
-      for (const file of byProject.get(id)!.files) {
-        const entry = entries.find((candidate) => candidate.projectId === id && candidate.name === file.name)!;
+      for (const file of project.files) {
+        const entry = entriesByFile.get(`${id}\u0000${file.name}`)!;
         done += 1;
         await report(onProgress, {
           phase: 'importing',

@@ -33,6 +33,16 @@ export const BUNDLE_VERSION = 1;
 export const BUNDLE_EXTENSION = 'vvs';
 /** magic (4) + version (4) + header length (4). */
 export const BUNDLE_PREAMBLE_BYTES = 12;
+/**
+ * Ceiling on the header, enforced before a single byte of it is read.
+ *
+ * The length comes out of the file itself, so a corrupt or hostile one can
+ * claim any size at all - and the reader would faithfully try to allocate it.
+ * 8 MB is orders of magnitude above a real header (a manifest is well under a
+ * kilobyte, so this is room for thousands of songs) and small enough that
+ * refusing it costs nothing.
+ */
+export const MAX_HEADER_BYTES = 8 * 1024 * 1024;
 
 export interface BundledFile {
   /** Filename as it appears in the project's manifest (`TrackManifest.file`). */
@@ -117,7 +127,12 @@ export function decodeBundlePreamble(bytes: Uint8Array): { version: number; head
     );
   }
 
-  return { version, headerLength: view.getUint32(8, true) };
+  const headerLength = view.getUint32(8, true);
+  if (headerLength === 0 || headerLength > MAX_HEADER_BYTES) {
+    throw new BundleFormatError("This bundle's index is damaged and can't be read.");
+  }
+
+  return { version, headerLength };
 }
 
 /** Parses the header JSON that follows the preamble. */

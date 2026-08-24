@@ -167,6 +167,10 @@ export function LibraryScreen() {
 
   function handleNewFolder() {
     const folder = dispatch(createFolder(t.folder.defaultName));
+    if (!folder) {
+      setError(t.folder.createFailed);
+      return;
+    }
     // Straight into rename: a folder called "New folder" is never what the
     // user meant, and this saves them hunting for the menu to fix it.
     setRenamingFolderId(folder.id);

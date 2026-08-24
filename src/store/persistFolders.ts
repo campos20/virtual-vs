@@ -39,8 +39,17 @@ export function persistLibraryOrder(orderedKeys: string[]) {
  * immediately instead of appended below however many songs the user has.
  */
 export function createFolder(name?: string) {
-  return (dispatch: AppDispatch, getState: () => RootState): SetlistManifest => {
-    const folder = createSetlist(name);
+  return (dispatch: AppDispatch, getState: () => RootState): SetlistManifest | null => {
+    let folder: SetlistManifest;
+    try {
+      folder = createSetlist(name);
+    } catch (error) {
+      // Same contract as every other write here: the file is the record, so a
+      // folder that isn't on disk must not appear in the Library either.
+      console.warn('Failed to create a folder', error);
+      return null;
+    }
+
     dispatch(setlistAdded(folder));
     dispatch(persistLibraryOrder([folderKey(folder.id), ...getState().settings.libraryOrder]));
     return folder;

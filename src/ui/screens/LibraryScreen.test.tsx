@@ -15,6 +15,7 @@ import { createStore } from '@/store';
 import { projectsHydrated, type LibraryProjectEntry } from '@/store/projectsSlice';
 import { setlistsHydrated } from '@/store/setlistsSlice';
 import type { SetlistManifest } from '@/types/setlist';
+import * as setlistLibrary from '@/storage/setlistLibrary';
 import { renderWithStore } from '@/test-utils/renderWithStore';
 import { LibraryScreen } from './LibraryScreen';
 
@@ -125,7 +126,12 @@ describe('LibraryScreen', () => {
     fireEvent.press(screen.getByTestId('new-project-button'));
 
     await waitFor(() => expect(createDraftProject).toHaveBeenCalled());
-          expect(store.getState().projects.entities['untitled-abc']).toBeTruthy()
+    // createDraftProject resolving is not the end of it - the dispatch happens
+    // in the continuation after that await, so the store has to be waited on
+    // in its own right.
+    await waitFor(() =>
+      expect(store.getState().projects.entities['untitled-abc']).toBeTruthy()
+    );
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/project/[projectId]',
       params: { projectId: 'untitled-abc' },
@@ -223,7 +229,7 @@ describe('LibraryScreen', () => {
       clickEnabled: true,
     });
 
-          await waitFor(() =>
+    await waitFor(() =>
       expect(screen.getByTestId('project-row-sync-test-now-playing')).toBeTruthy()
     );
     expect(screen.queryByTestId('project-row-second-song-now-playing')).toBeNull();
@@ -360,7 +366,7 @@ describe('LibraryScreen', () => {
       fireEvent.press(screen.getByTestId('project-row-loose-menu'));
       fireEvent.press(screen.getByTestId('add-to-folder-sunday'));
 
-              expect(store.getState().setlists.entities.sunday?.songs).toEqual(['loose'])
+      expect(store.getState().setlists.entities.sunday?.songs).toEqual(['loose']);
     });
 
     it('takes a song back out of a folder, leaving the song itself alone', async () => {
@@ -388,7 +394,7 @@ describe('LibraryScreen', () => {
       fireEvent.press(screen.getByTestId('project-row-shared-menu'));
       fireEvent.press(screen.getByTestId('add-to-folder-wedding'));
 
-              expect(store.getState().setlists.entities.wedding?.songs).toEqual(['shared'])
+      expect(store.getState().setlists.entities.wedding?.songs).toEqual(['shared']);
       expect(store.getState().setlists.entities.sunday?.songs).toEqual(['shared']);
     });
 
@@ -400,7 +406,7 @@ describe('LibraryScreen', () => {
 
       fireEvent.press(screen.getByTestId('project-row-second-move-up'));
 
-              expect(store.getState().setlists.entities.sunday?.songs).toEqual(['second', 'first'])
+      expect(store.getState().setlists.entities.sunday?.songs).toEqual(['second', 'first']);
       expect(store.getState().settings.libraryOrder).toEqual([]);
     });
 
@@ -413,7 +419,7 @@ describe('LibraryScreen', () => {
         nativeEvent: { text: 'Wedding Gig' },
       });
 
-              expect(store.getState().setlists.entities.sunday?.name).toBe('Wedding Gig')
+      expect(store.getState().setlists.entities.sunday?.name).toBe('Wedding Gig');
     });
 
     it('ignores a rename to blank rather than leaving a nameless folder', async () => {
@@ -426,6 +432,19 @@ describe('LibraryScreen', () => {
       });
 
       expect(store.getState().setlists.entities.sunday?.name).toBe('Sunday Set');
+    });
+
+    it('says so when a folder cannot be created, instead of failing silently', () => {
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+      jest.spyOn(setlistLibrary, 'createSetlist').mockImplementation(() => {
+        throw new Error('disk full');
+      });
+      renderWithFolders([], []);
+
+      fireEvent.press(screen.getByTestId('new-folder-button'));
+
+      expect(screen.getByText(/Couldn't create the folder/)).toBeTruthy();
+      jest.restoreAllMocks();
     });
 
     it('creates a folder at the top of the library and opens it for renaming', async () => {

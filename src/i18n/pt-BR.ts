@@ -37,6 +37,7 @@ export const ptBR: TranslationDictionary = {
   },
   folder: {
     defaultName: 'Nova pasta',
+    createFailed: 'Não foi possível criar a pasta. Verifique se há espaço livre no dispositivo.',
     songsCount: (count: number) => `${count} ${count === 1 ? 'música' : 'músicas'}`,
     empty: 'Vazia — adicione músicas pelo menu da música',
     expand: 'Mostrar músicas',

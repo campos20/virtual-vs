@@ -91,6 +91,22 @@ describe('folder writes', () => {
 });
 
 describe('createFolder', () => {
+  // Every other write here logs and leaves state untouched on failure; this
+  // one used to be the exception, and would have thrown into the UI instead.
+  it('keeps the folder out of the library when the file cannot be written', () => {
+    const store = createStore();
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    storage.createSetlist.mockImplementation(() => {
+      throw new Error('disk full');
+    });
+
+    const created = store.dispatch(createFolder('Fresh'));
+
+    expect(created).toBeNull();
+    expect(setlistsSelectors.selectAll(store.getState().setlists)).toEqual([]);
+    expect(store.getState().settings.libraryOrder).toEqual([]);
+  });
+
   it('puts the new folder first in the library order and persists it', () => {
     const store = createStore();
     store.dispatch(persistLibraryOrder(['project:existing']));

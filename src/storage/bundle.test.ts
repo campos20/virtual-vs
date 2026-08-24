@@ -73,6 +73,11 @@ jest.mock('expo-file-system', () => {
       files.set(this.uri, bytes);
       log.push(`write ${this.uri}`);
     }
+    textSync() {
+      const bytes = files.get(this.uri);
+      if (!bytes) throw new Error(`no such file: ${this.uri}`);
+      return String.fromCharCode(...bytes);
+    }
     open(mode: string) {
       const path = this.uri;
       if (mode === FileMode.Truncate) files.set(path, new Uint8Array(0));
@@ -156,6 +161,17 @@ function putStem(projectId: string, name: string, size: number, seed: number): U
   disk.files.set(`file:///document/projects/${projectId}/${name}`, bytes);
   disk.directories.add(`file:///document/projects/${projectId}`);
   return bytes;
+}
+
+/**
+ * Gives a project the manifest that makes it visible to the Library - and so
+ * "already imported" as far as importBundle is concerned. A directory without
+ * one is the wreckage of an interrupted import, not a project.
+ */
+function putManifest(projectId: string) {
+  new File(`file:///document/projects/${projectId}`, 'manifest.json').write(
+    JSON.stringify({ id: projectId, title: projectId, key: '', tracks: [], sections: [] })
+  );
 }
 
 function project(id: string, files: string[], title = id): LibraryProjectEntry {
@@ -343,6 +359,7 @@ describe('importBundle', () => {
       { projects: [project('song', ['bass.wav'])], folders: [] },
       new File(Paths.cache, 'out.vvs')
     );
+    putManifest('song');
     // The local copy has since been changed - importing must not revert it.
     const edited = stemBytes(40, 99);
     disk.files.set('file:///document/projects/song/bass.wav', edited);
@@ -355,12 +372,56 @@ describe('importBundle', () => {
     expect(firstDifference(disk.files.get('file:///document/projects/song/bass.wav')!, original)).not.toBe(-1);
   });
 
+  /**
+   * The manifest is written last, so a dead import leaves a directory holding
+   * audio and nothing else. Treating that as "already imported" would make the
+   * project invisible to the Library *and* skip it on every future attempt -
+   * permanently stranded, with no way to get it back but a manual delete.
+   */
+  it('finishes an import that died before its manifest was written', async () => {
+    const bass = putStem('song', 'bass.wav', 40, 1);
+    const bundle = await writeBundle(
+      { projects: [project('song', ['bass.wav'])], folders: [] },
+      new File(Paths.cache, 'out.vvs')
+    );
+    wipeLibrary();
+    // What an interrupted import leaves behind: the directory and a partial
+    // file, but no manifest.json.
+    disk.directories.add('file:///document/projects/song');
+    disk.files.set('file:///document/projects/song/bass.wav', new Uint8Array(7));
+
+    const result = await importBundle(bundle);
+
+    expect(result.skippedProjectIds).toEqual([]);
+    expect(result.projects.map((p) => p.id)).toEqual(['song']);
+    expectSameBytes(disk.files.get('file:///document/projects/song/bass.wav'), bass);
+    expect(disk.files.has('file:///document/projects/song/manifest.json')).toBe(true);
+  });
+
+  it('re-imports over a manifest that is there but unreadable', async () => {
+    putStem('song', 'bass.wav', 40, 1);
+    const bundle = await writeBundle(
+      { projects: [project('song', ['bass.wav'], 'Real Title')], folders: [] },
+      new File(Paths.cache, 'out.vvs')
+    );
+    wipeLibrary();
+    disk.directories.add('file:///document/projects/song');
+    new File('file:///document/projects/song', 'manifest.json').write('{ truncated');
+
+    const result = await importBundle(bundle);
+
+    // The Library can't see a project whose manifest won't parse either, so
+    // skipping it here would strand it the same way.
+    expect(result.projects.map((p) => p.title)).toEqual(['Real Title']);
+  });
+
   it('still returns the folders when every project was already there', async () => {
     putStem('song', 'bass.wav', 40, 1);
     const bundle = await writeBundle(
       { projects: [project('song', ['bass.wav'])], folders: [folder('set', ['song'])] },
       new File(Paths.cache, 'out.vvs')
     );
+    putManifest('song');
 
     const result = await importBundle(bundle);
 
@@ -408,6 +469,21 @@ describe('importBundle', () => {
     disk.files.set(notABundle.uri, new Uint8Array([0x49, 0x44, 0x33, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
 
     await expect(importBundle(notABundle)).rejects.toThrow(/Not a Virtual VS bundle/);
+  });
+
+  it('refuses a header that claims more bytes than the file holds', async () => {
+    putStem('song', 'bass.wav', 50, 1);
+    const bundle = await writeBundle(
+      { projects: [project('song', ['bass.wav'])], folders: [] },
+      new File(Paths.cache, 'out.vvs')
+    );
+    // Plausible on its own - well under the absolute cap - but impossible for
+    // this file, which is the check that catches a truncated download.
+    const bytes = disk.files.get(bundle.uri)!;
+    new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).setUint32(8, 100_000, true);
+    wipeLibrary();
+
+    await expect(importBundle(bundle)).rejects.toThrow(/damaged/);
   });
 
   it('refuses a bundle whose payload was truncated', async () => {

@@ -2,6 +2,7 @@ import type { ProjectManifest } from '@/types/project';
 import type { SetlistManifest } from '@/types/setlist';
 import {
   BUNDLE_MAGIC,
+  MAX_HEADER_BYTES,
   BUNDLE_PREAMBLE_BYTES,
   BUNDLE_VERSION,
   BundleFormatError,
@@ -68,6 +69,22 @@ describe('bundle preamble', () => {
 
   it('rejects a file too short to even have a preamble', () => {
     expect(() => decodeBundlePreamble(new Uint8Array(4))).toThrow(/too short/);
+  });
+
+  // The length comes out of the file, so a corrupt or hostile one can claim
+  // any size at all - and a reader that trusts it allocates whatever it says.
+  it('refuses a header length beyond anything a real bundle has', () => {
+    const bytes = encodeBundleHeader(header());
+    new DataView(bytes.buffer).setUint32(8, MAX_HEADER_BYTES + 1, true);
+
+    expect(() => decodeBundlePreamble(bytes)).toThrow(/damaged/);
+  });
+
+  it('refuses a header length of zero', () => {
+    const bytes = encodeBundleHeader(header());
+    new DataView(bytes.buffer).setUint32(8, 0, true);
+
+    expect(() => decodeBundlePreamble(bytes)).toThrow(/damaged/);
   });
 
   // Better than failing halfway through an import with a confusing error.
