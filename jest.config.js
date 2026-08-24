@@ -15,6 +15,17 @@ module.exports = {
     '/node_modules/react-native-reanimated/plugin/',
     '/node_modules/@react-native/babel-preset/',
   ],
+  // Jest's 5s default is too tight for the screen tests, which load a project
+  // for real: decoding, folding channels to stereo and computing waveform
+  // peaks over a second of audio per stem. Most of that is *synchronous* JS
+  // (see storage/progress.ts on why those phases block the thread), so with
+  // coverage instrumenting every line it can hold the thread for seconds on a
+  // slow CI runner - long enough that even waitFor can't get a poll in, and
+  // the test dies on Jest's timeout rather than a useful assertion failure.
+  // This is what failed the v1.5.0 release build. The number is headroom for
+  // a slow machine, not an expectation: the whole suite runs in well under
+  // this locally, so a genuinely stuck test still surfaces quickly.
+  testTimeout: 20000,
   collectCoverage: true,
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
