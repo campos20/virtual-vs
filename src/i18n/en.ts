@@ -91,6 +91,21 @@ export const en = {
     importing: (name: string, current: number, total: number) =>
       `Unpacking ${name} (${current} of ${total})…`,
   },
+  markers: {
+    heading: 'Markers',
+    emptyText: 'No markers yet. Tap a preset or type a name, then add one at the current position.',
+    namePlaceholder: 'Marker name',
+    addAt: (time: string) => `Add at ${time}`,
+    remove: 'Remove',
+    jumpTo: (name: string) => `Jump to ${name}`,
+    presetIntro: 'Intro',
+    presetVerse: 'Verse',
+    presetChorus: 'Chorus',
+    presetBridge: 'Bridge',
+    presetOutro: 'Outro',
+    presetA: 'A',
+    presetB: 'B',
+  },
   nowPlaying: {
     heading: 'Now Playing',
     goToSong: (title: string) => `Now playing: ${title}. Go to song.`,

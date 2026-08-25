@@ -1,5 +1,5 @@
 import { patchProjectManifest } from '@/storage';
-import type { ProjectManifest, TrackManifest } from '@/types/project';
+import type { ProjectManifest, SectionManifest, TrackManifest } from '@/types/project';
 import type { AppDispatch, RootState } from './index';
 import { projectUpdated, projectsSelectors } from './projectsSlice';
 import { trackEntityId, tracksSelectors } from './tracksSlice';
@@ -53,6 +53,21 @@ export function persistProjectClick(projectId: string, clickEnabled: boolean) {
 }
 
 /**
+ * Persists a project's markers ("sections" in the manifest - see
+ * types/project.ts). Not gated on the transport running: like a stem
+ * rename, this only rewrites data in the manifest and never touches the
+ * audio graph, so adding/removing a marker mid-song is safe.
+ */
+export function persistProjectSections(projectId: string, sections: SectionManifest[]) {
+  return (dispatch: AppDispatch, getState: () => RootState) => {
+    const entry = projectsSelectors.selectById(getState().projects, projectId);
+    dispatch(projectUpdated({ id: projectId, changes: { sections } }));
+    if (!entry?.sourceDir) return;
+    writeManifest(entry.sourceDir, { sections });
+  };
+}
+
+/**
  * Failing to persist must never interrupt playback - the change is already
  * live in the engine and the store, and losing it only costs the user a
  * re-tweak next time. Warn and carry on rather than surfacing an error
@@ -60,6 +75,6 @@ export function persistProjectClick(projectId: string, clickEnabled: boolean) {
  */
 function writeManifest(sourceDir: string, changes: Partial<ProjectManifest>) {
   patchProjectManifest(sourceDir, changes).catch((error) => {
-    console.warn('Failed to persist project mixer state', error);
+    console.warn('Failed to persist project manifest changes', Object.keys(changes), error);
   });
 }

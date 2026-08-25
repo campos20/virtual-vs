@@ -100,6 +100,21 @@ export const ptBR: TranslationDictionary = {
     importing: (name: string, current: number, total: number) =>
       `Desempacotando ${name} (${current} de ${total})…`,
   },
+  markers: {
+    heading: 'Marcadores',
+    emptyText: 'Nenhum marcador ainda. Toque em um predefinido ou digite um nome e adicione na posição atual.',
+    namePlaceholder: 'Nome do marcador',
+    addAt: (time: string) => `Adicionar em ${time}`,
+    remove: 'Remover',
+    jumpTo: (name: string) => `Ir para ${name}`,
+    presetIntro: 'Introdução',
+    presetVerse: 'Estrofe',
+    presetChorus: 'Refrão',
+    presetBridge: 'Ponte',
+    presetOutro: 'Final',
+    presetA: 'A',
+    presetB: 'B',
+  },
   nowPlaying: {
     heading: 'Tocando Agora',
     goToSong: (title: string) => `Tocando agora: ${title}. Ir para a música.`,
