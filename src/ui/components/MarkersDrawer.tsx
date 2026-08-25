@@ -279,7 +279,11 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingTop: spacing.sm,
+    // Extra room at the bottom of the scrollable list, same reasoning as
+    // MixerDrawer's stripsContent - without it the last row's Remove button
+    // sits flush against the sheet's bottom edge.
+    paddingBottom: spacing.xl,
   },
   emptyText: {
     color: colors.textTertiary,
