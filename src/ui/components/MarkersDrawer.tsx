@@ -1,8 +1,16 @@
-import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useTranslation } from '@/i18n';
-import type { SectionManifest } from '@/types/project';
-import { colors, elevation, radii, spacing } from '@/ui/theme';
+import { useTranslation } from "@/i18n";
+import type { SectionManifest } from "@/types/project";
+import { colors, elevation, radii, spacing } from "@/ui/theme";
+import { useState } from "react";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
 interface MarkersDrawerProps {
   visible: boolean;
@@ -20,7 +28,7 @@ function formatMarkerTime(totalSeconds: number): string {
   const clamped = Math.max(0, totalSeconds);
   const minutes = Math.floor(clamped / 60);
   const seconds = Math.floor(clamped % 60);
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
 /**
@@ -29,13 +37,13 @@ function formatMarkerTime(totalSeconds: number): string {
  * underneath, so a fully custom name works the same way.
  */
 const PRESET_KEYS = [
-  'presetIntro',
-  'presetVerse',
-  'presetChorus',
-  'presetBridge',
-  'presetOutro',
-  'presetA',
-  'presetB',
+  "presetIntro",
+  "presetVerse",
+  "presetChorus",
+  "presetBridge",
+  "presetOutro",
+  "presetA",
+  "presetB",
 ] as const;
 
 /**
@@ -57,7 +65,7 @@ export function MarkersDrawer({
   onJump,
 }: MarkersDrawerProps) {
   const { t } = useTranslation();
-  const [draftName, setDraftName] = useState('');
+  const [draftName, setDraftName] = useState("");
 
   const sorted = [...sections].sort((a, b) => a.startSec - b.startSec);
   const trimmedName = draftName.trim();
@@ -65,11 +73,16 @@ export function MarkersDrawer({
   function handleAdd() {
     if (trimmedName.length === 0) return;
     onAdd(trimmedName);
-    setDraftName('');
+    setDraftName("");
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
       <Pressable
         style={StyleSheet.absoluteFill}
         onPress={onClose}
@@ -83,7 +96,10 @@ export function MarkersDrawer({
             onPress={onClose}
             hitSlop={8}
             testID="close-markers-button"
-            style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.closeButton,
+              pressed && styles.pressed,
+            ]}
           >
             <Text style={styles.closeButtonText}>{t.common.close}</Text>
           </Pressable>
@@ -103,7 +119,10 @@ export function MarkersDrawer({
               <Pressable
                 key={key}
                 onPress={() => setDraftName(t.markers[key])}
-                style={({ pressed }) => [styles.presetChip, pressed && styles.pressed]}
+                style={({ pressed }) => [
+                  styles.presetChip,
+                  pressed && styles.pressed,
+                ]}
                 testID={`marker-preset-${key}`}
               >
                 <Text style={styles.presetChipText}>{t.markers[key]}</Text>
@@ -120,26 +139,36 @@ export function MarkersDrawer({
             ]}
             testID="add-marker-button"
           >
-            <Text style={styles.addButtonText}>{t.markers.addAt(formatMarkerTime(playheadSec))}</Text>
+            <Text style={styles.addButtonText}>
+              {t.markers.addAt(formatMarkerTime(playheadSec))}
+            </Text>
           </Pressable>
         </View>
 
-        <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+        <ScrollView
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+        >
           {sorted.length === 0 ? (
             <Text style={styles.emptyText}>{t.markers.emptyText}</Text>
           ) : (
-            sorted.map((section) => (
+            sorted.map((section, idx) => (
               <View key={section.id} style={styles.row}>
                 <Pressable
-                  style={({ pressed }) => [styles.rowJump, pressed && styles.pressed]}
+                  style={({ pressed }) => [
+                    styles.rowJump,
+                    pressed && styles.pressed,
+                  ]}
                   onPress={() => onJump(section.startSec)}
                   accessibilityLabel={t.markers.jumpTo(section.name)}
                   testID={`jump-marker-${section.id}`}
                 >
                   <Text style={styles.rowName} numberOfLines={1}>
-                    {section.name}
+                    {idx + 1}. {section.name}
                   </Text>
-                  <Text style={styles.rowTime}>{formatMarkerTime(section.startSec)}</Text>
+                  <Text style={styles.rowTime}>
+                    {formatMarkerTime(section.startSec)}
+                  </Text>
                 </Pressable>
                 <Pressable
                   onPress={() => onRemove(section.id)}
@@ -160,8 +189,8 @@ export function MarkersDrawer({
 
 const styles = StyleSheet.create({
   sheet: {
-    marginTop: 'auto',
-    maxHeight: '80%',
+    marginTop: "auto",
+    maxHeight: "80%",
     backgroundColor: colors.panel,
     borderTopLeftRadius: radii.xl,
     borderTopRightRadius: radii.xl,
@@ -170,9 +199,9 @@ const styles = StyleSheet.create({
     ...elevation,
   },
   sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
@@ -180,20 +209,20 @@ const styles = StyleSheet.create({
   sheetTitle: {
     color: colors.textPrimary,
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   closeButton: {
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
     borderRadius: radii.pill,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
   },
   closeButtonText: {
     color: colors.accent,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   pressed: {
     opacity: 0.7,
@@ -214,36 +243,36 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   presetRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.xs,
   },
   presetChip: {
     paddingHorizontal: spacing.sm,
     paddingVertical: 6,
     borderRadius: radii.pill,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
   },
   presetChipText: {
     color: colors.textSecondary,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   addButton: {
     backgroundColor: colors.accent,
     borderRadius: radii.md,
     paddingVertical: 12,
-    alignItems: 'center',
+    alignItems: "center",
   },
   addButtonDisabled: {
     opacity: 0.4,
   },
   addButtonText: {
-    color: '#0a0a0a',
+    color: "#0a0a0a",
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   list: {
     flexGrow: 0,
@@ -258,35 +287,35 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
   rowJump: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginRight: 12,
   },
   rowName: {
     color: colors.textPrimary,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
     flexShrink: 1,
     marginRight: 8,
   },
   rowTime: {
     color: colors.textSecondary,
     fontSize: 13,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
   removeText: {
     color: colors.danger,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });
