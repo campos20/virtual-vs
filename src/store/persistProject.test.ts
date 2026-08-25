@@ -1,7 +1,7 @@
 import { patchProjectManifest } from '@/storage';
 import type { LibraryProjectEntry } from './projectsSlice';
 import { createStore } from './index';
-import { persistProjectClick, persistProjectMixer } from './persistProject';
+import { persistProjectClick, persistProjectMixer, persistProjectSections } from './persistProject';
 import { projectAdded } from './projectsSlice';
 import {
   trackBusSet,
@@ -113,5 +113,27 @@ describe('persistProjectClick', () => {
 
     expect(patchMock).not.toHaveBeenCalled();
     expect(store.getState().projects.entities.song?.clickEnabled).toBe(false);
+  });
+});
+
+describe('persistProjectSections', () => {
+  it('writes the marker list into the manifest and the entry', () => {
+    const store = storeWithProject();
+    const sections = [{ id: 'chorus', name: 'Chorus', startSec: 30 }];
+
+    store.dispatch(persistProjectSections('song', sections));
+
+    expect(patchMock).toHaveBeenCalledWith(project.sourceDir, { sections });
+    expect(store.getState().projects.entities.song?.sections).toEqual(sections);
+  });
+
+  it('still updates the entry for a project it cannot write', () => {
+    const store = storeWithProject({ sourceDir: undefined });
+    const sections = [{ id: 'chorus', name: 'Chorus', startSec: 30 }];
+
+    store.dispatch(persistProjectSections('song', sections));
+
+    expect(patchMock).not.toHaveBeenCalled();
+    expect(store.getState().projects.entities.song?.sections).toEqual(sections);
   });
 });

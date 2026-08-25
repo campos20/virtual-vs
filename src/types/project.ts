@@ -14,6 +14,7 @@ export interface TrackManifest {
 }
 
 export interface SectionManifest {
+  id: string;
   name: string;
   startSec: number;
 }

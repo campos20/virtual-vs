@@ -140,6 +140,20 @@ describe('nowPlayingStore', () => {
     expect(nowPlayingStore.getSnapshot().projectId).toBeNull();
   });
 
+  it('setSectionsLocal patches the manifest with the new marker list', async () => {
+    await nowPlayingStore.openProject(entry('a'), ENGINE_OPTIONS);
+
+    nowPlayingStore.setSectionsLocal([{ id: 'chorus', name: 'Chorus', startSec: 30 }]);
+
+    const snapshot = nowPlayingStore.getSnapshot();
+    expect(snapshot.manifest?.sections).toEqual([{ id: 'chorus', name: 'Chorus', startSec: 30 }]);
+  });
+
+  it('setSectionsLocal is a no-op when nothing is loaded', () => {
+    expect(() => nowPlayingStore.setSectionsLocal([])).not.toThrow();
+    expect(nowPlayingStore.getSnapshot().projectId).toBeNull();
+  });
+
   it('notifies subscribers on commit', async () => {
     const listener = jest.fn();
     const unsubscribe = nowPlayingStore.subscribe(listener);

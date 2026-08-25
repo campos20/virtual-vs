@@ -28,20 +28,28 @@ import {
 } from "@/storage";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { projectRemoved, projectUpdated, projectsSelectors } from "@/store/projectsSlice";
-import { persistProjectClick } from "@/store/persistProject";
+import { persistProjectClick, persistProjectSections } from "@/store/persistProject";
 import { removeSongFromAllFolders } from "@/store/persistFolders";
 import { monitorModeSet } from "@/store/settingsSlice";
 import {
   tracksInitializedForProject,
   tracksRemovedForProject,
 } from "@/store/tracksSlice";
+import type { SectionManifest } from "@/types/project";
 import { HamburgerIcon } from "@/ui/components/HamburgerIcon";
+import { MarkerIcon } from "@/ui/components/MarkerIcon";
+import { MarkersDrawer } from "@/ui/components/MarkersDrawer";
 import { MixerDrawer } from "@/ui/components/MixerDrawer";
 import { ProjectForm, type ProjectFormValues } from "@/ui/components/ProjectForm";
 import { WaveformView } from "@/ui/components/WaveformView";
 import { BackButton } from "@/ui/components/BackButton";
 import { HeaderButton } from "@/ui/components/HeaderButton";
 import { colors, radii, spacing } from "@/ui/theme";
+
+/** Short random id for a newly added marker - only needs to be unique within one project's list. */
+function generateMarkerId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 /**
  * The one and only project view - play it, edit it, or fill in a brand-new
@@ -83,6 +91,7 @@ export function ProjectScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mixerOpen, setMixerOpen] = useState(false);
+  const [markersOpen, setMarkersOpen] = useState(false);
   // A project with no stems can't be played, so it opens straight in edit
   // mode - that is all "creating a project" means here.
   const [editing, setEditing] = useState((entry?.tracks.length ?? 0) === 0);
@@ -92,7 +101,7 @@ export function ProjectScreen() {
   // decode says so instead of showing an empty screen.
   const [status, setStatus] = useState<string | null>(null);
 
-  const { seconds: playheadSec, stop: stopPlayhead } = usePlayhead();
+  const { seconds: playheadSec, ref: playheadRef, stop: stopPlayhead } = usePlayhead();
 
   /**
    * Anything that edits a project ends in nowPlayingStore.reload(), and
@@ -251,6 +260,38 @@ export function ProjectScreen() {
   function handleClickEnabledChange(enabled: boolean) {
     audioEngine.setClickEnabled(enabled);
     if (entry) dispatch(persistProjectClick(entry.id, enabled));
+  }
+
+  /**
+   * Adds a marker at the exact instant this was called, read straight off
+   * `playheadRef` rather than the throttled `playheadSec` state - the same
+   * "instantaneous value, not the ~15fps display one" reasoning usePlayhead
+   * documents for driving anything precise off the transport.
+   */
+  function handleAddMarker(name: string) {
+    if (!entry || !nowPlaying.manifest) return;
+    const section: SectionManifest = {
+      id: generateMarkerId(),
+      name,
+      startSec: playheadRef.current,
+    };
+    const sections = [...nowPlaying.manifest.sections, section].sort(
+      (a, b) => a.startSec - b.startSec
+    );
+    nowPlayingStore.setSectionsLocal(sections);
+    dispatch(persistProjectSections(entry.id, sections));
+  }
+
+  function handleRemoveMarker(sectionId: string) {
+    if (!entry || !nowPlaying.manifest) return;
+    const sections = nowPlaying.manifest.sections.filter((s) => s.id !== sectionId);
+    nowPlayingStore.setSectionsLocal(sections);
+    dispatch(persistProjectSections(entry.id, sections));
+  }
+
+  function handleJumpToMarker(startSec: number) {
+    audioEngine.seek(startSec);
+    setMarkersOpen(false);
   }
 
   function handleStartEditing() {
@@ -479,15 +520,26 @@ export function ProjectScreen() {
         <View style={styles.headerTopRow}>
           <BackButton label={t.project.backToLibrary} onPress={handleBackFromProject} testID="back-button" />
           {isCurrent && nowPlaying.manifest && !editing && (
-            <Pressable
-              onPress={() => setMixerOpen(true)}
-              style={({ pressed }) => [styles.mixerButton, pressed && styles.mixerButtonPressed]}
-              hitSlop={8}
-              testID="mixer-menu-button"
-              accessibilityLabel={t.project.mixer}
-            >
-              <HamburgerIcon />
-            </Pressable>
+            <View style={styles.headerActions}>
+              <Pressable
+                onPress={() => setMarkersOpen(true)}
+                style={({ pressed }) => [styles.mixerButton, pressed && styles.mixerButtonPressed]}
+                hitSlop={8}
+                testID="markers-menu-button"
+                accessibilityLabel={t.markers.heading}
+              >
+                <MarkerIcon />
+              </Pressable>
+              <Pressable
+                onPress={() => setMixerOpen(true)}
+                style={({ pressed }) => [styles.mixerButton, pressed && styles.mixerButtonPressed]}
+                hitSlop={8}
+                testID="mixer-menu-button"
+                accessibilityLabel={t.project.mixer}
+              >
+                <HamburgerIcon />
+              </Pressable>
+            </View>
           )}
         </View>
         <Text style={styles.title}>{headerTitle}</Text>
@@ -586,6 +638,16 @@ export function ProjectScreen() {
         />
       </View>
 
+      <MarkersDrawer
+        visible={markersOpen}
+        onClose={() => setMarkersOpen(false)}
+        sections={nowPlaying.manifest.sections}
+        playheadSec={playheadSec}
+        onAdd={handleAddMarker}
+        onRemove={handleRemoveMarker}
+        onJump={handleJumpToMarker}
+      />
+
       <MixerDrawer
         visible={mixerOpen}
         onClose={() => setMixerOpen(false)}
@@ -670,6 +732,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
     justifyContent: "center",
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
   },
   mixerButton: {
     width: 36,

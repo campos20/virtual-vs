@@ -4,7 +4,7 @@ import { computeWaveformPeaks, waveformBarCount } from '@/engine/waveform';
 import { decodeProjectAudio, getProjectSourceForEntry } from '@/storage';
 import { report, type ProgressReporter } from '@/storage/progress';
 import type { LibraryProjectEntry } from '@/store/projectsSlice';
-import type { ProjectManifest } from '@/types/project';
+import type { ProjectManifest, SectionManifest } from '@/types/project';
 import type { StemWaveform } from '@/ui/components/WaveformView';
 import { getTrackColor } from '@/ui/trackColors';
 
@@ -169,6 +169,13 @@ class NowPlayingStore {
       },
       waveformTracks: waveformTracks.map((t) => (t.id === stemId ? { ...t, name } : t)),
     });
+  }
+
+  /** Patches the current project's markers in place after a successful write - no re-decode needed, same reasoning as `renameTrackLocal`. */
+  setSectionsLocal(sections: SectionManifest[]): void {
+    const { manifest } = this.snapshot;
+    if (!manifest) return;
+    this.commit({ ...this.snapshot, manifest: { ...manifest, sections } });
   }
 
   /**

@@ -6,6 +6,7 @@ import {
   addStemsToProject,
   deleteProjectDirectory,
   getProjectSourceForEntry,
+  patchProjectManifest,
   removeStemFromProject,
   renameStemInProject,
   updateProjectMetadata,
@@ -36,7 +37,10 @@ jest.mock('@/storage', () => ({
   renameStemInProject: jest.fn(),
   deleteProjectDirectory: jest.fn(),
   getProjectSourceForEntry: jest.fn(),
+  patchProjectManifest: jest.fn(),
 }));
+
+const patchManifestMock = patchProjectManifest as jest.Mock;
 
 const pickerMock = getDocumentAsync as jest.Mock;
 
@@ -63,6 +67,7 @@ beforeEach(() => {
   (getProjectSourceForEntry as jest.Mock).mockImplementation(
     jest.requireActual('@/storage').getProjectSourceForEntry
   );
+  patchManifestMock.mockResolvedValue({});
 });
 
 function asset(name: string, uri: string) {
@@ -246,6 +251,70 @@ describe('ProjectScreen - playing', () => {
 
     expect(audioEngine.getTransportState()).toBe('stopped');
     expect(screen.getByText('My Song')).toBeTruthy();
+  });
+});
+
+describe('ProjectScreen - markers', () => {
+  function openMarkers() {
+    fireEvent.press(screen.getByTestId('markers-menu-button'));
+  }
+
+  it('adds a marker at the current position from a preset chip', async () => {
+    renderLoaded();
+    await waitForMixer();
+    openMarkers();
+
+    fireEvent.press(screen.getByTestId('marker-preset-presetChorus'));
+    fireEvent.press(screen.getByTestId('add-marker-button'));
+
+    // Appears twice now: once on the preset chip, once on the new marker row.
+    expect(screen.getAllByText('Chorus')).toHaveLength(2);
+    const [sourceDir, changes] = patchManifestMock.mock.calls.at(-1)!;
+    expect(sourceDir).toBe(threeStemProject.sourceDir);
+    expect(changes.sections).toEqual([
+      expect.objectContaining({ name: 'Chorus', startSec: expect.any(Number) }),
+    ]);
+  });
+
+  it('does not add a marker with an empty name', async () => {
+    renderLoaded();
+    await waitForMixer();
+    openMarkers();
+
+    fireEvent.press(screen.getByTestId('add-marker-button'));
+
+    expect(patchManifestMock).not.toHaveBeenCalled();
+  });
+
+  it('jumps to a marker and closes the drawer', async () => {
+    const seekSpy = jest.spyOn(audioEngine, 'seek');
+    renderLoaded({
+      ...threeStemProject,
+      sections: [{ id: 'chorus', name: 'Chorus', startSec: 42 }],
+    });
+    await waitForMixer();
+    openMarkers();
+
+    fireEvent.press(screen.getByTestId('jump-marker-chorus'));
+
+    expect(seekSpy).toHaveBeenCalledWith(42);
+    expect(screen.queryByTestId('close-markers-button')).toBeNull();
+  });
+
+  it('removes a marker', async () => {
+    renderLoaded({
+      ...threeStemProject,
+      sections: [{ id: 'chorus', name: 'Chorus', startSec: 42 }],
+    });
+    await waitForMixer();
+    openMarkers();
+
+    fireEvent.press(screen.getByTestId('remove-marker-chorus'));
+
+    expect(screen.queryByTestId('jump-marker-chorus')).toBeNull();
+    const [sourceDir, changes] = patchManifestMock.mock.calls.at(-1)!;
+    expect(sourceDir).toBe(threeStemProject.sourceDir);
+    expect(changes.sections).toEqual([]);
   });
 });
 
