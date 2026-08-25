@@ -267,8 +267,8 @@ describe('ProjectScreen - markers', () => {
     fireEvent.press(screen.getByTestId('marker-preset-presetChorus'));
     fireEvent.press(screen.getByTestId('add-marker-button'));
 
-    // Appears twice now: once on the preset chip, once on the new marker row.
-    expect(screen.getAllByText('Chorus')).toHaveLength(2);
+    // The row is numbered ("1. Chorus"), distinct from the preset chip's plain "Chorus".
+    expect(screen.getByText('1. Chorus')).toBeTruthy();
     const [sourceDir, changes] = patchManifestMock.mock.calls.at(-1)!;
     expect(sourceDir).toBe(threeStemProject.sourceDir);
     expect(changes.sections).toEqual([
