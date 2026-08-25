@@ -75,6 +75,6 @@ export function persistProjectSections(projectId: string, sections: SectionManif
  */
 function writeManifest(sourceDir: string, changes: Partial<ProjectManifest>) {
   patchProjectManifest(sourceDir, changes).catch((error) => {
-    console.warn('Failed to persist project mixer state', error);
+    console.warn('Failed to persist project manifest changes', Object.keys(changes), error);
   });
 }

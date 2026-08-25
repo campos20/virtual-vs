@@ -5,9 +5,46 @@ import { foldToStereo } from './downmix';
 import { report, type ProgressReporter } from './progress';
 import type { BaseAudioContext, DecodedProject, ProjectSource } from './types';
 
+/** Short random id, unique enough within one project's marker list. */
+function generateSectionId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * Backfills a stable `id` onto any section that doesn't have one.
+ *
+ * `SectionManifest.id` was added after `sections` itself: the README's
+ * documented manifest.json schema (and every manifest written before this
+ * field existed) only guarantees `{ name, startSec }`. Without this, a
+ * legacy/hand-authored section would get an `undefined` React key and
+ * `undefined` id in the Markers UI - and since MarkersDrawer's remove button
+ * filters by `id`, removing *any* one legacy marker would remove *every*
+ * legacy marker sharing that same `undefined` id. Persisting the fix once,
+ * here, means ids are stable from the very first read onward rather than
+ * being silently re-derived (and drifting) on every subsequent read.
+ */
+function normalizeSections(directory: Directory, manifest: ProjectManifest): ProjectManifest {
+  const sections = manifest.sections ?? [];
+  const needsBackfill = sections.some((section) => !section.id);
+  if (!needsBackfill) {
+    // Nothing to fix, so nothing to write - avoids an unnecessary disk write
+    // on every ordinary project load. Only defaults the in-memory shape for
+    // the (equally legacy) case of `sections` being absent altogether.
+    return manifest.sections ? manifest : { ...manifest, sections };
+  }
+
+  const normalized: ProjectManifest = {
+    ...manifest,
+    sections: sections.map((section) => (section.id ? section : { ...section, id: generateSectionId() })),
+  };
+  new File(directory, 'manifest.json').write(JSON.stringify(normalized, null, 2));
+  return normalized;
+}
+
 export async function readProjectManifest(directory: Directory): Promise<ProjectManifest> {
   const manifestFile = new File(directory, 'manifest.json');
-  return manifestFile.json() as Promise<ProjectManifest>;
+  const manifest = (await manifestFile.json()) as ProjectManifest;
+  return normalizeSections(directory, manifest);
 }
 
 /** Builds a `ProjectSource` for a project that lives on the filesystem (e.g. imported by the user). */
