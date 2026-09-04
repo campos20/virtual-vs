@@ -1,7 +1,13 @@
 import { patchProjectManifest } from '@/storage';
 import type { LibraryProjectEntry } from './projectsSlice';
 import { createStore } from './index';
-import { persistProjectClick, persistProjectMixer, persistProjectSections } from './persistProject';
+import {
+  persistProjectClick,
+  persistProjectLyrics,
+  persistProjectLyricsSync,
+  persistProjectMixer,
+  persistProjectSections,
+} from './persistProject';
 import { projectAdded } from './projectsSlice';
 import {
   trackBusSet,
@@ -135,5 +141,51 @@ describe('persistProjectSections', () => {
 
     expect(patchMock).not.toHaveBeenCalled();
     expect(store.getState().projects.entities.song?.sections).toEqual(sections);
+  });
+});
+
+describe('persistProjectLyrics', () => {
+  it('writes the lyrics text into the manifest and the entry, clearing sync points', () => {
+    const store = storeWithProject();
+
+    store.dispatch(persistProjectLyrics('song', 'La la la\nVerse two'));
+
+    expect(patchMock).toHaveBeenCalledWith(project.sourceDir, {
+      lyrics: 'La la la\nVerse two',
+      lyricsSyncPoints: [],
+    });
+    expect(store.getState().projects.entities.song?.lyrics).toBe('La la la\nVerse two');
+    expect(store.getState().projects.entities.song?.lyricsSyncPoints).toEqual([]);
+  });
+
+  it('still updates the entry for a project it cannot write', () => {
+    const store = storeWithProject({ sourceDir: undefined });
+
+    store.dispatch(persistProjectLyrics('song', 'text'));
+
+    expect(patchMock).not.toHaveBeenCalled();
+    expect(store.getState().projects.entities.song?.lyrics).toBe('text');
+  });
+});
+
+describe('persistProjectLyricsSync', () => {
+  it('writes the sync points into the manifest and the entry', () => {
+    const store = storeWithProject();
+    const syncPoints = [{ lineIndex: 2, timeSec: 12.5 }];
+
+    store.dispatch(persistProjectLyricsSync('song', syncPoints));
+
+    expect(patchMock).toHaveBeenCalledWith(project.sourceDir, { lyricsSyncPoints: syncPoints });
+    expect(store.getState().projects.entities.song?.lyricsSyncPoints).toEqual(syncPoints);
+  });
+
+  it('still updates the entry for a project it cannot write', () => {
+    const store = storeWithProject({ sourceDir: undefined });
+    const syncPoints = [{ lineIndex: 0, timeSec: 1 }];
+
+    store.dispatch(persistProjectLyricsSync('song', syncPoints));
+
+    expect(patchMock).not.toHaveBeenCalled();
+    expect(store.getState().projects.entities.song?.lyricsSyncPoints).toEqual(syncPoints);
   });
 });

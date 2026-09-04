@@ -318,6 +318,94 @@ describe('ProjectScreen - markers', () => {
   });
 });
 
+describe('ProjectScreen - lyrics', () => {
+  function toggleLyrics() {
+    fireEvent.press(screen.getByTestId('lyrics-toggle-button'));
+  }
+
+  it('swaps the waveform for the lyrics view and back', async () => {
+    renderLoaded();
+    await waitForMixer();
+
+    expect(screen.getByText('Bass')).toBeTruthy();
+    expect(screen.queryByTestId('edit-lyrics-button')).toBeNull();
+
+    toggleLyrics();
+
+    expect(screen.queryByText('Bass')).toBeNull();
+    expect(screen.getByTestId('edit-lyrics-button')).toBeTruthy();
+
+    toggleLyrics();
+
+    expect(screen.getByText('Bass')).toBeTruthy();
+    expect(screen.queryByTestId('edit-lyrics-button')).toBeNull();
+  });
+
+  it('collapses the BPM/Key header pills while viewing lyrics', async () => {
+    renderLoaded();
+    await waitForMixer();
+    expect(screen.getByText('120 BPM')).toBeTruthy();
+
+    toggleLyrics();
+
+    expect(screen.queryByText('120 BPM')).toBeNull();
+  });
+
+  it('saves lyrics entered through the drawer', async () => {
+    renderLoaded();
+    await waitForMixer();
+    toggleLyrics();
+
+    fireEvent.press(screen.getByTestId('add-lyrics-button'));
+    fireEvent.changeText(screen.getByTestId('lyrics-input'), 'Line one\nLine two');
+    fireEvent.press(screen.getByTestId('save-lyrics-button'));
+
+    expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
+      lyrics: 'Line one\nLine two',
+      lyricsSyncPoints: [],
+    });
+    expect(screen.getByText('Line one')).toBeTruthy();
+  });
+
+  it('tapping a line persists a sync point at the precise playhead', async () => {
+    renderLoaded({ ...threeStemProject, lyrics: 'Line one\nLine two' });
+    await waitForMixer();
+    toggleLyrics();
+
+    fireEvent.press(screen.getByTestId('lyrics-line-1'));
+
+    expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
+      lyricsSyncPoints: [{ lineIndex: 1, timeSec: expect.any(Number) }],
+    });
+  });
+
+  // Neither lyrics text nor a line tap ever touches the audio graph, so
+  // unlike bpm/key edits (gated via transportIsRunning()), both should work
+  // mid-song - same reasoning as markers ("still allows renaming a stem
+  // while playing" above).
+  it('does not block lyrics editing or line-tapping while the transport is playing', async () => {
+    renderLoaded({ ...threeStemProject, lyrics: 'Line one\nLine two' });
+    await waitForMixer();
+    toggleLyrics();
+    audioEngine.play();
+
+    fireEvent.press(screen.getByTestId('lyrics-line-0'));
+    fireEvent.press(screen.getByTestId('edit-lyrics-button'));
+    fireEvent.changeText(screen.getByTestId('lyrics-input'), 'Edited live');
+    fireEvent.press(screen.getByTestId('save-lyrics-button'));
+
+    expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
+      lyricsSyncPoints: [{ lineIndex: 0, timeSec: expect.any(Number) }],
+    });
+    expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
+      lyrics: 'Edited live',
+      lyricsSyncPoints: [],
+    });
+    expect(audioEngine.getTransportState()).toBe('playing');
+    audioEngine.stop();
+  });
+});
+
 describe('ProjectScreen - editing in place', () => {
   function renderEditable() {
     mockParams = { projectId: 'my-song' };
