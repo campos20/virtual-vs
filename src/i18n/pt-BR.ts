@@ -128,6 +128,9 @@ export const ptBR: TranslationDictionary = {
     syncCount: (count: number) =>
       `${count} linha${count === 1 ? '' : 's'} sincronizada${count === 1 ? '' : 's'}`,
     clearSync: 'Limpar sincronização',
+    sync: 'Sincronizar',
+    syncHeading: 'Toque para Sincronizar',
+    remove: 'Remover',
   },
   nowPlaying: {
     heading: 'Tocando Agora',

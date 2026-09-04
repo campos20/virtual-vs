@@ -7,7 +7,7 @@ function renderLyrics(overrides: Partial<React.ComponentProps<typeof LyricsView>
   const onTapLine = jest.fn();
   const onFontSizeChange = jest.fn();
   const onAllCapsChange = jest.fn();
-  const onClearSync = jest.fn();
+  const onOpenSync = jest.fn();
   renderWithStore(
     <LyricsView
       lyrics=""
@@ -20,11 +20,11 @@ function renderLyrics(overrides: Partial<React.ComponentProps<typeof LyricsView>
       onTapLine={onTapLine}
       onFontSizeChange={onFontSizeChange}
       onAllCapsChange={onAllCapsChange}
-      onClearSync={onClearSync}
+      onOpenSync={onOpenSync}
       {...overrides}
     />
   );
-  return { onEdit, onTapLine, onFontSizeChange, onAllCapsChange, onClearSync };
+  return { onEdit, onTapLine, onFontSizeChange, onAllCapsChange, onOpenSync };
 }
 
 describe('LyricsView', () => {
@@ -67,28 +67,31 @@ describe('LyricsView', () => {
     expect(onEdit).toHaveBeenCalled();
   });
 
-  it('shows the tap hint before any line has been tapped', () => {
+  // The main reading view stays free of sync chrome now - counter/clear
+  // moved into LyricsSyncDrawer, opened via the toolbar's Sync button.
+  it('keeps the main view free of any inline sync hint or status', () => {
     renderLyrics({ lyrics: 'Line one', syncPoints: [] });
-
-    expect(screen.getByText('Tap a line to fine-tune sync')).toBeTruthy();
-  });
-
-  it('hides the tap hint once a sync point exists', () => {
-    renderLyrics({ lyrics: 'Line one', syncPoints: [{ lineIndex: 0, timeSec: 1 }] });
-
     expect(screen.queryByText('Tap a line to fine-tune sync')).toBeNull();
-  });
-
-  it('shows a sync indicator once taps exist, and not before', () => {
-    renderLyrics({ lyrics: 'Line one', syncPoints: [] });
-    expect(screen.queryByTestId('lyrics-sync-status')).toBeNull();
 
     renderLyrics({ lyrics: 'Line one', syncPoints: [{ lineIndex: 0, timeSec: 1 }] });
-    expect(screen.getByTestId('lyrics-sync-status')).toBeTruthy();
-    expect(screen.getByText('1 line synced')).toBeTruthy();
+    expect(screen.queryByText('1 line synced')).toBeNull();
   });
 
-  it('pluralizes the sync count for more than one tap', () => {
+  it('opens the sync drawer from the toolbar Sync button', () => {
+    const { onOpenSync } = renderLyrics({ lyrics: 'Line one' });
+
+    fireEvent.press(screen.getByTestId('open-lyrics-sync-button'));
+
+    expect(onOpenSync).toHaveBeenCalled();
+  });
+
+  it('shows no sync badge until a line has been tapped', () => {
+    renderLyrics({ lyrics: 'Line one', syncPoints: [] });
+
+    expect(screen.queryByTestId('lyrics-sync-badge')).toBeNull();
+  });
+
+  it('badges the Sync button with the tap count once taps exist', () => {
     renderLyrics({
       lyrics: 'Line one\nLine two',
       syncPoints: [
@@ -97,18 +100,8 @@ describe('LyricsView', () => {
       ],
     });
 
-    expect(screen.getByText('2 lines synced')).toBeTruthy();
-  });
-
-  it('clears every sync point when Clear is pressed', () => {
-    const { onClearSync } = renderLyrics({
-      lyrics: 'Line one',
-      syncPoints: [{ lineIndex: 0, timeSec: 1 }],
-    });
-
-    fireEvent.press(screen.getByTestId('lyrics-clear-sync-button'));
-
-    expect(onClearSync).toHaveBeenCalled();
+    expect(screen.getByTestId('lyrics-sync-badge')).toBeTruthy();
+    expect(screen.getByText('2')).toBeTruthy();
   });
 
   it('steps the font size up and down, clamped at the configured bounds', () => {

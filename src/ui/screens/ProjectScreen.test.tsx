@@ -416,22 +416,33 @@ describe('ProjectScreen - lyrics', () => {
     });
   });
 
-  it('shows the sync indicator after a tap and clears every sync point on Clear', async () => {
+  it('badges the Sync button, and the drawer lists, removes and clears sync points', async () => {
     renderLoaded({
       ...threeStemProject,
       lyrics: 'Line one\nLine two',
-      lyricsSyncPoints: [{ lineIndex: 0, timeSec: 1 }],
+      lyricsSyncPoints: [
+        { lineIndex: 0, timeSec: 1 },
+        { lineIndex: 1, timeSec: 5 },
+      ],
     });
     await waitForMixer();
     toggleLyrics();
-    expect(screen.getByTestId('lyrics-sync-status')).toBeTruthy();
+    expect(screen.getByTestId('lyrics-sync-badge')).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId('lyrics-clear-sync-button'));
+    fireEvent.press(screen.getByTestId('open-lyrics-sync-button'));
+    expect(screen.getByTestId('remove-sync-0')).toBeTruthy();
+    expect(screen.getByTestId('remove-sync-1')).toBeTruthy();
 
+    fireEvent.press(screen.getByTestId('remove-sync-0'));
+    expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
+      lyricsSyncPoints: [{ lineIndex: 1, timeSec: 5 }],
+    });
+
+    fireEvent.press(screen.getByTestId('clear-all-sync-button'));
     expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
       lyricsSyncPoints: [],
     });
-    expect(screen.queryByTestId('lyrics-sync-status')).toBeNull();
+    expect(screen.queryByTestId('lyrics-sync-badge')).toBeNull();
   });
 
   // Neither lyrics text nor a line tap ever touches the audio graph, so

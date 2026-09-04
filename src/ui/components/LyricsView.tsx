@@ -35,8 +35,8 @@ interface LyricsViewProps {
   onTapLine: (lineIndex: number) => void;
   onFontSizeChange: (fontSizePt: number) => void;
   onAllCapsChange: (allCaps: boolean) => void;
-  /** Discards every tap-to-sync correction, reverting to plain duration-proportional scroll. */
-  onClearSync: () => void;
+  /** Opens the sync management drawer (review/remove individual or all tap-to-sync corrections). */
+  onOpenSync: () => void;
 }
 
 /**
@@ -61,7 +61,7 @@ export function LyricsView({
   onTapLine,
   onFontSizeChange,
   onAllCapsChange,
-  onClearSync,
+  onOpenSync,
 }: LyricsViewProps) {
   const { t } = useTranslation();
   const scrollRef = useRef<ScrollView>(null);
@@ -121,14 +121,29 @@ export function LyricsView({
   return (
     <View style={styles.container} onLayout={handleViewportLayout}>
       <View style={styles.toolbar}>
-        <Pressable
-          onPress={onEdit}
-          hitSlop={8}
-          testID="edit-lyrics-button"
-          style={({ pressed }) => [styles.toolbarButton, pressed && styles.pressed]}
-        >
-          <Text style={styles.toolbarButtonText}>{t.lyrics.edit}</Text>
-        </Pressable>
+        <View style={styles.toolbarGroup}>
+          <Pressable
+            onPress={onEdit}
+            hitSlop={8}
+            testID="edit-lyrics-button"
+            style={({ pressed }) => [styles.toolbarButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.toolbarButtonText}>{t.lyrics.edit}</Text>
+          </Pressable>
+          <Pressable
+            onPress={onOpenSync}
+            hitSlop={8}
+            testID="open-lyrics-sync-button"
+            style={({ pressed }) => [styles.toolbarButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.toolbarButtonText}>{t.lyrics.sync}</Text>
+            {syncPoints.length > 0 && (
+              <View style={styles.syncBadge} testID="lyrics-sync-badge">
+                <Text style={styles.syncBadgeText}>{syncPoints.length}</Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
         <View style={styles.fontControls}>
           <Pressable
             onPress={handleToggleAllCaps}
@@ -174,60 +189,42 @@ export function LyricsView({
           </Pressable>
         </View>
       ) : (
-        <>
-          {syncPoints.length === 0 ? (
-            <Text style={styles.tapHint}>{t.lyrics.tapHint}</Text>
-          ) : (
-            <View style={styles.syncStatusRow} testID="lyrics-sync-status">
-              <View style={styles.syncStatusDot} />
-              <Text style={styles.syncStatusText}>{t.lyrics.syncCount(syncPoints.length)}</Text>
+        <ScrollView
+          ref={scrollRef}
+          scrollEnabled={false}
+          showsVerticalScrollIndicator={false}
+          onContentSizeChange={handleContentSizeChange}
+          contentContainerStyle={styles.linesContainer}
+        >
+          {lines.map((line, index) => {
+            if (line.trim().length === 0) {
+              return <View key={index} style={{ height: fontSizePt * LINE_HEIGHT_RATIO }} />;
+            }
+            return (
               <Pressable
-                onPress={onClearSync}
-                hitSlop={8}
-                testID="lyrics-clear-sync-button"
-                style={({ pressed }) => pressed && styles.pressed}
+                key={index}
+                onPress={() => onTapLine(index)}
+                onLayout={(event) => handleLineLayout(index, event)}
+                testID={`lyrics-line-${index}`}
+                style={({ pressed }) => [styles.line, pressed && styles.pressed]}
               >
-                <Text style={styles.clearSyncText}>{t.lyrics.clearSync}</Text>
-              </Pressable>
-            </View>
-          )}
-          <ScrollView
-            ref={scrollRef}
-            scrollEnabled={false}
-            showsVerticalScrollIndicator={false}
-            onContentSizeChange={handleContentSizeChange}
-            contentContainerStyle={styles.linesContainer}
-          >
-            {lines.map((line, index) => {
-              if (line.trim().length === 0) {
-                return <View key={index} style={{ height: fontSizePt * LINE_HEIGHT_RATIO }} />;
-              }
-              return (
-                <Pressable
-                  key={index}
-                  onPress={() => onTapLine(index)}
-                  onLayout={(event) => handleLineLayout(index, event)}
-                  testID={`lyrics-line-${index}`}
-                  style={({ pressed }) => [styles.line, pressed && styles.pressed]}
+                <Text
+                  style={[
+                    styles.lineText,
+                    {
+                      fontSize: fontSizePt,
+                      lineHeight: fontSizePt * LINE_HEIGHT_RATIO,
+                      textTransform: allCaps ? 'uppercase' : 'none',
+                    },
+                    index === activeLine && styles.lineTextActive,
+                  ]}
                 >
-                  <Text
-                    style={[
-                      styles.lineText,
-                      {
-                        fontSize: fontSizePt,
-                        lineHeight: fontSizePt * LINE_HEIGHT_RATIO,
-                        textTransform: allCaps ? 'uppercase' : 'none',
-                      },
-                      index === activeLine && styles.lineTextActive,
-                    ]}
-                  >
-                    {line}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </>
+                  {line}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       )}
     </View>
   );
@@ -244,7 +241,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
   },
+  toolbarGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
   toolbarButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: spacing.sm,
     paddingVertical: 6,
     borderRadius: radii.pill,
@@ -256,6 +261,20 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontSize: 13,
     fontWeight: '700',
+  },
+  syncBadge: {
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 3,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+  },
+  syncBadgeText: {
+    color: '#0a0a0a',
+    fontSize: 10,
+    fontWeight: '800',
   },
   fontControls: {
     flexDirection: 'row',
@@ -307,34 +326,6 @@ const styles = StyleSheet.create({
   addButtonText: {
     color: '#0a0a0a',
     fontSize: 14,
-    fontWeight: '700',
-  },
-  tapHint: {
-    color: colors.textTertiary,
-    fontSize: 12,
-    textAlign: 'center',
-    paddingBottom: spacing.xs,
-  },
-  syncStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingBottom: spacing.xs,
-  },
-  syncStatusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.accent,
-  },
-  syncStatusText: {
-    color: colors.textTertiary,
-    fontSize: 12,
-  },
-  clearSyncText: {
-    color: colors.danger,
-    fontSize: 12,
     fontWeight: '700',
   },
   linesContainer: {

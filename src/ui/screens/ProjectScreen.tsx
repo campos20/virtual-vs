@@ -49,6 +49,7 @@ import type { LyricsSyncPoint, SectionManifest } from "@/types/project";
 import { HamburgerIcon } from "@/ui/components/HamburgerIcon";
 import { LyricsDrawer } from "@/ui/components/LyricsDrawer";
 import { LyricsIcon } from "@/ui/components/LyricsIcon";
+import { LyricsSyncDrawer } from "@/ui/components/LyricsSyncDrawer";
 import { LyricsView } from "@/ui/components/LyricsView";
 import { MarkerIcon } from "@/ui/components/MarkerIcon";
 import { MarkersDrawer } from "@/ui/components/MarkersDrawer";
@@ -112,6 +113,7 @@ export function ProjectScreen() {
   const [mixerOpen, setMixerOpen] = useState(false);
   const [markersOpen, setMarkersOpen] = useState(false);
   const [lyricsEditorOpen, setLyricsEditorOpen] = useState(false);
+  const [lyricsSyncOpen, setLyricsSyncOpen] = useState(false);
   // A project with no stems can't be played, so it opens straight in edit
   // mode - that is all "creating a project" means here.
   const [editing, setEditing] = useState((entry?.tracks.length ?? 0) === 0);
@@ -326,27 +328,36 @@ export function ProjectScreen() {
     dispatch(persistProjectLyrics(entry.id, lyrics));
   }
 
+  /** Shared commit path for every tap-to-sync change - not gated on playback, same reasoning as persistProjectSections. */
+  function commitLyricsSync(updated: LyricsSyncPoint[]) {
+    if (!entry) return;
+    nowPlayingStore.setLyricsSyncLocal(updated);
+    dispatch(persistProjectLyricsSync(entry.id, updated));
+  }
+
   /**
    * Reads `playheadRef.current` (the precise, un-throttled value) rather
    * than the ~15fps `playheadSec` state, same reasoning handleAddMarker
    * documents for "the exact instant this happened".
    */
   function handleTapLyricsLine(lineIndex: number) {
-    if (!entry || !nowPlaying.manifest) return;
+    if (!nowPlaying.manifest) return;
     const existing = nowPlaying.manifest.lyricsSyncPoints ?? [];
-    const updated: LyricsSyncPoint[] = [
+    commitLyricsSync([
       ...existing.filter((p) => p.lineIndex !== lineIndex),
       { lineIndex, timeSec: playheadRef.current },
-    ];
-    nowPlayingStore.setLyricsSyncLocal(updated);
-    dispatch(persistProjectLyricsSync(entry.id, updated));
+    ]);
   }
 
-  /** Discards every tap-to-sync correction - not gated on playback, same reasoning as handleTapLyricsLine. */
+  /** Discards one line's tap-to-sync correction, opened from the Sync drawer's per-row Remove. */
+  function handleRemoveLyricsSyncPoint(lineIndex: number) {
+    const existing = nowPlaying.manifest?.lyricsSyncPoints ?? [];
+    commitLyricsSync(existing.filter((p) => p.lineIndex !== lineIndex));
+  }
+
+  /** Discards every tap-to-sync correction, reverting to plain duration-proportional scroll. */
   function handleClearLyricsSync() {
-    if (!entry) return;
-    nowPlayingStore.setLyricsSyncLocal([]);
-    dispatch(persistProjectLyricsSync(entry.id, []));
+    commitLyricsSync([]);
   }
 
   function handleLyricsFontSizeChange(fontSizePt: number) {
@@ -728,7 +739,7 @@ export function ProjectScreen() {
             allCaps={lyricsAllCaps}
             onEdit={() => setLyricsEditorOpen(true)}
             onTapLine={handleTapLyricsLine}
-            onClearSync={handleClearLyricsSync}
+            onOpenSync={() => setLyricsSyncOpen(true)}
             onFontSizeChange={handleLyricsFontSizeChange}
             onAllCapsChange={handleLyricsAllCapsChange}
           />
@@ -756,6 +767,15 @@ export function ProjectScreen() {
         onClose={() => setLyricsEditorOpen(false)}
         lyrics={nowPlaying.manifest.lyrics ?? ""}
         onSave={handleSaveLyrics}
+      />
+
+      <LyricsSyncDrawer
+        visible={lyricsSyncOpen}
+        onClose={() => setLyricsSyncOpen(false)}
+        lyrics={nowPlaying.manifest.lyrics ?? ""}
+        syncPoints={nowPlaying.manifest.lyricsSyncPoints ?? []}
+        onRemoveOne={handleRemoveLyricsSyncPoint}
+        onClearAll={handleClearLyricsSync}
       />
 
       <MixerDrawer

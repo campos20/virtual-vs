@@ -118,6 +118,9 @@ export const en = {
     allCaps: 'ALL CAPS',
     syncCount: (count: number) => `${count} line${count === 1 ? '' : 's'} synced`,
     clearSync: 'Clear sync',
+    sync: 'Sync',
+    syncHeading: 'Tap to Sync',
+    remove: 'Remove',
   },
   nowPlaying: {
     heading: 'Now Playing',
