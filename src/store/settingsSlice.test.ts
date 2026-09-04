@@ -4,11 +4,12 @@ import reducer, {
   libraryOrderSet,
   lyricsAllCapsSet,
   lyricsFontSizeSet,
+  lyricsViewActiveSet,
   monitorModeSet,
 } from './settingsSlice';
 
 describe('settingsSlice', () => {
-  it('defaults to split monitor mode, the device locale, the default lyrics font size and mixed-case lyrics', () => {
+  it('defaults to split monitor mode, the device locale, the default lyrics font size, mixed-case lyrics and the waveform view', () => {
     const state = reducer(undefined, { type: '@@INIT' });
     expect(state).toEqual({
       monitorMode: 'split',
@@ -16,6 +17,7 @@ describe('settingsSlice', () => {
       libraryOrder: [],
       lyricsFontSizePt: DEFAULT_LYRICS_FONT_SIZE_PT,
       lyricsAllCaps: false,
+      lyricsViewActive: false,
     });
   });
 
@@ -48,5 +50,10 @@ describe('settingsSlice', () => {
   it('sets the lyrics all-caps display', () => {
     const state = reducer(undefined, lyricsAllCapsSet(true));
     expect(state.lyricsAllCaps).toBe(true);
+  });
+
+  it('sets whether the lyrics view is active', () => {
+    const state = reducer(undefined, lyricsViewActiveSet(true));
+    expect(state.lyricsViewActive).toBe(true);
   });
 });

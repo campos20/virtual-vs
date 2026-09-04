@@ -31,6 +31,8 @@ export interface PersistedAppSettings {
   lyricsFontSizePt?: number;
   /** Whether the lyrics view renders its text in all caps - a reading preference, not a per-song one, same reasoning as `lyricsFontSizePt`. */
   lyricsAllCaps?: boolean;
+  /** Whether ProjectScreen shows the lyrics view instead of the waveform - global so switching songs keeps the view the performer left it on. */
+  lyricsViewActive?: boolean;
 }
 
 const settingsFile = new File(Paths.document, 'settings.json');

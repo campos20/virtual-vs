@@ -35,6 +35,8 @@ interface LyricsViewProps {
   onTapLine: (lineIndex: number) => void;
   onFontSizeChange: (fontSizePt: number) => void;
   onAllCapsChange: (allCaps: boolean) => void;
+  /** Discards every tap-to-sync correction, reverting to plain duration-proportional scroll. */
+  onClearSync: () => void;
 }
 
 /**
@@ -59,6 +61,7 @@ export function LyricsView({
   onTapLine,
   onFontSizeChange,
   onAllCapsChange,
+  onClearSync,
 }: LyricsViewProps) {
   const { t } = useTranslation();
   const scrollRef = useRef<ScrollView>(null);
@@ -172,7 +175,22 @@ export function LyricsView({
         </View>
       ) : (
         <>
-          {syncPoints.length === 0 && <Text style={styles.tapHint}>{t.lyrics.tapHint}</Text>}
+          {syncPoints.length === 0 ? (
+            <Text style={styles.tapHint}>{t.lyrics.tapHint}</Text>
+          ) : (
+            <View style={styles.syncStatusRow} testID="lyrics-sync-status">
+              <View style={styles.syncStatusDot} />
+              <Text style={styles.syncStatusText}>{t.lyrics.syncCount(syncPoints.length)}</Text>
+              <Pressable
+                onPress={onClearSync}
+                hitSlop={8}
+                testID="lyrics-clear-sync-button"
+                style={({ pressed }) => pressed && styles.pressed}
+              >
+                <Text style={styles.clearSyncText}>{t.lyrics.clearSync}</Text>
+              </Pressable>
+            </View>
+          )}
           <ScrollView
             ref={scrollRef}
             scrollEnabled={false}
@@ -296,6 +314,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     paddingBottom: spacing.xs,
+  },
+  syncStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingBottom: spacing.xs,
+  },
+  syncStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.accent,
+  },
+  syncStatusText: {
+    color: colors.textTertiary,
+    fontSize: 12,
+  },
+  clearSyncText: {
+    color: colors.danger,
+    fontSize: 12,
+    fontWeight: '700',
   },
   linesContainer: {
     paddingHorizontal: spacing.lg,

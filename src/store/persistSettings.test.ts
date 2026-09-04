@@ -1,5 +1,10 @@
 import { createStore } from './index';
-import { persistLanguageOverride, persistLyricsAllCaps, persistLyricsFontSize } from './persistSettings';
+import {
+  persistLanguageOverride,
+  persistLyricsAllCaps,
+  persistLyricsFontSize,
+  persistLyricsViewActive,
+} from './persistSettings';
 
 jest.mock('@/storage/appSettings', () => ({
   readAppSettings: jest.fn(() => ({})),
@@ -52,5 +57,16 @@ describe('persistLyricsAllCaps', () => {
 
     expect(store.getState().settings.lyricsAllCaps).toBe(true);
     expect(writeAppSettings).toHaveBeenCalledWith({ lyricsAllCaps: true });
+  });
+});
+
+describe('persistLyricsViewActive', () => {
+  it('sets whether the lyrics view is active and persists it', () => {
+    const store = createStore();
+
+    store.dispatch(persistLyricsViewActive(true));
+
+    expect(store.getState().settings.lyricsViewActive).toBe(true);
+    expect(writeAppSettings).toHaveBeenCalledWith({ lyricsViewActive: true });
   });
 });

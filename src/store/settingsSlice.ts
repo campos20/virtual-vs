@@ -24,6 +24,13 @@ export interface SettingsState {
   lyricsFontSizePt: number;
   /** Whether the lyrics view renders in all caps - a reading preference, not a per-song one, same reasoning as `lyricsFontSizePt`. */
   lyricsAllCaps: boolean;
+  /**
+   * Whether ProjectScreen shows the lyrics view instead of the waveform.
+   * Global rather than per-project so switching songs keeps showing lyrics
+   * if that's the view the performer left it on - it's how they want to
+   * read this set, not something about any one song.
+   */
+  lyricsViewActive: boolean;
 }
 
 const initialState: SettingsState = {
@@ -32,6 +39,7 @@ const initialState: SettingsState = {
   libraryOrder: resolveLibraryOrder(readAppSettings()),
   lyricsFontSizePt: readAppSettings().lyricsFontSizePt ?? DEFAULT_LYRICS_FONT_SIZE_PT,
   lyricsAllCaps: readAppSettings().lyricsAllCaps ?? false,
+  lyricsViewActive: readAppSettings().lyricsViewActive ?? false,
 };
 
 const settingsSlice = createSlice({
@@ -62,6 +70,10 @@ const settingsSlice = createSlice({
     lyricsAllCapsSet(state, action: PayloadAction<boolean>) {
       state.lyricsAllCaps = action.payload;
     },
+    /** State-only, like the above; persisted by the persistLyricsViewActive thunk. */
+    lyricsViewActiveSet(state, action: PayloadAction<boolean>) {
+      state.lyricsViewActive = action.payload;
+    },
   },
 });
 
@@ -71,5 +83,6 @@ export const {
   libraryOrderSet,
   lyricsFontSizeSet,
   lyricsAllCapsSet,
+  lyricsViewActiveSet,
 } = settingsSlice.actions;
 export default settingsSlice.reducer;

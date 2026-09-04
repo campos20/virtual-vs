@@ -116,6 +116,8 @@ export const en = {
     editHint: 'Saving clears any existing tap-to-sync timing, since the lines may no longer match up.',
     tapHint: 'Tap a line to fine-tune sync',
     allCaps: 'ALL CAPS',
+    syncCount: (count: number) => `${count} line${count === 1 ? '' : 's'} synced`,
+    clearSync: 'Clear sync',
   },
   nowPlaying: {
     heading: 'Now Playing',

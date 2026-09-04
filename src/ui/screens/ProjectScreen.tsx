@@ -35,7 +35,11 @@ import {
   persistProjectSections,
 } from "@/store/persistProject";
 import { removeSongFromAllFolders } from "@/store/persistFolders";
-import { persistLyricsAllCaps, persistLyricsFontSize } from "@/store/persistSettings";
+import {
+  persistLyricsAllCaps,
+  persistLyricsFontSize,
+  persistLyricsViewActive,
+} from "@/store/persistSettings";
 import { monitorModeSet } from "@/store/settingsSlice";
 import {
   tracksInitializedForProject,
@@ -87,6 +91,10 @@ export function ProjectScreen() {
   const monitorMode = useAppSelector((s) => s.settings.monitorMode);
   const lyricsFontSizePt = useAppSelector((s) => s.settings.lyricsFontSizePt);
   const lyricsAllCaps = useAppSelector((s) => s.settings.lyricsAllCaps);
+  // Global, not local component state: switching songs (or restarting the
+  // app) should keep showing lyrics if that's the view the performer left
+  // it on, rather than resetting to the waveform on every project mount.
+  const showLyrics = useAppSelector((s) => s.settings.lyricsViewActive);
   // Per-project, and stored in its manifest - a song either runs to a click
   // or it doesn't. Monitor/split stays global: that describes how the
   // headphone splitter is wired, which is the same for every song at a gig.
@@ -103,7 +111,6 @@ export function ProjectScreen() {
   const [error, setError] = useState<string | null>(null);
   const [mixerOpen, setMixerOpen] = useState(false);
   const [markersOpen, setMarkersOpen] = useState(false);
-  const [showLyrics, setShowLyrics] = useState(false);
   const [lyricsEditorOpen, setLyricsEditorOpen] = useState(false);
   // A project with no stems can't be played, so it opens straight in edit
   // mode - that is all "creating a project" means here.
@@ -335,12 +342,23 @@ export function ProjectScreen() {
     dispatch(persistProjectLyricsSync(entry.id, updated));
   }
 
+  /** Discards every tap-to-sync correction - not gated on playback, same reasoning as handleTapLyricsLine. */
+  function handleClearLyricsSync() {
+    if (!entry) return;
+    nowPlayingStore.setLyricsSyncLocal([]);
+    dispatch(persistProjectLyricsSync(entry.id, []));
+  }
+
   function handleLyricsFontSizeChange(fontSizePt: number) {
     dispatch(persistLyricsFontSize(fontSizePt));
   }
 
   function handleLyricsAllCapsChange(allCaps: boolean) {
     dispatch(persistLyricsAllCaps(allCaps));
+  }
+
+  function handleToggleLyricsView() {
+    dispatch(persistLyricsViewActive(!showLyrics));
   }
 
   function handleStartEditing() {
@@ -589,7 +607,7 @@ export function ProjectScreen() {
                 <MarkerIcon />
               </Pressable>
               <Pressable
-                onPress={() => setShowLyrics((v) => !v)}
+                onPress={handleToggleLyricsView}
                 style={({ pressed }) => [styles.mixerButton, pressed && styles.mixerButtonPressed]}
                 hitSlop={8}
                 testID="lyrics-toggle-button"
@@ -710,6 +728,7 @@ export function ProjectScreen() {
             allCaps={lyricsAllCaps}
             onEdit={() => setLyricsEditorOpen(true)}
             onTapLine={handleTapLyricsLine}
+            onClearSync={handleClearLyricsSync}
             onFontSizeChange={handleLyricsFontSizeChange}
             onAllCapsChange={handleLyricsAllCapsChange}
           />

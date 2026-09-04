@@ -125,6 +125,9 @@ export const ptBR: TranslationDictionary = {
     editHint: 'Salvar apaga a sincronização por toque existente, já que as linhas podem não corresponder mais.',
     tapHint: 'Toque em uma linha para ajustar a sincronização',
     allCaps: 'CAIXA ALTA',
+    syncCount: (count: number) =>
+      `${count} linha${count === 1 ? '' : 's'} sincronizada${count === 1 ? '' : 's'}`,
+    clearSync: 'Limpar sincronização',
   },
   nowPlaying: {
     heading: 'Tocando Agora',

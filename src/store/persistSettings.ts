@@ -1,7 +1,12 @@
 import type { Locale } from '@/i18n';
 import { writeAppSettings } from '@/storage/appSettings';
 import type { AppDispatch } from './index';
-import { languageOverrideSet, lyricsAllCapsSet, lyricsFontSizeSet } from './settingsSlice';
+import {
+  languageOverrideSet,
+  lyricsAllCapsSet,
+  lyricsFontSizeSet,
+  lyricsViewActiveSet,
+} from './settingsSlice';
 
 /** Sets the manual language override (or `null` to follow the device locale again) and persists it. */
 export function persistLanguageOverride(locale: Locale | null) {
@@ -24,5 +29,13 @@ export function persistLyricsAllCaps(allCaps: boolean) {
   return (dispatch: AppDispatch) => {
     dispatch(lyricsAllCapsSet(allCaps));
     writeAppSettings({ lyricsAllCaps: allCaps });
+  };
+}
+
+/** Sets whether ProjectScreen shows the lyrics view and persists it - global, so switching songs keeps the view the performer left it on, see appSettings.ts. */
+export function persistLyricsViewActive(active: boolean) {
+  return (dispatch: AppDispatch) => {
+    dispatch(lyricsViewActiveSet(active));
+    writeAppSettings({ lyricsViewActive: active });
   };
 }

@@ -8,6 +8,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "@/i18n";
 import { colors, elevation, radii, spacing } from "@/ui/theme";
 
@@ -52,7 +53,7 @@ export function LyricsDrawer({ visible, onClose, lyrics, onSave }: LyricsDrawerP
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.sheet}>
+      <SafeAreaView edges={["bottom"]} style={styles.sheet}>
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle}>{t.lyrics.heading}</Text>
           <Pressable
@@ -84,7 +85,7 @@ export function LyricsDrawer({ visible, onClose, lyrics, onSave }: LyricsDrawerP
         >
           <Text style={styles.saveButtonText}>{t.common.save}</Text>
         </Pressable>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }

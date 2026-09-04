@@ -341,6 +341,43 @@ describe('ProjectScreen - lyrics', () => {
     expect(screen.queryByTestId('edit-lyrics-button')).toBeNull();
   });
 
+  // Global rather than per-screen-mount state: a performer switching songs
+  // mid-set shouldn't have to re-toggle back into the lyrics view every
+  // time, so this simulates "switch songs" as unmounting and remounting
+  // ProjectScreen against the same store with a different project, the way
+  // navigating Library -> a different song's ProjectScreen actually works.
+  it('keeps showing the lyrics view after switching to a different project', async () => {
+    const secondProject: LibraryProjectEntry = {
+      ...threeStemProject,
+      id: 'song-two',
+      title: 'Song Two',
+      sourceDir: 'file:///mock/document/projects/song-two',
+    };
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: threeStemProject,
+      resolveFile: () => 0,
+    });
+    mockParams = { projectId: threeStemProject.id };
+    const store = createStore();
+    store.dispatch(projectAdded(threeStemProject));
+    store.dispatch(projectAdded(secondProject));
+    const { unmount } = renderWithStore(<ProjectScreen />, store);
+    await waitForMixer();
+    toggleLyrics();
+    expect(screen.getByTestId('edit-lyrics-button')).toBeTruthy();
+    unmount();
+
+    mockParams = { projectId: secondProject.id };
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: secondProject,
+      resolveFile: () => 0,
+    });
+    renderWithStore(<ProjectScreen />, store);
+    await waitForMixer();
+
+    expect(screen.getByTestId('edit-lyrics-button')).toBeTruthy();
+  });
+
   it('collapses the BPM/Key header pills while viewing lyrics', async () => {
     renderLoaded();
     await waitForMixer();
@@ -377,6 +414,24 @@ describe('ProjectScreen - lyrics', () => {
     expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
       lyricsSyncPoints: [{ lineIndex: 1, timeSec: expect.any(Number) }],
     });
+  });
+
+  it('shows the sync indicator after a tap and clears every sync point on Clear', async () => {
+    renderLoaded({
+      ...threeStemProject,
+      lyrics: 'Line one\nLine two',
+      lyricsSyncPoints: [{ lineIndex: 0, timeSec: 1 }],
+    });
+    await waitForMixer();
+    toggleLyrics();
+    expect(screen.getByTestId('lyrics-sync-status')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('lyrics-clear-sync-button'));
+
+    expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
+      lyricsSyncPoints: [],
+    });
+    expect(screen.queryByTestId('lyrics-sync-status')).toBeNull();
   });
 
   // Neither lyrics text nor a line tap ever touches the audio graph, so

@@ -1,4 +1,5 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { MonitorMode } from '@/engine';
 import { useTranslation } from '@/i18n';
 import type { ProjectManifest } from '@/types/project';
@@ -60,7 +61,7 @@ export function MixerDrawer({
         accessibilityLabel={t.common.close}
         testID="mixer-drawer-backdrop"
       />
-      <View style={styles.sheet}>
+      <SafeAreaView edges={['bottom']} style={styles.sheet}>
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle}>{t.project.mixer}</Text>
           <View style={styles.sheetHeaderActions}>
@@ -109,7 +110,7 @@ export function MixerDrawer({
             <ChannelStrip key={item.id} projectId={manifest.id} track={item} index={index} />
           ))}
         </ScrollView>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }

@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 interface MarkersDrawerProps {
   visible: boolean;
@@ -89,7 +90,7 @@ export function MarkersDrawer({
         accessibilityLabel={t.common.close}
         testID="markers-drawer-backdrop"
       />
-      <View style={styles.sheet}>
+      <SafeAreaView edges={["bottom"]} style={styles.sheet}>
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle}>{t.markers.heading}</Text>
           <Pressable
@@ -182,7 +183,7 @@ export function MarkersDrawer({
             ))
           )}
         </ScrollView>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }
