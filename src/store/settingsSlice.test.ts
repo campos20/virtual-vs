@@ -2,18 +2,20 @@ import { DEFAULT_LYRICS_FONT_SIZE_PT } from '@/ui/lyricsScroll';
 import reducer, {
   languageOverrideSet,
   libraryOrderSet,
+  lyricsAllCapsSet,
   lyricsFontSizeSet,
   monitorModeSet,
 } from './settingsSlice';
 
 describe('settingsSlice', () => {
-  it('defaults to split monitor mode, the device locale and the default lyrics font size', () => {
+  it('defaults to split monitor mode, the device locale, the default lyrics font size and mixed-case lyrics', () => {
     const state = reducer(undefined, { type: '@@INIT' });
     expect(state).toEqual({
       monitorMode: 'split',
       languageOverride: null,
       libraryOrder: [],
       lyricsFontSizePt: DEFAULT_LYRICS_FONT_SIZE_PT,
+      lyricsAllCaps: false,
     });
   });
 
@@ -41,5 +43,10 @@ describe('settingsSlice', () => {
   it('sets the lyrics font size', () => {
     const state = reducer(undefined, lyricsFontSizeSet(24));
     expect(state.lyricsFontSizePt).toBe(24);
+  });
+
+  it('sets the lyrics all-caps display', () => {
+    const state = reducer(undefined, lyricsAllCapsSet(true));
+    expect(state.lyricsAllCaps).toBe(true);
   });
 });

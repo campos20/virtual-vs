@@ -6,6 +6,7 @@ function renderLyrics(overrides: Partial<React.ComponentProps<typeof LyricsView>
   const onEdit = jest.fn();
   const onTapLine = jest.fn();
   const onFontSizeChange = jest.fn();
+  const onAllCapsChange = jest.fn();
   renderWithStore(
     <LyricsView
       lyrics=""
@@ -13,13 +14,15 @@ function renderLyrics(overrides: Partial<React.ComponentProps<typeof LyricsView>
       durationSec={60}
       playheadSec={0}
       fontSizePt={18}
+      allCaps={false}
       onEdit={onEdit}
       onTapLine={onTapLine}
       onFontSizeChange={onFontSizeChange}
+      onAllCapsChange={onAllCapsChange}
       {...overrides}
     />
   );
-  return { onEdit, onTapLine, onFontSizeChange };
+  return { onEdit, onTapLine, onFontSizeChange, onAllCapsChange };
 }
 
 describe('LyricsView', () => {
@@ -90,5 +93,20 @@ describe('LyricsView', () => {
     fireEvent.press(screen.getByTestId('lyrics-font-increase'));
 
     expect(onFontSizeChange).toHaveBeenCalledWith(30);
+  });
+
+  it('toggles all caps on and off', () => {
+    const { onAllCapsChange } = renderLyrics({ lyrics: 'Line one', allCaps: false });
+
+    fireEvent.press(screen.getByTestId('lyrics-allcaps-toggle'));
+    expect(onAllCapsChange).toHaveBeenCalledWith(true);
+  });
+
+  it('renders line text with an uppercase transform when all caps is on', () => {
+    renderLyrics({ lyrics: 'Line one', allCaps: true });
+
+    const style = screen.getByText('Line one').props.style;
+    const flattened = Array.isArray(style) ? Object.assign({}, ...style.flat(Infinity)) : style;
+    expect(flattened.textTransform).toBe('uppercase');
   });
 });

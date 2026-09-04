@@ -404,6 +404,17 @@ describe('ProjectScreen - lyrics', () => {
     expect(audioEngine.getTransportState()).toBe('playing');
     audioEngine.stop();
   });
+
+  it('toggles all-caps and persists it globally, not on the project', async () => {
+    renderLoaded({ ...threeStemProject, lyrics: 'Line one' });
+    await waitForMixer();
+    toggleLyrics();
+
+    fireEvent.press(screen.getByTestId('lyrics-allcaps-toggle'));
+
+    // A settings write, never a project manifest write.
+    expect(patchManifestMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('ProjectScreen - editing in place', () => {

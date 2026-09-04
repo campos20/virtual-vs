@@ -1,5 +1,5 @@
 import { createStore } from './index';
-import { persistLanguageOverride, persistLyricsFontSize } from './persistSettings';
+import { persistLanguageOverride, persistLyricsAllCaps, persistLyricsFontSize } from './persistSettings';
 
 jest.mock('@/storage/appSettings', () => ({
   readAppSettings: jest.fn(() => ({})),
@@ -41,5 +41,16 @@ describe('persistLyricsFontSize', () => {
 
     expect(store.getState().settings.lyricsFontSizePt).toBe(24);
     expect(writeAppSettings).toHaveBeenCalledWith({ lyricsFontSizePt: 24 });
+  });
+});
+
+describe('persistLyricsAllCaps', () => {
+  it('sets all-caps and persists it', () => {
+    const store = createStore();
+
+    store.dispatch(persistLyricsAllCaps(true));
+
+    expect(store.getState().settings.lyricsAllCaps).toBe(true);
+    expect(writeAppSettings).toHaveBeenCalledWith({ lyricsAllCaps: true });
   });
 });
