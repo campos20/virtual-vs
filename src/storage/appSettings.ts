@@ -29,6 +29,8 @@ export interface PersistedAppSettings {
    * than on any one project's manifest.
    */
   lyricsFontSizePt?: number;
+  /** Whether the lyrics view renders its text in all caps - a reading preference, not a per-song one, same reasoning as `lyricsFontSizePt`. */
+  lyricsAllCaps?: boolean;
 }
 
 const settingsFile = new File(Paths.document, 'settings.json');

@@ -124,6 +124,7 @@ export const ptBR: TranslationDictionary = {
     editPlaceholder: 'Digite ou cole a letra…',
     editHint: 'Salvar apaga a sincronização por toque existente, já que as linhas podem não corresponder mais.',
     tapHint: 'Toque em uma linha para ajustar a sincronização',
+    allCaps: 'CAIXA ALTA',
   },
   nowPlaying: {
     heading: 'Tocando Agora',

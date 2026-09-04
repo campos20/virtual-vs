@@ -115,6 +115,7 @@ export const en = {
     editPlaceholder: 'Type or paste the lyrics…',
     editHint: 'Saving clears any existing tap-to-sync timing, since the lines may no longer match up.',
     tapHint: 'Tap a line to fine-tune sync',
+    allCaps: 'ALL CAPS',
   },
   nowPlaying: {
     heading: 'Now Playing',

@@ -29,10 +29,12 @@ interface LyricsViewProps {
   durationSec: number;
   playheadSec: number;
   fontSizePt: number;
+  allCaps: boolean;
   onEdit: () => void;
   /** A non-blank line was tapped - the caller records `{ lineIndex, timeSec: playheadRef.current }`. */
   onTapLine: (lineIndex: number) => void;
   onFontSizeChange: (fontSizePt: number) => void;
+  onAllCapsChange: (allCaps: boolean) => void;
 }
 
 /**
@@ -52,9 +54,11 @@ export function LyricsView({
   durationSec,
   playheadSec,
   fontSizePt,
+  allCaps,
   onEdit,
   onTapLine,
   onFontSizeChange,
+  onAllCapsChange,
 }: LyricsViewProps) {
   const { t } = useTranslation();
   const scrollRef = useRef<ScrollView>(null);
@@ -107,6 +111,10 @@ export function LyricsView({
     onFontSizeChange(clampLyricsFontSize(fontSizePt + LYRICS_FONT_SIZE_STEP_PT));
   }
 
+  function handleToggleAllCaps() {
+    onAllCapsChange(!allCaps);
+  }
+
   return (
     <View style={styles.container} onLayout={handleViewportLayout}>
       <View style={styles.toolbar}>
@@ -119,6 +127,19 @@ export function LyricsView({
           <Text style={styles.toolbarButtonText}>{t.lyrics.edit}</Text>
         </Pressable>
         <View style={styles.fontControls}>
+          <Pressable
+            onPress={handleToggleAllCaps}
+            hitSlop={8}
+            testID="lyrics-allcaps-toggle"
+            accessibilityLabel={t.lyrics.allCaps}
+            style={({ pressed }) => [
+              styles.fontButton,
+              allCaps && styles.fontButtonActive,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[styles.fontButtonText, allCaps && styles.fontButtonTextActive]}>ABC</Text>
+          </Pressable>
           <Pressable
             onPress={handleFontDecrease}
             hitSlop={8}
@@ -174,7 +195,11 @@ export function LyricsView({
                   <Text
                     style={[
                       styles.lineText,
-                      { fontSize: fontSizePt, lineHeight: fontSizePt * LINE_HEIGHT_RATIO },
+                      {
+                        fontSize: fontSizePt,
+                        lineHeight: fontSizePt * LINE_HEIGHT_RATIO,
+                        textTransform: allCaps ? 'uppercase' : 'none',
+                      },
                       index === activeLine && styles.lineTextActive,
                     ]}
                   >
@@ -232,6 +257,13 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 13,
     fontWeight: '700',
+  },
+  fontButtonActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  fontButtonTextActive: {
+    color: '#0a0a0a',
   },
   pressed: {
     opacity: 0.7,

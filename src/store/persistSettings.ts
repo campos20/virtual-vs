@@ -1,7 +1,7 @@
 import type { Locale } from '@/i18n';
 import { writeAppSettings } from '@/storage/appSettings';
 import type { AppDispatch } from './index';
-import { languageOverrideSet, lyricsFontSizeSet } from './settingsSlice';
+import { languageOverrideSet, lyricsAllCapsSet, lyricsFontSizeSet } from './settingsSlice';
 
 /** Sets the manual language override (or `null` to follow the device locale again) and persists it. */
 export function persistLanguageOverride(locale: Locale | null) {
@@ -16,5 +16,13 @@ export function persistLyricsFontSize(sizePt: number) {
   return (dispatch: AppDispatch) => {
     dispatch(lyricsFontSizeSet(sizePt));
     writeAppSettings({ lyricsFontSizePt: sizePt });
+  };
+}
+
+/** Sets the lyrics view's all-caps display and persists it - a reading preference, not a per-project one, see appSettings.ts. */
+export function persistLyricsAllCaps(allCaps: boolean) {
+  return (dispatch: AppDispatch) => {
+    dispatch(lyricsAllCapsSet(allCaps));
+    writeAppSettings({ lyricsAllCaps: allCaps });
   };
 }

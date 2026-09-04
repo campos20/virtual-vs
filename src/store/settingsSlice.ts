@@ -22,6 +22,8 @@ export interface SettingsState {
   libraryOrder: string[];
   /** The lyrics view's text size, in points - a performer/device preference, not a per-song one. See appSettings.ts. */
   lyricsFontSizePt: number;
+  /** Whether the lyrics view renders in all caps - a reading preference, not a per-song one, same reasoning as `lyricsFontSizePt`. */
+  lyricsAllCaps: boolean;
 }
 
 const initialState: SettingsState = {
@@ -29,6 +31,7 @@ const initialState: SettingsState = {
   languageOverride: readAppSettings().languageOverride ?? null,
   libraryOrder: resolveLibraryOrder(readAppSettings()),
   lyricsFontSizePt: readAppSettings().lyricsFontSizePt ?? DEFAULT_LYRICS_FONT_SIZE_PT,
+  lyricsAllCaps: readAppSettings().lyricsAllCaps ?? false,
 };
 
 const settingsSlice = createSlice({
@@ -55,9 +58,18 @@ const settingsSlice = createSlice({
     lyricsFontSizeSet(state, action: PayloadAction<number>) {
       state.lyricsFontSizePt = action.payload;
     },
+    /** State-only, like the above; persisted by the persistLyricsAllCaps thunk. */
+    lyricsAllCapsSet(state, action: PayloadAction<boolean>) {
+      state.lyricsAllCaps = action.payload;
+    },
   },
 });
 
-export const { monitorModeSet, languageOverrideSet, libraryOrderSet, lyricsFontSizeSet } =
-  settingsSlice.actions;
+export const {
+  monitorModeSet,
+  languageOverrideSet,
+  libraryOrderSet,
+  lyricsFontSizeSet,
+  lyricsAllCapsSet,
+} = settingsSlice.actions;
 export default settingsSlice.reducer;

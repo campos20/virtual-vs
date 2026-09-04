@@ -35,7 +35,7 @@ import {
   persistProjectSections,
 } from "@/store/persistProject";
 import { removeSongFromAllFolders } from "@/store/persistFolders";
-import { persistLyricsFontSize } from "@/store/persistSettings";
+import { persistLyricsAllCaps, persistLyricsFontSize } from "@/store/persistSettings";
 import { monitorModeSet } from "@/store/settingsSlice";
 import {
   tracksInitializedForProject,
@@ -86,6 +86,7 @@ export function ProjectScreen() {
   );
   const monitorMode = useAppSelector((s) => s.settings.monitorMode);
   const lyricsFontSizePt = useAppSelector((s) => s.settings.lyricsFontSizePt);
+  const lyricsAllCaps = useAppSelector((s) => s.settings.lyricsAllCaps);
   // Per-project, and stored in its manifest - a song either runs to a click
   // or it doesn't. Monitor/split stays global: that describes how the
   // headphone splitter is wired, which is the same for every song at a gig.
@@ -336,6 +337,10 @@ export function ProjectScreen() {
 
   function handleLyricsFontSizeChange(fontSizePt: number) {
     dispatch(persistLyricsFontSize(fontSizePt));
+  }
+
+  function handleLyricsAllCapsChange(allCaps: boolean) {
+    dispatch(persistLyricsAllCaps(allCaps));
   }
 
   function handleStartEditing() {
@@ -702,9 +707,11 @@ export function ProjectScreen() {
             durationSec={nowPlaying.durationSec}
             playheadSec={playheadSec}
             fontSizePt={lyricsFontSizePt}
+            allCaps={lyricsAllCaps}
             onEdit={() => setLyricsEditorOpen(true)}
             onTapLine={handleTapLyricsLine}
             onFontSizeChange={handleLyricsFontSizeChange}
+            onAllCapsChange={handleLyricsAllCapsChange}
           />
         ) : (
           <WaveformView
