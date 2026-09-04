@@ -106,6 +106,16 @@ export const en = {
     presetA: 'A',
     presetB: 'B',
   },
+  lyrics: {
+    heading: 'Lyrics',
+    toggleLabel: 'Lyrics',
+    emptyText: 'No lyrics yet.',
+    addLyrics: 'Add lyrics',
+    edit: 'Edit',
+    editPlaceholder: 'Type or paste the lyrics…',
+    editHint: 'Saving clears any existing tap-to-sync timing, since the lines may no longer match up.',
+    tapHint: 'Tap a line to fine-tune sync',
+  },
   nowPlaying: {
     heading: 'Now Playing',
     goToSong: (title: string) => `Now playing: ${title}. Go to song.`,

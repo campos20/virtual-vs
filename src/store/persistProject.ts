@@ -1,5 +1,5 @@
 import { patchProjectManifest } from '@/storage';
-import type { ProjectManifest, SectionManifest, TrackManifest } from '@/types/project';
+import type { LyricsSyncPoint, ProjectManifest, SectionManifest, TrackManifest } from '@/types/project';
 import type { AppDispatch, RootState } from './index';
 import { projectUpdated, projectsSelectors } from './projectsSlice';
 import { trackEntityId, tracksSelectors } from './tracksSlice';
@@ -64,6 +64,39 @@ export function persistProjectSections(projectId: string, sections: SectionManif
     dispatch(projectUpdated({ id: projectId, changes: { sections } }));
     if (!entry?.sourceDir) return;
     writeManifest(entry.sourceDir, { sections });
+  };
+}
+
+/**
+ * Persists a project's lyrics text. Not gated on the transport running:
+ * like a marker or a stem rename, this only rewrites data in the manifest
+ * and never touches the audio graph, so editing lyrics mid-song is safe.
+ *
+ * Resets `lyricsSyncPoints` to empty - a line count/order change in the new
+ * text can make old per-line tap timings point at the wrong line, so they're
+ * discarded rather than silently misapplied. See persistProjectLyricsSync
+ * for the (separate, much more frequent) tap-correction writes.
+ */
+export function persistProjectLyrics(projectId: string, lyrics: string) {
+  return (dispatch: AppDispatch, getState: () => RootState) => {
+    const entry = projectsSelectors.selectById(getState().projects, projectId);
+    dispatch(projectUpdated({ id: projectId, changes: { lyrics, lyricsSyncPoints: [] } }));
+    if (!entry?.sourceDir) return;
+    writeManifest(entry.sourceDir, { lyrics, lyricsSyncPoints: [] });
+  };
+}
+
+/**
+ * Persists the lyrics view's tap-to-correct sync points. Not gated on the
+ * transport running - tapping a line to fix its timing is meant to work
+ * mid-song, same reasoning as persistProjectSections.
+ */
+export function persistProjectLyricsSync(projectId: string, syncPoints: LyricsSyncPoint[]) {
+  return (dispatch: AppDispatch, getState: () => RootState) => {
+    const entry = projectsSelectors.selectById(getState().projects, projectId);
+    dispatch(projectUpdated({ id: projectId, changes: { lyricsSyncPoints: syncPoints } }));
+    if (!entry?.sourceDir) return;
+    writeManifest(entry.sourceDir, { lyricsSyncPoints: syncPoints });
   };
 }
 

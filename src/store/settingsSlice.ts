@@ -2,6 +2,7 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import type { MonitorMode } from '@/engine';
 import type { Locale } from '@/i18n';
 import { readAppSettings } from '@/storage/appSettings';
+import { DEFAULT_LYRICS_FONT_SIZE_PT } from '@/ui/lyricsScroll';
 import { resolveLibraryOrder } from '@/ui/libraryTree';
 
 export interface SettingsState {
@@ -19,12 +20,15 @@ export interface SettingsState {
    * old project-only order did, because folders aren't projects.
    */
   libraryOrder: string[];
+  /** The lyrics view's text size, in points - a performer/device preference, not a per-song one. See appSettings.ts. */
+  lyricsFontSizePt: number;
 }
 
 const initialState: SettingsState = {
   monitorMode: 'split',
   languageOverride: readAppSettings().languageOverride ?? null,
   libraryOrder: resolveLibraryOrder(readAppSettings()),
+  lyricsFontSizePt: readAppSettings().lyricsFontSizePt ?? DEFAULT_LYRICS_FONT_SIZE_PT,
 };
 
 const settingsSlice = createSlice({
@@ -47,8 +51,13 @@ const settingsSlice = createSlice({
     libraryOrderSet(state, action: PayloadAction<string[]>) {
       state.libraryOrder = action.payload;
     },
+    /** State-only, like the above; persisted by the persistLyricsFontSize thunk. */
+    lyricsFontSizeSet(state, action: PayloadAction<number>) {
+      state.lyricsFontSizePt = action.payload;
+    },
   },
 });
 
-export const { monitorModeSet, languageOverrideSet, libraryOrderSet } = settingsSlice.actions;
+export const { monitorModeSet, languageOverrideSet, libraryOrderSet, lyricsFontSizeSet } =
+  settingsSlice.actions;
 export default settingsSlice.reducer;

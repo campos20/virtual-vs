@@ -23,6 +23,12 @@ export interface PersistedAppSettings {
    * manifest, next to the membership it belongs to.
    */
   libraryOrder?: string[];
+  /**
+   * The lyrics view's text size, in points - a performer/device preference
+   * (eyesight, stage distance), not a per-song one, so it lives here rather
+   * than on any one project's manifest.
+   */
+  lyricsFontSizePt?: number;
 }
 
 const settingsFile = new File(Paths.document, 'settings.json');

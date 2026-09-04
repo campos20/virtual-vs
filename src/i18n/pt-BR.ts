@@ -115,6 +115,16 @@ export const ptBR: TranslationDictionary = {
     presetA: 'A',
     presetB: 'B',
   },
+  lyrics: {
+    heading: 'Letra',
+    toggleLabel: 'Letra',
+    emptyText: 'Ainda não há letra.',
+    addLyrics: 'Adicionar letra',
+    edit: 'Editar',
+    editPlaceholder: 'Digite ou cole a letra…',
+    editHint: 'Salvar apaga a sincronização por toque existente, já que as linhas podem não corresponder mais.',
+    tapHint: 'Toque em uma linha para ajustar a sincronização',
+  },
   nowPlaying: {
     heading: 'Tocando Agora',
     goToSong: (title: string) => `Tocando agora: ${title}. Ir para a música.`,

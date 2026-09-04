@@ -28,15 +28,24 @@ import {
 } from "@/storage";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { projectRemoved, projectUpdated, projectsSelectors } from "@/store/projectsSlice";
-import { persistProjectClick, persistProjectSections } from "@/store/persistProject";
+import {
+  persistProjectClick,
+  persistProjectLyrics,
+  persistProjectLyricsSync,
+  persistProjectSections,
+} from "@/store/persistProject";
 import { removeSongFromAllFolders } from "@/store/persistFolders";
+import { persistLyricsFontSize } from "@/store/persistSettings";
 import { monitorModeSet } from "@/store/settingsSlice";
 import {
   tracksInitializedForProject,
   tracksRemovedForProject,
 } from "@/store/tracksSlice";
-import type { SectionManifest } from "@/types/project";
+import type { LyricsSyncPoint, SectionManifest } from "@/types/project";
 import { HamburgerIcon } from "@/ui/components/HamburgerIcon";
+import { LyricsDrawer } from "@/ui/components/LyricsDrawer";
+import { LyricsIcon } from "@/ui/components/LyricsIcon";
+import { LyricsView } from "@/ui/components/LyricsView";
 import { MarkerIcon } from "@/ui/components/MarkerIcon";
 import { MarkersDrawer } from "@/ui/components/MarkersDrawer";
 import { MixerDrawer } from "@/ui/components/MixerDrawer";
@@ -76,6 +85,7 @@ export function ProjectScreen() {
     projectId ? projectsSelectors.selectById(s.projects, projectId) : undefined,
   );
   const monitorMode = useAppSelector((s) => s.settings.monitorMode);
+  const lyricsFontSizePt = useAppSelector((s) => s.settings.lyricsFontSizePt);
   // Per-project, and stored in its manifest - a song either runs to a click
   // or it doesn't. Monitor/split stays global: that describes how the
   // headphone splitter is wired, which is the same for every song at a gig.
@@ -92,6 +102,8 @@ export function ProjectScreen() {
   const [error, setError] = useState<string | null>(null);
   const [mixerOpen, setMixerOpen] = useState(false);
   const [markersOpen, setMarkersOpen] = useState(false);
+  const [showLyrics, setShowLyrics] = useState(false);
+  const [lyricsEditorOpen, setLyricsEditorOpen] = useState(false);
   // A project with no stems can't be played, so it opens straight in edit
   // mode - that is all "creating a project" means here.
   const [editing, setEditing] = useState((entry?.tracks.length ?? 0) === 0);
@@ -292,6 +304,38 @@ export function ProjectScreen() {
   function handleJumpToMarker(startSec: number) {
     audioEngine.seek(startSec);
     setMarkersOpen(false);
+  }
+
+  /**
+   * Not gated on `transportIsRunning()`, unlike the ProjectForm/reload path:
+   * lyrics text never touches decode or the click track, so there's no
+   * reason a performer fixing a typo mid-song should be blocked - same
+   * reasoning persistProjectSections/handleAddMarker already establish.
+   */
+  function handleSaveLyrics(lyrics: string) {
+    if (!entry) return;
+    nowPlayingStore.setLyricsLocal(lyrics);
+    dispatch(persistProjectLyrics(entry.id, lyrics));
+  }
+
+  /**
+   * Reads `playheadRef.current` (the precise, un-throttled value) rather
+   * than the ~15fps `playheadSec` state, same reasoning handleAddMarker
+   * documents for "the exact instant this happened".
+   */
+  function handleTapLyricsLine(lineIndex: number) {
+    if (!entry || !nowPlaying.manifest) return;
+    const existing = nowPlaying.manifest.lyricsSyncPoints ?? [];
+    const updated: LyricsSyncPoint[] = [
+      ...existing.filter((p) => p.lineIndex !== lineIndex),
+      { lineIndex, timeSec: playheadRef.current },
+    ];
+    nowPlayingStore.setLyricsSyncLocal(updated);
+    dispatch(persistProjectLyricsSync(entry.id, updated));
+  }
+
+  function handleLyricsFontSizeChange(fontSizePt: number) {
+    dispatch(persistLyricsFontSize(fontSizePt));
   }
 
   function handleStartEditing() {
@@ -515,8 +559,17 @@ export function ProjectScreen() {
   const headerTitle = (isCurrent ? nowPlaying.manifest?.title : undefined) ?? entry?.title ?? "";
 
   function renderHeader() {
+    // Collapsed while viewing lyrics, to give the auto-scrolling text as
+    // much of the screen as it reasonably can: the BPM/Key pills are purely
+    // decorative once the user is reading lyrics, and the title shrinks to
+    // a compact single line. The back button and the action icon row are
+    // unchanged either way - those are controls still needed while reading
+    // lyrics. No animation on the switch, matching AGENTS.md's
+    // `animation: 'none'` precedent - an abrupt layout change here avoids
+    // any transition-timing complexity for what is otherwise a plain toggle.
+    const compact = showLyrics;
     return (
-      <View style={styles.header}>
+      <View style={[styles.header, compact && styles.headerCompact]}>
         <View style={styles.headerTopRow}>
           <BackButton label={t.project.backToLibrary} onPress={handleBackFromProject} testID="back-button" />
           {isCurrent && nowPlaying.manifest && !editing && (
@@ -531,6 +584,15 @@ export function ProjectScreen() {
                 <MarkerIcon />
               </Pressable>
               <Pressable
+                onPress={() => setShowLyrics((v) => !v)}
+                style={({ pressed }) => [styles.mixerButton, pressed && styles.mixerButtonPressed]}
+                hitSlop={8}
+                testID="lyrics-toggle-button"
+                accessibilityLabel={t.lyrics.toggleLabel}
+              >
+                <LyricsIcon />
+              </Pressable>
+              <Pressable
                 onPress={() => setMixerOpen(true)}
                 style={({ pressed }) => [styles.mixerButton, pressed && styles.mixerButtonPressed]}
                 hitSlop={8}
@@ -542,8 +604,10 @@ export function ProjectScreen() {
             </View>
           )}
         </View>
-        <Text style={styles.title}>{headerTitle}</Text>
-        {isCurrent && nowPlaying.manifest && !editing && (
+        <Text style={[styles.title, compact && styles.titleCompact]} numberOfLines={1}>
+          {headerTitle}
+        </Text>
+        {isCurrent && nowPlaying.manifest && !editing && !compact && (
           <View style={styles.subtitleRow}>
             {nowPlaying.manifest.bpm !== undefined && (
               <View style={styles.subtitlePill}>
@@ -631,11 +695,24 @@ export function ProjectScreen() {
       {renderHeader()}
 
       <View style={styles.waveformArea}>
-        <WaveformView
-          tracks={nowPlaying.waveformTracks}
-          durationSec={nowPlaying.durationSec}
-          playheadSec={playheadSec}
-        />
+        {showLyrics ? (
+          <LyricsView
+            lyrics={nowPlaying.manifest.lyrics ?? ""}
+            syncPoints={nowPlaying.manifest.lyricsSyncPoints ?? []}
+            durationSec={nowPlaying.durationSec}
+            playheadSec={playheadSec}
+            fontSizePt={lyricsFontSizePt}
+            onEdit={() => setLyricsEditorOpen(true)}
+            onTapLine={handleTapLyricsLine}
+            onFontSizeChange={handleLyricsFontSizeChange}
+          />
+        ) : (
+          <WaveformView
+            tracks={nowPlaying.waveformTracks}
+            durationSec={nowPlaying.durationSec}
+            playheadSec={playheadSec}
+          />
+        )}
       </View>
 
       <MarkersDrawer
@@ -646,6 +723,13 @@ export function ProjectScreen() {
         onAdd={handleAddMarker}
         onRemove={handleRemoveMarker}
         onJump={handleJumpToMarker}
+      />
+
+      <LyricsDrawer
+        visible={lyricsEditorOpen}
+        onClose={() => setLyricsEditorOpen(false)}
+        lyrics={nowPlaying.manifest.lyrics ?? ""}
+        onSave={handleSaveLyrics}
       />
 
       <MixerDrawer
@@ -692,6 +776,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
+  // While viewing lyrics: shrinks the header down to just the controls row
+  // and a compact title, reclaiming vertical space for the auto-scrolling
+  // text - see renderHeader's `compact` comment.
+  headerCompact: {
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
+  },
   headerTopRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -703,6 +794,10 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "800",
     letterSpacing: -0.3,
+  },
+  titleCompact: {
+    fontSize: 15,
+    fontWeight: "700",
   },
   subtitleRow: {
     flexDirection: "row",
