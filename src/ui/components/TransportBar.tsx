@@ -11,6 +11,23 @@ interface TransportBarProps {
   onSeek: (seconds: number) => void;
 }
 
+/**
+ * The scrub track and elapsed-time readout are fixed dark, LCD-style
+ * surfaces regardless of theme - like a hardware console's own display, not
+ * part of the app's light/dark chrome (same reasoning `bevelLight`/
+ * `bevelDark` in theme.ts stay fixed). Anything drawn on top of them must
+ * stay fixed too, or it silently loses contrast in light mode: the theme's
+ * `accent`/text colors are recalibrated for a *light* surface, and this
+ * surface is never light. This was the actual cause of the current-time
+ * progress fill (and the readout's own text) going near-invisible in light
+ * mode - both were pulling `colors.*` values meant for a white background
+ * onto a track/readout that's always near-black.
+ */
+const FIXED_DARK_SURFACE_ACCENT = '#208AEF';
+const FIXED_DARK_SURFACE_TEXT_PRIMARY = '#ffffff';
+const FIXED_DARK_SURFACE_TEXT_SECONDARY = '#9b9b9d';
+const FIXED_DARK_SURFACE_TEXT_TERTIARY = '#5f5f63';
+
 function formatTime(totalSeconds: number): string {
   const clamped = Math.max(0, totalSeconds);
   const minutes = Math.floor(clamped / 60);
@@ -55,7 +72,9 @@ export function TransportBar({ isPlaying, playheadSec, durationSec, onPlayPause,
     <View style={styles.container}>
       <View style={styles.scrubTrack} onLayout={handleLayout} {...panResponder.panHandlers}>
         <View style={[styles.scrubFill, { width: progressPercent }]} />
-        <View style={[styles.scrubHead, { left: progressPercent }, isPlaying && glow(colors.accent, 6)]} />
+        <View
+          style={[styles.scrubHead, { left: progressPercent }, isPlaying && glow(FIXED_DARK_SURFACE_ACCENT, 6)]}
+        />
       </View>
 
       <View style={styles.row}>
@@ -107,7 +126,7 @@ function createStyles(colors: ThemeColors) {
   scrubFill: {
     height: '100%',
     borderRadius: radii.pill,
-    backgroundColor: colors.accent,
+    backgroundColor: FIXED_DARK_SURFACE_ACCENT,
   },
   scrubHead: {
     position: 'absolute',
@@ -118,7 +137,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: 8,
     backgroundColor: '#ffffff',
     borderWidth: 2,
-    borderColor: colors.accent,
+    borderColor: FIXED_DARK_SURFACE_ACCENT,
   },
   row: {
     flexDirection: 'row',
@@ -134,17 +153,17 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.bevelDark,
   },
   time: {
-    color: colors.textSecondary,
+    color: FIXED_DARK_SURFACE_TEXT_SECONDARY,
     fontVariant: ['tabular-nums'],
     fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
   },
   timePlayed: {
-    color: colors.textPrimary,
+    color: FIXED_DARK_SURFACE_TEXT_PRIMARY,
   },
   timeSep: {
-    color: colors.textTertiary,
+    color: FIXED_DARK_SURFACE_TEXT_TERTIARY,
   },
   stopButton: {
     width: 46,
@@ -162,7 +181,11 @@ function createStyles(colors: ThemeColors) {
     width: 15,
     height: 15,
     borderRadius: 3,
-    backgroundColor: '#ffffff',
+    // Unlike the fixed-dark surfaces above, `stopButton` itself is
+    // theme-adaptive (`colors.surface`) - a hardcoded white icon here was
+    // invisible against a white button in light mode. `textPrimary` tracks
+    // the button's own background in both themes.
+    backgroundColor: colors.textPrimary,
   },
   playButtonWrap: {
     alignItems: 'center',

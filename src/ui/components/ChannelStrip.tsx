@@ -19,6 +19,15 @@ const BUS_OPTIONS: { value: Bus; label: string }[] = [
   { value: 'both', label: 'L+R' },
 ];
 
+/**
+ * The bus-selector row sits on a fixed dark surface regardless of theme (see
+ * `busRow`'s hardcoded background below) - its inactive label text must stay
+ * fixed too, or it silently loses contrast in light mode, where
+ * `colors.textSecondary` is recalibrated for a *light* surface this one
+ * never is (see TransportBar's identical fix for its elapsed-time readout).
+ */
+const FIXED_DARK_SURFACE_TEXT_SECONDARY = '#9b9b9d';
+
 interface ChannelStripProps {
   projectId: string;
   track: TrackManifest;
@@ -161,7 +170,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'transparent',
   },
   busPillText: {
-    color: colors.textSecondary,
+    color: FIXED_DARK_SURFACE_TEXT_SECONDARY,
     fontSize: 10,
     fontWeight: '700',
   },

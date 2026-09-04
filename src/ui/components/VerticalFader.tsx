@@ -7,6 +7,16 @@ import {
   valueFromDrag,
 } from './faderGesture';
 
+/**
+ * The volume readout sits on a fixed dark, LCD-style surface regardless of
+ * theme (see `readout`'s hardcoded background below) - not part of the
+ * app's light/dark chrome. Its text must stay fixed too, or it silently
+ * loses contrast in light mode, where `colors.textSecondary` is
+ * recalibrated for a *light* surface this one never is (see TransportBar's
+ * identical fix for its elapsed-time readout and scrub-progress fill).
+ */
+const FIXED_DARK_SURFACE_TEXT_SECONDARY = '#9b9b9d';
+
 interface VerticalFaderProps {
   /** Committed value from the store; only reflected while not actively dragging. */
   value: number;
@@ -196,7 +206,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.bevelDark,
   },
   readoutText: {
-    color: colors.textSecondary,
+    color: FIXED_DARK_SURFACE_TEXT_SECONDARY,
     fontSize: 11,
     fontVariant: ['tabular-nums'],
     fontWeight: '700',
