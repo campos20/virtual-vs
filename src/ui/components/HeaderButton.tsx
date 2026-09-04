@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, radii, spacing } from '@/ui/theme';
+import { radii, spacing, useThemeColors, type ThemeColors } from '@/ui/theme';
 
 interface HeaderButtonProps {
   label: string;
@@ -19,6 +20,9 @@ interface HeaderButtonProps {
  * constant.
  */
 export function HeaderButton({ label, onPress, testID, style }: HeaderButtonProps) {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <Pressable
       onPress={onPress}
@@ -31,21 +35,23 @@ export function HeaderButton({ label, onPress, testID, style }: HeaderButtonProp
   );
 }
 
-const styles = StyleSheet.create({
-  button: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radii.pill,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-  },
-  text: {
-    color: colors.accent,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    button: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: 6,
+      borderRadius: radii.pill,
+      backgroundColor: colors.borderLight,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderLight,
+    },
+    text: {
+      color: colors.accent,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+  });
+}

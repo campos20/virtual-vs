@@ -1,8 +1,10 @@
+import { useMemo } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { MonitorMode } from '@/engine';
 import { useTranslation } from '@/i18n';
 import type { ProjectManifest } from '@/types/project';
-import { colors, elevation, radii, spacing } from '@/ui/theme';
+import { elevation, radii, spacing, useThemeColors, type ThemeColors } from '@/ui/theme';
 import { ChannelStrip } from './ChannelStrip';
 import { ClickToggle } from './ClickToggle';
 import { HeaderButton } from './HeaderButton';
@@ -51,6 +53,8 @@ export function MixerDrawer({
   onExport,
 }: MixerDrawerProps) {
   const { t } = useTranslation();
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -60,7 +64,7 @@ export function MixerDrawer({
         accessibilityLabel={t.common.close}
         testID="mixer-drawer-backdrop"
       />
-      <View style={styles.sheet}>
+      <SafeAreaView edges={['bottom']} style={styles.sheet}>
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle}>{t.project.mixer}</Text>
           <View style={styles.sheetHeaderActions}>
@@ -109,12 +113,13 @@ export function MixerDrawer({
             <ChannelStrip key={item.id} projectId={manifest.id} track={item} index={index} />
           ))}
         </ScrollView>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   editLocked: {
     color: colors.textTertiary,
     fontSize: 12,
@@ -154,7 +159,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
     borderRadius: radii.pill,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.borderLight,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
   },
@@ -186,4 +191,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingBottom: spacing.lg,
   },
-});
+  });
+}

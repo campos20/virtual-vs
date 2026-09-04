@@ -1,6 +1,6 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, elevation, radii, spacing } from '@/ui/theme';
+import { elevation, radii, spacing, useThemeColors, type ThemeColors } from '@/ui/theme';
 
 export interface OverflowMenuItem {
   key: string;
@@ -51,6 +51,8 @@ interface OverflowMenuProps {
  * simply "measure, then open").
  */
 export function OverflowMenu({ items, children, align = 'end', accessibilityLabel, testID }: OverflowMenuProps) {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const triggerRef = useRef<View>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [anchor, setAnchor] = useState<Anchor>(() =>
@@ -122,6 +124,9 @@ export function OverflowMenu({ items, children, align = 'end', accessibilityLabe
 
 /** The "..." trigger icon - three dots, drawn with Views rather than a glyph/icon font (see TransportBar for the same convention). */
 export function KebabIcon() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.kebab}>
       <View style={styles.kebabDot} />
@@ -131,7 +136,8 @@ export function KebabIcon() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   pressed: {
     opacity: 0.6,
   },
@@ -142,7 +148,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.borderLight,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
   },
@@ -177,10 +183,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   itemActive: {
+    // Hardcoded to the accent's own rgba form rather than derived per-theme
+    // - a deliberate, bounded cosmetic cut, not an oversight (see the theme
+    // migration notes for AboutScreen's identical linkRow tint).
     backgroundColor: 'rgba(32,138,239,0.12)',
   },
   itemTextActive: {
     color: colors.accent,
     fontWeight: '700',
   },
-});
+  });
+}

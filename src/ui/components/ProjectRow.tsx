@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, elevation, glow, radii, spacing } from '@/ui/theme';
+import { elevation, glow, radii, spacing, useThemeColors, type ThemeColors } from '@/ui/theme';
 import { MoveColumn } from './MoveColumn';
 import { KebabIcon, OverflowMenu, type OverflowMenuItem } from './OverflowMenu';
 
@@ -64,6 +65,9 @@ export function ProjectRow({
   position,
   testID,
 }: ProjectRowProps) {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={[styles.container, nested && styles.nested]}>
       <Pressable
@@ -148,7 +152,8 @@ export function ProjectRow({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     borderRadius: radii.lg,
     backgroundColor: colors.surface,
@@ -212,7 +217,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: radii.pill,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.borderLight,
   },
   metaPillText: {
     color: colors.textSecondary,
@@ -238,4 +243,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: spacing.sm,
   },
-});
+  });
+}

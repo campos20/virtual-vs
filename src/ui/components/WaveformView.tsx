@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { colors } from '@/ui/theme';
+import { useThemeColors, type ThemeColors } from '@/ui/theme';
 import { StemWaveformLane } from './StemWaveformLane';
 
 export interface StemWaveform {
@@ -29,6 +30,9 @@ interface WaveformViewProps {
  * touch scrolling here is exactly what's wanted for browsing stems.
  */
 export function WaveformView({ tracks, durationSec, playheadSec }: WaveformViewProps) {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.lanes}>
@@ -48,21 +52,23 @@ export function WaveformView({ tracks, durationSec, playheadSec }: WaveformViewP
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  lanes: {
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-  },
-  playhead: {
-    position: 'absolute',
-    left: '50%',
-    top: 0,
-    bottom: 0,
-    width: 2,
-    marginLeft: -1,
-    backgroundColor: colors.textPrimary,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+    },
+    lanes: {
+      paddingVertical: 12,
+      paddingHorizontal: 4,
+    },
+    playhead: {
+      position: 'absolute',
+      left: '50%',
+      top: 0,
+      bottom: 0,
+      width: 2,
+      marginLeft: -1,
+      backgroundColor: colors.textPrimary,
+    },
+  });
+}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { WAVEFORM_PIXELS_PER_SECOND } from '@/engine/waveform';
-import { colors } from '@/ui/theme';
+import { useThemeColors, type ThemeColors } from '@/ui/theme';
 
 export const STEM_LANE_BAR_MAX_HEIGHT = 48;
 const MIN_BAR_HEIGHT = 2;
@@ -28,6 +28,8 @@ interface StemWaveformLaneProps {
  * imperative scroll, not a reconciliation of every bar view.
  */
 export function StemWaveformLane({ label, color, peaks, durationSec, playheadSec }: StemWaveformLaneProps) {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const scrollRef = useRef<ScrollView>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
 
@@ -58,7 +60,7 @@ export function StemWaveformLane({ label, color, peaks, durationSec, playheadSec
           ]}
         />
       )),
-    [peaks, barWidth, color]
+    [peaks, barWidth, color, styles.bar]
   );
 
   return (
@@ -83,7 +85,8 @@ export function StemWaveformLane({ label, color, peaks, durationSec, playheadSec
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   lane: {
     marginBottom: 10,
   },
@@ -106,4 +109,5 @@ const styles = StyleSheet.create({
   bar: {
     borderRadius: 1,
   },
-});
+  });
+}

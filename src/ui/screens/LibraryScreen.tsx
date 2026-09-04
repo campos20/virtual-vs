@@ -31,13 +31,15 @@ import { KebabIcon, OverflowMenu, type OverflowMenuItem } from "@/ui/components/
 import { ProjectRow } from "@/ui/components/ProjectRow";
 import { buildLibraryTree } from "@/ui/libraryTree";
 import { moveId } from "@/ui/reorder";
-import { colors, radii, spacing } from "@/ui/theme";
+import { radii, spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
 import { getTrackColor } from "@/ui/trackColors";
 
 export function LibraryScreen() {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const { t } = useTranslation();
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const projects = useAppSelector((s) =>
     projectsSelectors.selectAll(s.projects),
   );
@@ -263,6 +265,12 @@ export function LibraryScreen() {
       testID: "menu-import-bundle",
     },
     {
+      key: "settings",
+      label: t.menu.settings,
+      onPress: () => router.push("/settings"),
+      testID: "menu-settings",
+    },
+    {
       key: "about",
       label: t.menu.about,
       onPress: () => router.push("/about"),
@@ -450,7 +458,8 @@ export function LibraryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -552,4 +561,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
   },
-});
+  });
+}

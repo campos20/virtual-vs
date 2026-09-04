@@ -154,6 +154,36 @@ describe('nowPlayingStore', () => {
     expect(nowPlayingStore.getSnapshot().projectId).toBeNull();
   });
 
+  it('setLyricsLocal patches the manifest with the new lyrics text and clears sync points', async () => {
+    await nowPlayingStore.openProject(entry('a'), ENGINE_OPTIONS);
+    nowPlayingStore.setLyricsSyncLocal([{ lineIndex: 0, timeSec: 1 }]);
+
+    nowPlayingStore.setLyricsLocal('New lyrics');
+
+    const snapshot = nowPlayingStore.getSnapshot();
+    expect(snapshot.manifest?.lyrics).toBe('New lyrics');
+    expect(snapshot.manifest?.lyricsSyncPoints).toEqual([]);
+  });
+
+  it('setLyricsLocal is a no-op when nothing is loaded', () => {
+    expect(() => nowPlayingStore.setLyricsLocal('x')).not.toThrow();
+    expect(nowPlayingStore.getSnapshot().projectId).toBeNull();
+  });
+
+  it('setLyricsSyncLocal patches the manifest with the new sync points', async () => {
+    await nowPlayingStore.openProject(entry('a'), ENGINE_OPTIONS);
+
+    nowPlayingStore.setLyricsSyncLocal([{ lineIndex: 2, timeSec: 12.5 }]);
+
+    const snapshot = nowPlayingStore.getSnapshot();
+    expect(snapshot.manifest?.lyricsSyncPoints).toEqual([{ lineIndex: 2, timeSec: 12.5 }]);
+  });
+
+  it('setLyricsSyncLocal is a no-op when nothing is loaded', () => {
+    expect(() => nowPlayingStore.setLyricsSyncLocal([])).not.toThrow();
+    expect(nowPlayingStore.getSnapshot().projectId).toBeNull();
+  });
+
   it('notifies subscribers on commit', async () => {
     const listener = jest.fn();
     const unsubscribe = nowPlayingStore.subscribe(listener);

@@ -1,10 +1,11 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { audioEngine } from '@/engine';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { persistProjectMixer } from '@/store/persistProject';
 import { trackBusSet, trackEntityId, trackMuteToggled, trackSoloToggled, trackVolumeCommitted } from '@/store/tracksSlice';
 import type { Bus, TrackManifest } from '@/types/project';
-import { colors, glow, radii } from '@/ui/theme';
+import { glow, radii, useThemeColors, type ThemeColors } from '@/ui/theme';
 import { getTrackColor } from '../trackColors';
 import { VerticalFader } from './VerticalFader';
 
@@ -18,6 +19,15 @@ const BUS_OPTIONS: { value: Bus; label: string }[] = [
   { value: 'both', label: 'L+R' },
 ];
 
+/**
+ * The bus-selector row sits on a fixed dark surface regardless of theme (see
+ * `busRow`'s hardcoded background below) - its inactive label text must stay
+ * fixed too, or it silently loses contrast in light mode, where
+ * `colors.textSecondary` is recalibrated for a *light* surface this one
+ * never is (see TransportBar's identical fix for its elapsed-time readout).
+ */
+const FIXED_DARK_SURFACE_TEXT_SECONDARY = '#9b9b9d';
+
 interface ChannelStripProps {
   projectId: string;
   track: TrackManifest;
@@ -26,6 +36,8 @@ interface ChannelStripProps {
 
 export function ChannelStrip({ projectId, track, index }: ChannelStripProps) {
   const dispatch = useAppDispatch();
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const entityId = trackEntityId(projectId, track.id);
   const committed = useAppSelector((s) => s.tracks.entities[entityId]);
   const accentColor = getTrackColor(index);
@@ -111,7 +123,8 @@ export function ChannelStrip({ projectId, track, index }: ChannelStripProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   strip: {
     width: 104,
     marginVertical: 10,
@@ -157,7 +170,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   busPillText: {
-    color: colors.textSecondary,
+    color: FIXED_DARK_SURFACE_TEXT_SECONDARY,
     fontSize: 10,
     fontWeight: '700',
   },
@@ -193,4 +206,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 12,
   },
-});
+  });
+}

@@ -1,11 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PanResponder, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
-import { colors, glow, radii } from '@/ui/theme';
+import { glow, radii, useThemeColors, type ThemeColors } from '@/ui/theme';
 import {
   UNITY_GAIN,
   classifyGestureEnd,
   valueFromDrag,
 } from './faderGesture';
+
+/**
+ * The volume readout sits on a fixed dark, LCD-style surface regardless of
+ * theme (see `readout`'s hardcoded background below) - not part of the
+ * app's light/dark chrome. Its text must stay fixed too, or it silently
+ * loses contrast in light mode, where `colors.textSecondary` is
+ * recalibrated for a *light* surface this one never is (see TransportBar's
+ * identical fix for its elapsed-time readout and scrub-progress fill).
+ */
+const FIXED_DARK_SURFACE_TEXT_SECONDARY = '#9b9b9d';
 
 interface VerticalFaderProps {
   /** Committed value from the store; only reflected while not actively dragging. */
@@ -49,6 +59,8 @@ export function VerticalFader({
   accentColor,
   testID,
 }: VerticalFaderProps) {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const heightRef = useRef(0);
   const draggingValueRef = useRef(value);
   /** Value the finger grabbed at, which the drag delta is applied to. */
@@ -178,7 +190,8 @@ export function VerticalFader({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   wrapper: {
     alignItems: 'center',
     width: '100%',
@@ -193,7 +206,7 @@ const styles = StyleSheet.create({
     borderColor: colors.bevelDark,
   },
   readoutText: {
-    color: colors.textSecondary,
+    color: FIXED_DARK_SURFACE_TEXT_SECONDARY,
     fontSize: 11,
     fontVariant: ['tabular-nums'],
     fontWeight: '700',
@@ -255,4 +268,5 @@ const styles = StyleSheet.create({
     borderRadius: 1,
     backgroundColor: 'rgba(0,0,0,0.25)',
   },
-});
+  });
+}

@@ -1,7 +1,7 @@
 import { useTranslation } from "@/i18n";
 import type { SectionManifest } from "@/types/project";
-import { colors, elevation, radii, spacing } from "@/ui/theme";
-import { useState } from "react";
+import { elevation, radii, spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
+import { useMemo, useState } from "react";
 import {
   Modal,
   Pressable,
@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 interface MarkersDrawerProps {
   visible: boolean;
@@ -65,6 +66,8 @@ export function MarkersDrawer({
   onJump,
 }: MarkersDrawerProps) {
   const { t } = useTranslation();
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [draftName, setDraftName] = useState("");
 
   const sorted = [...sections].sort((a, b) => a.startSec - b.startSec);
@@ -89,7 +92,7 @@ export function MarkersDrawer({
         accessibilityLabel={t.common.close}
         testID="markers-drawer-backdrop"
       />
-      <View style={styles.sheet}>
+      <SafeAreaView edges={["bottom"]} style={styles.sheet}>
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle}>{t.markers.heading}</Text>
           <Pressable
@@ -182,12 +185,13 @@ export function MarkersDrawer({
             ))
           )}
         </ScrollView>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   sheet: {
     marginTop: "auto",
     maxHeight: "80%",
@@ -215,7 +219,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
     borderRadius: radii.pill,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: colors.borderLight,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
   },
@@ -251,7 +255,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 6,
     borderRadius: radii.pill,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: colors.borderLight,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
   },
@@ -322,4 +326,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
   },
-});
+  });
+}

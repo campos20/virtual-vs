@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,7 +8,7 @@ import { usePlayhead } from '@/hooks/usePlayhead';
 import { useTransportState } from '@/hooks/useTransportState';
 import { useTranslation } from '@/i18n';
 import type { ProjectManifest } from '@/types/project';
-import { colors, elevation } from '@/ui/theme';
+import { elevation, useThemeColors, type ThemeColors } from '@/ui/theme';
 import { TransportBar } from './TransportBar';
 
 /**
@@ -50,6 +51,8 @@ interface NowPlayingBarContentProps {
 function NowPlayingBarContent({ projectId, manifest, durationSec }: NowPlayingBarContentProps) {
   const router = useRouter();
   const { t } = useTranslation();
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { seconds: playheadSec } = usePlayhead();
   const transportState = useTransportState();
 
@@ -84,7 +87,8 @@ function NowPlayingBarContent({ projectId, manifest, durationSec }: NowPlayingBa
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   safeArea: {
     backgroundColor: colors.panel,
   },
@@ -113,4 +117,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 2,
   },
-});
+  });
+}

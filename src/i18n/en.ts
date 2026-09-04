@@ -106,6 +106,22 @@ export const en = {
     presetA: 'A',
     presetB: 'B',
   },
+  lyrics: {
+    heading: 'Lyrics',
+    toggleLabel: 'Lyrics',
+    emptyText: 'No lyrics yet.',
+    addLyrics: 'Add lyrics',
+    edit: 'Edit',
+    editPlaceholder: 'Type or paste the lyrics…',
+    editHint: 'Saving clears any existing tap-to-sync timing, since the lines may no longer match up.',
+    tapHint: 'Tap a line to fine-tune sync',
+    allCaps: 'ALL CAPS',
+    syncCount: (count: number) => `${count} line${count === 1 ? '' : 's'} synced`,
+    clearSync: 'Clear sync',
+    sync: 'Sync',
+    syncHeading: 'Tap to Sync',
+    remove: 'Remove',
+  },
   nowPlaying: {
     heading: 'Now Playing',
     goToSong: (title: string) => `Now playing: ${title}. Go to song.`,
@@ -120,6 +136,7 @@ export const en = {
   },
   menu: {
     moreOptions: 'More options',
+    settings: 'Settings',
     about: 'About',
   },
   about: {
@@ -128,8 +145,15 @@ export const en = {
     version: (version: string) => `Version ${version}`,
     viewOnGithub: 'View on GitHub',
     license: 'License',
+  },
+  settings: {
+    title: 'Settings',
     language: 'Language',
     languageSystem: 'System',
+    theme: 'Appearance',
+    themeSystem: 'System',
+    themeLight: 'Light',
+    themeDark: 'Dark',
   },
 };
 

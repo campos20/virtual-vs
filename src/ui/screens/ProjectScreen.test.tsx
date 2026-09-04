@@ -318,6 +318,171 @@ describe('ProjectScreen - markers', () => {
   });
 });
 
+describe('ProjectScreen - lyrics', () => {
+  function toggleLyrics() {
+    fireEvent.press(screen.getByTestId('lyrics-toggle-button'));
+  }
+
+  it('swaps the waveform for the lyrics view and back', async () => {
+    renderLoaded();
+    await waitForMixer();
+
+    expect(screen.getByText('Bass')).toBeTruthy();
+    expect(screen.queryByTestId('edit-lyrics-button')).toBeNull();
+
+    toggleLyrics();
+
+    expect(screen.queryByText('Bass')).toBeNull();
+    expect(screen.getByTestId('edit-lyrics-button')).toBeTruthy();
+
+    toggleLyrics();
+
+    expect(screen.getByText('Bass')).toBeTruthy();
+    expect(screen.queryByTestId('edit-lyrics-button')).toBeNull();
+  });
+
+  // Global rather than per-screen-mount state: a performer switching songs
+  // mid-set shouldn't have to re-toggle back into the lyrics view every
+  // time, so this simulates "switch songs" as unmounting and remounting
+  // ProjectScreen against the same store with a different project, the way
+  // navigating Library -> a different song's ProjectScreen actually works.
+  it('keeps showing the lyrics view after switching to a different project', async () => {
+    const secondProject: LibraryProjectEntry = {
+      ...threeStemProject,
+      id: 'song-two',
+      title: 'Song Two',
+      sourceDir: 'file:///mock/document/projects/song-two',
+    };
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: threeStemProject,
+      resolveFile: () => 0,
+    });
+    mockParams = { projectId: threeStemProject.id };
+    const store = createStore();
+    store.dispatch(projectAdded(threeStemProject));
+    store.dispatch(projectAdded(secondProject));
+    const { unmount } = renderWithStore(<ProjectScreen />, store);
+    await waitForMixer();
+    toggleLyrics();
+    expect(screen.getByTestId('edit-lyrics-button')).toBeTruthy();
+    unmount();
+
+    mockParams = { projectId: secondProject.id };
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: secondProject,
+      resolveFile: () => 0,
+    });
+    renderWithStore(<ProjectScreen />, store);
+    await waitForMixer();
+
+    expect(screen.getByTestId('edit-lyrics-button')).toBeTruthy();
+  });
+
+  it('collapses the BPM/Key header pills while viewing lyrics', async () => {
+    renderLoaded();
+    await waitForMixer();
+    expect(screen.getByText('120 BPM')).toBeTruthy();
+
+    toggleLyrics();
+
+    expect(screen.queryByText('120 BPM')).toBeNull();
+  });
+
+  it('saves lyrics entered through the drawer', async () => {
+    renderLoaded();
+    await waitForMixer();
+    toggleLyrics();
+
+    fireEvent.press(screen.getByTestId('add-lyrics-button'));
+    fireEvent.changeText(screen.getByTestId('lyrics-input'), 'Line one\nLine two');
+    fireEvent.press(screen.getByTestId('save-lyrics-button'));
+
+    expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
+      lyrics: 'Line one\nLine two',
+      lyricsSyncPoints: [],
+    });
+    expect(screen.getByText('Line one')).toBeTruthy();
+  });
+
+  it('tapping a line persists a sync point at the precise playhead', async () => {
+    renderLoaded({ ...threeStemProject, lyrics: 'Line one\nLine two' });
+    await waitForMixer();
+    toggleLyrics();
+
+    fireEvent.press(screen.getByTestId('lyrics-line-1'));
+
+    expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
+      lyricsSyncPoints: [{ lineIndex: 1, timeSec: expect.any(Number) }],
+    });
+  });
+
+  it('badges the Sync button, and the drawer lists, removes and clears sync points', async () => {
+    renderLoaded({
+      ...threeStemProject,
+      lyrics: 'Line one\nLine two',
+      lyricsSyncPoints: [
+        { lineIndex: 0, timeSec: 1 },
+        { lineIndex: 1, timeSec: 5 },
+      ],
+    });
+    await waitForMixer();
+    toggleLyrics();
+    expect(screen.getByTestId('lyrics-sync-badge')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('open-lyrics-sync-button'));
+    expect(screen.getByTestId('remove-sync-0')).toBeTruthy();
+    expect(screen.getByTestId('remove-sync-1')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('remove-sync-0'));
+    expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
+      lyricsSyncPoints: [{ lineIndex: 1, timeSec: 5 }],
+    });
+
+    fireEvent.press(screen.getByTestId('clear-all-sync-button'));
+    expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
+      lyricsSyncPoints: [],
+    });
+    expect(screen.queryByTestId('lyrics-sync-badge')).toBeNull();
+  });
+
+  // Neither lyrics text nor a line tap ever touches the audio graph, so
+  // unlike bpm/key edits (gated via transportIsRunning()), both should work
+  // mid-song - same reasoning as markers ("still allows renaming a stem
+  // while playing" above).
+  it('does not block lyrics editing or line-tapping while the transport is playing', async () => {
+    renderLoaded({ ...threeStemProject, lyrics: 'Line one\nLine two' });
+    await waitForMixer();
+    toggleLyrics();
+    audioEngine.play();
+
+    fireEvent.press(screen.getByTestId('lyrics-line-0'));
+    fireEvent.press(screen.getByTestId('edit-lyrics-button'));
+    fireEvent.changeText(screen.getByTestId('lyrics-input'), 'Edited live');
+    fireEvent.press(screen.getByTestId('save-lyrics-button'));
+
+    expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
+      lyricsSyncPoints: [{ lineIndex: 0, timeSec: expect.any(Number) }],
+    });
+    expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
+      lyrics: 'Edited live',
+      lyricsSyncPoints: [],
+    });
+    expect(audioEngine.getTransportState()).toBe('playing');
+    audioEngine.stop();
+  });
+
+  it('toggles all-caps and persists it globally, not on the project', async () => {
+    renderLoaded({ ...threeStemProject, lyrics: 'Line one' });
+    await waitForMixer();
+    toggleLyrics();
+
+    fireEvent.press(screen.getByTestId('lyrics-allcaps-toggle'));
+
+    // A settings write, never a project manifest write.
+    expect(patchManifestMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('ProjectScreen - editing in place', () => {
   function renderEditable() {
     mockParams = { projectId: 'my-song' };

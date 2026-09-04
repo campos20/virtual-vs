@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors, elevation, radii, spacing } from '@/ui/theme';
+import { elevation, radii, spacing, useThemeColors, type ThemeColors } from '@/ui/theme';
 import { MoveColumn } from './MoveColumn';
 import { KebabIcon, OverflowMenu, type OverflowMenuItem } from './OverflowMenu';
 
@@ -55,6 +56,9 @@ export function FolderRow({
   onRenameCancel,
   testID,
 }: FolderRowProps) {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.container}>
       {/* Press feedback lives in the `style` callback and the children stay
@@ -117,7 +121,8 @@ export function FolderRow({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     borderRadius: radii.lg,
     backgroundColor: colors.panel,
@@ -180,4 +185,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 2,
   },
-});
+  });
+}

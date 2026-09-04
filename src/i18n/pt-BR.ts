@@ -115,6 +115,23 @@ export const ptBR: TranslationDictionary = {
     presetA: 'A',
     presetB: 'B',
   },
+  lyrics: {
+    heading: 'Letra',
+    toggleLabel: 'Letra',
+    emptyText: 'Ainda não há letra.',
+    addLyrics: 'Adicionar letra',
+    edit: 'Editar',
+    editPlaceholder: 'Digite ou cole a letra…',
+    editHint: 'Salvar apaga a sincronização por toque existente, já que as linhas podem não corresponder mais.',
+    tapHint: 'Toque em uma linha para ajustar a sincronização',
+    allCaps: 'CAIXA ALTA',
+    syncCount: (count: number) =>
+      `${count} linha${count === 1 ? '' : 's'} sincronizada${count === 1 ? '' : 's'}`,
+    clearSync: 'Limpar sincronização',
+    sync: 'Sincronizar',
+    syncHeading: 'Toque para Sincronizar',
+    remove: 'Remover',
+  },
   nowPlaying: {
     heading: 'Tocando Agora',
     goToSong: (title: string) => `Tocando agora: ${title}. Ir para a música.`,
@@ -129,6 +146,7 @@ export const ptBR: TranslationDictionary = {
   },
   menu: {
     moreOptions: 'Mais opções',
+    settings: 'Configurações',
     about: 'Sobre',
   },
   about: {
@@ -137,7 +155,14 @@ export const ptBR: TranslationDictionary = {
     version: (version: string) => `Versão ${version}`,
     viewOnGithub: 'Ver no GitHub',
     license: 'Licença',
+  },
+  settings: {
+    title: 'Configurações',
     language: 'Idioma',
     languageSystem: 'Sistema',
+    theme: 'Aparência',
+    themeSystem: 'Sistema',
+    themeLight: 'Claro',
+    themeDark: 'Escuro',
   },
 };

@@ -19,6 +19,13 @@ export interface SectionManifest {
   startSec: number;
 }
 
+export interface LyricsSyncPoint {
+  /** Index into `lyrics.split('\n')`. */
+  lineIndex: number;
+  /** Playhead position, in seconds, this line was tapped at. */
+  timeSec: number;
+}
+
 export interface PadManifest {
   file: string;
   loop: boolean;
@@ -39,4 +46,12 @@ export interface ProjectManifest {
   tracks: TrackManifest[];
   sections: SectionManifest[];
   pad?: PadManifest;
+  /** Optional full lyrics text, shown in the auto-scrolling lyrics view. Absent/empty means the project has no lyrics yet. */
+  lyrics?: string;
+  /**
+   * Sparse tap-to-correct timing points, at most one per line index - see
+   * LyricsView. Cleared whenever `lyrics` text is re-saved, since line
+   * indices may no longer line up with the new text.
+   */
+  lyricsSyncPoints?: LyricsSyncPoint[];
 }

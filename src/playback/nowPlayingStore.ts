@@ -4,7 +4,7 @@ import { computeWaveformPeaks, waveformBarCount } from '@/engine/waveform';
 import { decodeProjectAudio, getProjectSourceForEntry } from '@/storage';
 import { report, type ProgressReporter } from '@/storage/progress';
 import type { LibraryProjectEntry } from '@/store/projectsSlice';
-import type { ProjectManifest, SectionManifest } from '@/types/project';
+import type { LyricsSyncPoint, ProjectManifest, SectionManifest } from '@/types/project';
 import type { StemWaveform } from '@/ui/components/WaveformView';
 import { getTrackColor } from '@/ui/trackColors';
 
@@ -176,6 +176,24 @@ class NowPlayingStore {
     const { manifest } = this.snapshot;
     if (!manifest) return;
     this.commit({ ...this.snapshot, manifest: { ...manifest, sections } });
+  }
+
+  /**
+   * Patches the current project's lyrics text in place after a successful
+   * write - no re-decode needed, same reasoning as `setSectionsLocal`.
+   * Resets `lyricsSyncPoints` too, mirroring persistProjectLyrics's reset.
+   */
+  setLyricsLocal(lyrics: string): void {
+    const { manifest } = this.snapshot;
+    if (!manifest) return;
+    this.commit({ ...this.snapshot, manifest: { ...manifest, lyrics, lyricsSyncPoints: [] } });
+  }
+
+  /** Patches the current project's lyrics tap-to-correct sync points in place - no re-decode needed, same reasoning as `setSectionsLocal`. */
+  setLyricsSyncLocal(syncPoints: LyricsSyncPoint[]): void {
+    const { manifest } = this.snapshot;
+    if (!manifest) return;
+    this.commit({ ...this.snapshot, manifest: { ...manifest, lyricsSyncPoints: syncPoints } });
   }
 
   /**
