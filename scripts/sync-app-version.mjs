@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
- * Writes the release version into app.json before `expo prebuild`.
+ * Writes the release version into app.json before `expo prebuild` (the
+ * GitHub Releases APK workflow) or an EAS build (the Play Store AAB
+ * workflow).
  *
  * package.json is the single source of truth for the version - the release
  * workflow refuses to build if the git tag disagrees with it - so app.json is
@@ -8,21 +10,25 @@
  *
  * Android additionally needs `versionCode`: a plain increasing integer that
  * has to go up with every build the Play Store or a device sees, and which
- * can't be derived from a semver string like "1.0.0-alpha.0". The workflow
- * passes the run number, which only ever increases.
+ * can't be derived from a semver string like "1.0.0-alpha.0". The GitHub
+ * Releases workflow passes the run number, which only ever increases.
+ * versionCode is omitted for the EAS workflow - eas.json's
+ * `appVersionSource: "remote"` has EAS manage and auto-increment it on its
+ * own servers instead, and `autoIncrement` doesn't support the version
+ * string, so this script still has to set that half.
  *
- * Usage: node scripts/sync-app-version.mjs <version> <versionCode>
+ * Usage: node scripts/sync-app-version.mjs <version> [versionCode]
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const [, , version, versionCode] = process.argv;
 
-if (!version || !versionCode) {
-  console.error('Usage: sync-app-version.mjs <version> <versionCode>');
+if (!version) {
+  console.error('Usage: sync-app-version.mjs <version> [versionCode]');
   process.exit(1);
 }
 
-if (!/^\d+$/.test(versionCode)) {
+if (versionCode !== undefined && !/^\d+$/.test(versionCode)) {
   console.error(`versionCode must be a positive integer, got "${versionCode}"`);
   process.exit(1);
 }
@@ -31,8 +37,12 @@ const path = new URL('../app.json', import.meta.url);
 const app = JSON.parse(readFileSync(path, 'utf8'));
 
 app.expo.version = version;
-app.expo.android = { ...app.expo.android, versionCode: Number(versionCode) };
+if (versionCode !== undefined) {
+  app.expo.android = { ...app.expo.android, versionCode: Number(versionCode) };
+}
 
 writeFileSync(path, `${JSON.stringify(app, null, 2)}\n`);
 
-console.log(`app.json set to version ${version} (versionCode ${versionCode})`);
+console.log(
+  `app.json set to version ${version}` + (versionCode !== undefined ? ` (versionCode ${versionCode})` : '')
+);

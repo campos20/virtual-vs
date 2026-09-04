@@ -1,0 +1,86 @@
+name: Build Android AAB (Play Store)
+
+# Manually triggered only - unlike the GitHub Releases APK workflow, this
+# doesn't publish anywhere on its own. It builds a Play-Store-ready AAB on
+# EAS's servers and hands it back as a workflow artifact; a person still
+# reviews it and uploads it to Play Console themselves.
+#
+# One-time setup this workflow depends on, done once from a machine with
+# interactive `eas` access (not something this workflow can do for you):
+#   - An `eas.json` with an `appVersionSource: "remote"` and a `production`
+#     build profile (`eas build:configure`) - this repo does not have one yet.
+#   - `EXPO_TOKEN` must exist as a repo secret (an EAS personal or robot
+#     access token - https://expo.dev/accounts/[account]/settings/access-tokens).
+#   - Android production signing credentials must already be configured on
+#     EAS (`eas credentials`, or answer the prompts on a first interactive
+#     `eas build -p android -e production`) - `--non-interactive` below can't
+#     create them itself.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build on EAS
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # app.json's version string is still read locally even with eas.json's
+      # `appVersionSource: "remote"` - that only covers the Android
+      # versionCode, which EAS auto-increments on its own servers instead.
+      # package.json stays the single source of truth for the version, same
+      # as the GitHub Releases workflow.
+      - name: Sync app.json version from package.json
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          node scripts/sync-app-version.mjs "$VERSION"
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # Runs on EAS's own build infrastructure, not this runner - no Java/
+      # Android SDK setup needed here, unlike the local gradlew build the
+      # GitHub Releases workflow does.
+      - name: Build the AAB on EAS
+        run: |
+          eas build \
+            --platform android \
+            --profile production \
+            --non-interactive \
+            --freeze-credentials \
+            --wait \
+            --json > build-result.json
+          cat build-result.json
+
+      - name: Download the build artifact
+        run: |
+          node -e "
+            const [build] = require('./build-result.json');
+            if (build.status !== 'FINISHED' || !build.artifacts?.applicationArchiveUrl) {
+              console.error('Build did not finish successfully:', JSON.stringify(build, null, 2));
+              process.exit(1);
+            }
+            require('fs').writeFileSync('artifact-url.txt', build.artifacts.applicationArchiveUrl);
+          "
+          curl -fL -o "virtual-vs-${VERSION}.aab" "$(cat artifact-url.txt)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: virtual-vs-${{ env.VERSION }}-aab
+          path: virtual-vs-${{ env.VERSION }}.aab
+          retention-days: 14
