@@ -36,14 +36,18 @@ export interface SettingsState {
   themeOverride: ThemeOverride;
 }
 
+// Read once - `readAppSettings()` does a synchronous file read + JSON.parse,
+// so calling it per-field here would multiply that I/O for no reason.
+const persisted = readAppSettings();
+
 const initialState: SettingsState = {
   monitorMode: 'split',
-  languageOverride: readAppSettings().languageOverride ?? null,
-  libraryOrder: resolveLibraryOrder(readAppSettings()),
-  lyricsFontSizePt: readAppSettings().lyricsFontSizePt ?? DEFAULT_LYRICS_FONT_SIZE_PT,
-  lyricsAllCaps: readAppSettings().lyricsAllCaps ?? false,
-  lyricsViewActive: readAppSettings().lyricsViewActive ?? false,
-  themeOverride: isThemeOverride(readAppSettings().themeOverride) ? readAppSettings().themeOverride! : 'dark',
+  languageOverride: persisted.languageOverride ?? null,
+  libraryOrder: resolveLibraryOrder(persisted),
+  lyricsFontSizePt: persisted.lyricsFontSizePt ?? DEFAULT_LYRICS_FONT_SIZE_PT,
+  lyricsAllCaps: persisted.lyricsAllCaps ?? false,
+  lyricsViewActive: persisted.lyricsViewActive ?? false,
+  themeOverride: isThemeOverride(persisted.themeOverride) ? persisted.themeOverride : 'dark',
 };
 
 const settingsSlice = createSlice({

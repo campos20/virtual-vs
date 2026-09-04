@@ -131,7 +131,15 @@ export function useThemeColors(): ThemeColors {
   return useIsDark() ? darkColors : lightColors;
 }
 
-/** For anything that needs the dark/light decision itself, not the color values - e.g. `<StatusBar style="light" | "dark">`. */
+/**
+ * For anything that needs the dark/light decision itself, not the color
+ * values - e.g. deciding which icon/label to show for the current mode.
+ * Note this is the app's *theme* mode, not directly an
+ * `expo-status-bar` `style` value: that prop names the icon color, not the
+ * theme ('light' style = light icons, for a *dark* background), so a
+ * consumer driving `<StatusBar>` from this must invert it - see
+ * `_layout.tsx`.
+ */
 export function useThemeMode(): 'dark' | 'light' {
   return useIsDark() ? 'dark' : 'light';
 }

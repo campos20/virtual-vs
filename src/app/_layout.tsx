@@ -39,7 +39,10 @@ function ThemedApp() {
 
   return (
     <>
-      <StatusBar style={mode} />
+      {/* expo-status-bar's `style` names the icon color, not the theme:
+          "light" means light icons, which is what a *dark* background
+          needs - the inverse of our own dark/light theme mode. */}
+      <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
       <View style={{ flex: 1 }}>
         {/* No transition animation: simpler and more predictable than an
             animated push/pop, and removes the window where two screens'
