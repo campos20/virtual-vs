@@ -1,4 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from "@/i18n";
+import type { LyricsSyncPoint } from "@/types/project";
+import {
+  activeLyricsLineIndex,
+  buildLyricsScrollAnchors,
+  clampLyricsFontSize,
+  computeLyricsScrollY,
+  LYRICS_FONT_SIZE_STEP_PT,
+} from "@/ui/lyricsScroll";
+import { radii, spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Platform,
   Pressable,
@@ -7,20 +17,14 @@ import {
   Text,
   View,
   type LayoutChangeEvent,
-} from 'react-native';
-import { useTranslation } from '@/i18n';
-import type { LyricsSyncPoint } from '@/types/project';
-import {
-  activeLyricsLineIndex,
-  buildLyricsScrollAnchors,
-  clampLyricsFontSize,
-  computeLyricsScrollY,
-  LYRICS_FONT_SIZE_STEP_PT,
-} from '@/ui/lyricsScroll';
-import { radii, spacing, useThemeColors, type ThemeColors } from '@/ui/theme';
+} from "react-native";
 
 /** Bare 'monospace' only reliably resolves on Android - iOS needs a named font. */
-const MONOSPACE_FONT = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
+const MONOSPACE_FONT = Platform.select({
+  ios: "Menlo",
+  android: "monospace",
+  default: "monospace",
+});
 const LINE_HEIGHT_RATIO = 1.5;
 
 interface LyricsViewProps {
@@ -75,45 +79,66 @@ export function LyricsView({
   // trigger a state update loop.
   const [lineOffsets, setLineOffsets] = useState<Record<number, number>>({});
 
-  const lines = useMemo(() => lyrics.split('\n'), [lyrics]);
+  const lines = useMemo(() => lyrics.split("\n"), [lyrics]);
   const isEmpty = lyrics.trim().length === 0;
 
   const handleViewportLayout = useCallback((event: LayoutChangeEvent) => {
     setViewportHeight(event.nativeEvent.layout.height);
   }, []);
 
-  const handleContentSizeChange = useCallback((_width: number, height: number) => {
-    setContentHeight(height);
-  }, []);
+  const handleContentSizeChange = useCallback(
+    (_width: number, height: number) => {
+      setContentHeight(height);
+    },
+    [],
+  );
 
-  const handleLineLayout = useCallback((index: number, event: LayoutChangeEvent) => {
-    const y = event.nativeEvent.layout.y;
-    setLineOffsets((prev) => (prev[index] === y ? prev : { ...prev, [index]: y }));
-  }, []);
+  const handleLineLayout = useCallback(
+    (index: number, event: LayoutChangeEvent) => {
+      const y = event.nativeEvent.layout.y;
+      setLineOffsets((prev) =>
+        prev[index] === y ? prev : { ...prev, [index]: y },
+      );
+    },
+    [],
+  );
 
   const maxScrollY = Math.max(0, contentHeight - viewportHeight);
   const anchors = useMemo(
-    () => buildLyricsScrollAnchors(syncPoints, lineOffsets, durationSec, maxScrollY),
-    [syncPoints, lineOffsets, durationSec, maxScrollY]
+    () =>
+      buildLyricsScrollAnchors(
+        syncPoints,
+        lineOffsets,
+        durationSec,
+        maxScrollY,
+      ),
+    [syncPoints, lineOffsets, durationSec, maxScrollY],
   );
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ y: computeLyricsScrollY(playheadSec, anchors), animated: false });
+    scrollRef.current?.scrollTo({
+      y: computeLyricsScrollY(playheadSec, anchors),
+      animated: false,
+    });
   }, [playheadSec, anchors]);
 
   // Doubles as a karaoke-style "current line" indicator and as immediate
   // visual confirmation that a tap registered - no timer-based flash needed.
   const activeLine = useMemo(
     () => activeLyricsLineIndex(playheadSec, syncPoints),
-    [playheadSec, syncPoints]
+    [playheadSec, syncPoints],
   );
 
   function handleFontDecrease() {
-    onFontSizeChange(clampLyricsFontSize(fontSizePt - LYRICS_FONT_SIZE_STEP_PT));
+    onFontSizeChange(
+      clampLyricsFontSize(fontSizePt - LYRICS_FONT_SIZE_STEP_PT),
+    );
   }
 
   function handleFontIncrease() {
-    onFontSizeChange(clampLyricsFontSize(fontSizePt + LYRICS_FONT_SIZE_STEP_PT));
+    onFontSizeChange(
+      clampLyricsFontSize(fontSizePt + LYRICS_FONT_SIZE_STEP_PT),
+    );
   }
 
   function handleToggleAllCaps() {
@@ -128,7 +153,10 @@ export function LyricsView({
             onPress={onEdit}
             hitSlop={8}
             testID="edit-lyrics-button"
-            style={({ pressed }) => [styles.toolbarButton, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.toolbarButton,
+              pressed && styles.pressed,
+            ]}
           >
             <Text style={styles.toolbarButtonText}>{t.lyrics.edit}</Text>
           </Pressable>
@@ -136,7 +164,10 @@ export function LyricsView({
             onPress={onOpenSync}
             hitSlop={8}
             testID="open-lyrics-sync-button"
-            style={({ pressed }) => [styles.toolbarButton, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.toolbarButton,
+              pressed && styles.pressed,
+            ]}
           >
             <Text style={styles.toolbarButtonText}>{t.lyrics.sync}</Text>
             {syncPoints.length > 0 && (
@@ -154,17 +185,26 @@ export function LyricsView({
             accessibilityLabel={t.lyrics.allCaps}
             style={({ pressed }) => [
               styles.fontButton,
-              allCaps && styles.fontButtonActive,
               pressed && styles.pressed,
             ]}
           >
-            <Text style={[styles.fontButtonText, allCaps && styles.fontButtonTextActive]}>ABC</Text>
+            <Text
+              style={[
+                styles.fontButtonText,
+                allCaps && styles.fontButtonTextActive,
+              ]}
+            >
+              {allCaps ? "AA" : "Aa"}
+            </Text>
           </Pressable>
           <Pressable
             onPress={handleFontDecrease}
             hitSlop={8}
             testID="lyrics-font-decrease"
-            style={({ pressed }) => [styles.fontButton, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.fontButton,
+              pressed && styles.pressed,
+            ]}
           >
             <Text style={styles.fontButtonText}>A−</Text>
           </Pressable>
@@ -172,7 +212,10 @@ export function LyricsView({
             onPress={handleFontIncrease}
             hitSlop={8}
             testID="lyrics-font-increase"
-            style={({ pressed }) => [styles.fontButton, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.fontButton,
+              pressed && styles.pressed,
+            ]}
           >
             <Text style={styles.fontButtonText}>A+</Text>
           </Pressable>
@@ -185,7 +228,10 @@ export function LyricsView({
           <Pressable
             onPress={onEdit}
             testID="add-lyrics-button"
-            style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.addButton,
+              pressed && styles.pressed,
+            ]}
           >
             <Text style={styles.addButtonText}>{t.lyrics.addLyrics}</Text>
           </Pressable>
@@ -200,7 +246,12 @@ export function LyricsView({
         >
           {lines.map((line, index) => {
             if (line.trim().length === 0) {
-              return <View key={index} style={{ height: fontSizePt * LINE_HEIGHT_RATIO }} />;
+              return (
+                <View
+                  key={index}
+                  style={{ height: fontSizePt * LINE_HEIGHT_RATIO }}
+                />
+              );
             }
             return (
               <Pressable
@@ -208,7 +259,10 @@ export function LyricsView({
                 onPress={() => onTapLine(index)}
                 onLayout={(event) => handleLineLayout(index, event)}
                 testID={`lyrics-line-${index}`}
-                style={({ pressed }) => [styles.line, pressed && styles.pressed]}
+                style={({ pressed }) => [
+                  styles.line,
+                  pressed && styles.pressed,
+                ]}
               >
                 <Text
                   style={[
@@ -216,7 +270,7 @@ export function LyricsView({
                     {
                       fontSize: fontSizePt,
                       lineHeight: fontSizePt * LINE_HEIGHT_RATIO,
-                      textTransform: allCaps ? 'uppercase' : 'none',
+                      textTransform: allCaps ? "uppercase" : "none",
                     },
                     index === activeLine && styles.lineTextActive,
                   ]}
@@ -234,117 +288,113 @@ export function LyricsView({
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  toolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  toolbarGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  toolbarButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: radii.pill,
-    backgroundColor: colors.borderLight,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-  },
-  toolbarButtonText: {
-    color: colors.accent,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  syncBadge: {
-    minWidth: 16,
-    height: 16,
-    paddingHorizontal: 3,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.accent,
-  },
-  syncBadgeText: {
-    color: '#0a0a0a',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  fontControls: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  fontButton: {
-    width: 32,
-    height: 28,
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.borderLight,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-  },
-  fontButtonText: {
-    color: colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  fontButtonActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  fontButtonTextActive: {
-    color: '#0a0a0a',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.xl,
-  },
-  emptyText: {
-    color: colors.textTertiary,
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  addButton: {
-    backgroundColor: colors.accent,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 10,
-  },
-  addButtonText: {
-    color: '#0a0a0a',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  linesContainer: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
-  },
-  line: {
-    paddingVertical: 2,
-  },
-  lineText: {
-    fontFamily: MONOSPACE_FONT,
-    color: colors.textSecondary,
-  },
-  lineTextActive: {
-    color: colors.textPrimary,
-    fontWeight: '700',
-  },
+    container: {
+      flex: 1,
+    },
+    toolbar: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+    },
+    toolbarGroup: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.xs,
+    },
+    toolbarButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 6,
+      borderRadius: radii.pill,
+      backgroundColor: colors.borderLight,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderLight,
+    },
+    toolbarButtonText: {
+      color: colors.accent,
+      fontSize: 13,
+      fontWeight: "700",
+    },
+    syncBadge: {
+      minWidth: 16,
+      height: 16,
+      paddingHorizontal: 3,
+      borderRadius: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.accent,
+    },
+    syncBadgeText: {
+      color: "#0a0a0a",
+      fontSize: 10,
+      fontWeight: "800",
+    },
+    fontControls: {
+      flexDirection: "row",
+      gap: spacing.xs,
+    },
+    fontButton: {
+      width: 32,
+      height: 28,
+      borderRadius: radii.sm,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.borderLight,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderLight,
+    },
+    fontButtonText: {
+      color: colors.textPrimary,
+      fontSize: 13,
+      fontWeight: "700",
+    },
+    fontButtonTextActive: {
+      color: "#0a0a0a",
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+    emptyState: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: spacing.md,
+      paddingHorizontal: spacing.xl,
+    },
+    emptyText: {
+      color: colors.textTertiary,
+      fontSize: 14,
+      textAlign: "center",
+    },
+    addButton: {
+      backgroundColor: colors.accent,
+      borderRadius: radii.md,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: 10,
+    },
+    addButtonText: {
+      color: "#0a0a0a",
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    linesContainer: {
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.xl,
+    },
+    line: {
+      paddingVertical: 2,
+    },
+    lineText: {
+      fontFamily: MONOSPACE_FONT,
+      color: colors.textSecondary,
+    },
+    lineTextActive: {
+      color: colors.textPrimary,
+      fontWeight: "700",
+    },
   });
 }
