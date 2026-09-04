@@ -1,6 +1,7 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { Chevron } from '@/ui/components/Chevron';
-import { colors, spacing } from '@/ui/theme';
+import { spacing, useThemeColors, type ThemeColors } from '@/ui/theme';
 
 interface BackButtonProps {
   label: string;
@@ -21,6 +22,9 @@ interface BackButtonProps {
  * mid-navigation, which this button specifically triggers (router.back()).
  */
 export function BackButton({ label, onPress, testID }: BackButtonProps) {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <Pressable
       onPress={onPress}
@@ -34,23 +38,25 @@ export function BackButton({ label, onPress, testID }: BackButtonProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingRight: spacing.sm,
-  },
-  chevron: {
-    marginRight: 4,
-  },
-  pressed: {
-    opacity: 0.5,
-  },
-  label: {
-    color: colors.accent,
-    fontSize: 17,
-    fontWeight: '600',
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      paddingVertical: 6,
+      paddingRight: spacing.sm,
+    },
+    chevron: {
+      marginRight: 4,
+    },
+    pressed: {
+      opacity: 0.5,
+    },
+    label: {
+      color: colors.accent,
+      fontSize: 17,
+      fontWeight: '600',
+    },
+  });
+}

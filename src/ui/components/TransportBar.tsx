@@ -1,6 +1,6 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { PanResponder, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
-import { colors, glow, radii } from '@/ui/theme';
+import { glow, radii, useThemeColors, type ThemeColors } from '@/ui/theme';
 
 interface TransportBarProps {
   isPlaying: boolean;
@@ -20,6 +20,8 @@ function formatTime(totalSeconds: number): string {
 }
 
 export function TransportBar({ isPlaying, playheadSec, durationSec, onPlayPause, onStop, onSeek }: TransportBarProps) {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const widthRef = useRef(0);
 
   function handleLayout(event: LayoutChangeEvent) {
@@ -87,7 +89,8 @@ export function TransportBar({ isPlaying, playheadSec, durationSec, onPlayPause,
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     paddingTop: 14,
     paddingBottom: 18,
@@ -205,4 +208,5 @@ const styles = StyleSheet.create({
     borderRadius: 1.5,
     backgroundColor: '#0a0a0a',
   },
-});
+  });
+}

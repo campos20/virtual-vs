@@ -17,7 +17,7 @@ import {
   computeLyricsScrollY,
   LYRICS_FONT_SIZE_STEP_PT,
 } from '@/ui/lyricsScroll';
-import { colors, radii, spacing } from '@/ui/theme';
+import { radii, spacing, useThemeColors, type ThemeColors } from '@/ui/theme';
 
 /** Bare 'monospace' only reliably resolves on Android - iOS needs a named font. */
 const MONOSPACE_FONT = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
@@ -64,6 +64,8 @@ export function LyricsView({
   onOpenSync,
 }: LyricsViewProps) {
   const { t } = useTranslation();
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const scrollRef = useRef<ScrollView>(null);
   const [viewportHeight, setViewportHeight] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
@@ -230,7 +232,8 @@ export function LyricsView({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -253,7 +256,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 6,
     borderRadius: radii.pill,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.borderLight,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
   },
@@ -286,7 +289,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.borderLight,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
   },
@@ -343,4 +346,5 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontWeight: '700',
   },
-});
+  });
+}

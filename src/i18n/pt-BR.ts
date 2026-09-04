@@ -146,6 +146,7 @@ export const ptBR: TranslationDictionary = {
   },
   menu: {
     moreOptions: 'Mais opções',
+    settings: 'Configurações',
     about: 'Sobre',
   },
   about: {
@@ -154,7 +155,14 @@ export const ptBR: TranslationDictionary = {
     version: (version: string) => `Versão ${version}`,
     viewOnGithub: 'Ver no GitHub',
     license: 'Licença',
+  },
+  settings: {
+    title: 'Configurações',
     language: 'Idioma',
     languageSystem: 'Sistema',
+    theme: 'Aparência',
+    themeSystem: 'Sistema',
+    themeLight: 'Claro',
+    themeDark: 'Escuro',
   },
 };

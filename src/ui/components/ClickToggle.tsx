@@ -1,6 +1,7 @@
+import { useMemo } from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 import { useTranslation } from '@/i18n';
-import { colors } from '@/ui/theme';
+import { useThemeColors, type ThemeColors } from '@/ui/theme';
 
 interface ClickToggleProps {
   enabled: boolean;
@@ -10,6 +11,9 @@ interface ClickToggleProps {
 /** Mutes/unmutes the synthesized metronome click without touching any track's volume. */
 export function ClickToggle({ enabled, onChange }: ClickToggleProps) {
   const { t } = useTranslation();
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.container}>
       <Text style={styles.heading}>{t.click.heading}</Text>
@@ -18,16 +22,18 @@ export function ClickToggle({ enabled, onChange }: ClickToggleProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  heading: {
-    color: colors.textTertiary,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    heading: {
+      color: colors.textTertiary,
+      fontSize: 10,
+      fontWeight: '700',
+      letterSpacing: 1,
+      marginBottom: 8,
+    },
+  });
+}

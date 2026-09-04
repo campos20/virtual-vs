@@ -136,6 +136,7 @@ export const en = {
   },
   menu: {
     moreOptions: 'More options',
+    settings: 'Settings',
     about: 'About',
   },
   about: {
@@ -144,8 +145,15 @@ export const en = {
     version: (version: string) => `Version ${version}`,
     viewOnGithub: 'View on GitHub',
     license: 'License',
+  },
+  settings: {
+    title: 'Settings',
     language: 'Language',
     languageSystem: 'System',
+    theme: 'Appearance',
+    themeSystem: 'System',
+    themeLight: 'Light',
+    themeDark: 'Dark',
   },
 };
 

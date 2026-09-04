@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Modal,
   Platform,
@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "@/i18n";
-import { colors, elevation, radii, spacing } from "@/ui/theme";
+import { elevation, radii, spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
 
 const MONOSPACE_FONT = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" });
 
@@ -34,6 +34,8 @@ interface LyricsDrawerProps {
  */
 export function LyricsDrawer({ visible, onClose, lyrics, onSave }: LyricsDrawerProps) {
   const { t } = useTranslation();
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [draft, setDraft] = useState(lyrics);
   // Re-seeds the draft on every closed-to-open transition, so the drawer
   // always shows the project's current lyrics rather than a stale edit from
@@ -90,7 +92,8 @@ export function LyricsDrawer({ visible, onClose, lyrics, onSave }: LyricsDrawerP
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   sheet: {
     marginTop: "auto",
     height: "85%",
@@ -117,7 +120,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
     borderRadius: radii.pill,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: colors.borderLight,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
   },
@@ -156,4 +159,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
   },
-});
+  });
+}

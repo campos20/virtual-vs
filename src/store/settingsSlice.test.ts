@@ -6,10 +6,11 @@ import reducer, {
   lyricsFontSizeSet,
   lyricsViewActiveSet,
   monitorModeSet,
+  themeOverrideSet,
 } from './settingsSlice';
 
 describe('settingsSlice', () => {
-  it('defaults to split monitor mode, the device locale, the default lyrics font size, mixed-case lyrics and the waveform view', () => {
+  it('defaults to split monitor mode, the device locale, the default lyrics font size, mixed-case lyrics, the waveform view and dark theme', () => {
     const state = reducer(undefined, { type: '@@INIT' });
     expect(state).toEqual({
       monitorMode: 'split',
@@ -18,6 +19,7 @@ describe('settingsSlice', () => {
       lyricsFontSizePt: DEFAULT_LYRICS_FONT_SIZE_PT,
       lyricsAllCaps: false,
       lyricsViewActive: false,
+      themeOverride: 'dark',
     });
   });
 
@@ -55,5 +57,10 @@ describe('settingsSlice', () => {
   it('sets whether the lyrics view is active', () => {
     const state = reducer(undefined, lyricsViewActiveSet(true));
     expect(state.lyricsViewActive).toBe(true);
+  });
+
+  it('sets the theme override', () => {
+    const state = reducer(undefined, themeOverrideSet('light'));
+    expect(state.themeOverride).toBe('light');
   });
 });

@@ -1,6 +1,6 @@
 import { getDocumentAsync, type DocumentPickerAsset } from "expo-document-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -58,7 +58,7 @@ import { ProjectForm, type ProjectFormValues } from "@/ui/components/ProjectForm
 import { WaveformView } from "@/ui/components/WaveformView";
 import { BackButton } from "@/ui/components/BackButton";
 import { HeaderButton } from "@/ui/components/HeaderButton";
-import { colors, radii, spacing } from "@/ui/theme";
+import { radii, spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
 
 /** Short random id for a newly added marker - only needs to be unique within one project's list. */
 function generateMarkerId(): string {
@@ -85,6 +85,8 @@ export function ProjectScreen() {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const { t } = useTranslation();
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const entry = useAppSelector((s) =>
     projectId ? projectsSelectors.selectById(s.projects, projectId) : undefined,
@@ -797,7 +799,8 @@ export function ProjectScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -854,7 +857,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: radii.pill,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: colors.borderLight,
   },
   subtitlePillText: {
     color: colors.textSecondary,
@@ -885,7 +888,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: colors.borderLight,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
   },
@@ -902,4 +905,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: spacing.lg,
   },
-});
+  });
+}

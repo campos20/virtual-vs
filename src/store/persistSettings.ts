@@ -1,11 +1,13 @@
 import type { Locale } from '@/i18n';
 import { writeAppSettings } from '@/storage/appSettings';
+import type { ThemeOverride } from '@/types/theme';
 import type { AppDispatch } from './index';
 import {
   languageOverrideSet,
   lyricsAllCapsSet,
   lyricsFontSizeSet,
   lyricsViewActiveSet,
+  themeOverrideSet,
 } from './settingsSlice';
 
 /** Sets the manual language override (or `null` to follow the device locale again) and persists it. */
@@ -37,5 +39,13 @@ export function persistLyricsViewActive(active: boolean) {
   return (dispatch: AppDispatch) => {
     dispatch(lyricsViewActiveSet(active));
     writeAppSettings({ lyricsViewActive: active });
+  };
+}
+
+/** Sets the manual theme override ("system" follows the device's own light/dark setting) and persists it. */
+export function persistThemeOverride(theme: ThemeOverride) {
+  return (dispatch: AppDispatch) => {
+    dispatch(themeOverrideSet(theme));
+    writeAppSettings({ themeOverride: theme });
   };
 }

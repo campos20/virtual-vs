@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   Modal,
   Pressable,
@@ -9,7 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "@/i18n";
 import type { LyricsSyncPoint } from "@/types/project";
-import { colors, elevation, radii, spacing } from "@/ui/theme";
+import { elevation, radii, spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
 
 interface LyricsSyncDrawerProps {
   visible: boolean;
@@ -46,6 +47,8 @@ export function LyricsSyncDrawer({
   onClearAll,
 }: LyricsSyncDrawerProps) {
   const { t } = useTranslation();
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const lines = lyrics.split("\n");
   const sorted = [...syncPoints].sort((a, b) => a.timeSec - b.timeSec);
 
@@ -117,7 +120,8 @@ export function LyricsSyncDrawer({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   sheet: {
     marginTop: "auto",
     maxHeight: "80%",
@@ -150,7 +154,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
     borderRadius: radii.pill,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: colors.borderLight,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
   },
@@ -224,4 +228,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
   },
-});
+  });
+}

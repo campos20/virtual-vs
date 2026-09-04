@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { colors } from '@/ui/theme';
+import { useThemeColors, type ThemeColors } from '@/ui/theme';
 
 /**
  * A single eighth note (head + stem + flag), drawn with Views - see
@@ -11,6 +12,9 @@ import { colors } from '@/ui/theme';
  * content" rather than another menu/list glyph.
  */
 export function LyricsIcon() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.container}>
       <View style={styles.stem} />
@@ -20,38 +24,40 @@ export function LyricsIcon() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    width: 16,
-    height: 18,
-  },
-  head: {
-    position: 'absolute',
-    left: 0,
-    bottom: 0,
-    width: 9,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: colors.textPrimary,
-  },
-  stem: {
-    position: 'absolute',
-    left: 7,
-    top: 0,
-    width: 2,
-    height: 11,
-    borderRadius: 1,
-    backgroundColor: colors.textPrimary,
-  },
-  flag: {
-    position: 'absolute',
-    left: 9,
-    top: 0,
-    width: 0,
-    height: 0,
-    borderTopWidth: 6,
-    borderRightWidth: 6,
-    borderTopColor: colors.textPrimary,
-    borderRightColor: 'transparent',
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      width: 16,
+      height: 18,
+    },
+    head: {
+      position: 'absolute',
+      left: 0,
+      bottom: 0,
+      width: 9,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: colors.textPrimary,
+    },
+    stem: {
+      position: 'absolute',
+      left: 7,
+      top: 0,
+      width: 2,
+      height: 11,
+      borderRadius: 1,
+      backgroundColor: colors.textPrimary,
+    },
+    flag: {
+      position: 'absolute',
+      left: 9,
+      top: 0,
+      width: 0,
+      height: 0,
+      borderTopWidth: 6,
+      borderRightWidth: 6,
+      borderTopColor: colors.textPrimary,
+      borderRightColor: 'transparent',
+    },
+  });
+}

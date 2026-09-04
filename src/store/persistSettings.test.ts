@@ -4,6 +4,7 @@ import {
   persistLyricsAllCaps,
   persistLyricsFontSize,
   persistLyricsViewActive,
+  persistThemeOverride,
 } from './persistSettings';
 
 jest.mock('@/storage/appSettings', () => ({
@@ -68,5 +69,16 @@ describe('persistLyricsViewActive', () => {
 
     expect(store.getState().settings.lyricsViewActive).toBe(true);
     expect(writeAppSettings).toHaveBeenCalledWith({ lyricsViewActive: true });
+  });
+});
+
+describe('persistThemeOverride', () => {
+  it('sets the theme override and persists it', () => {
+    const store = createStore();
+
+    store.dispatch(persistThemeOverride('light'));
+
+    expect(store.getState().settings.themeOverride).toBe('light');
+    expect(writeAppSettings).toHaveBeenCalledWith({ themeOverride: 'light' });
   });
 });

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -7,9 +7,11 @@ import {
   Text,
   TextInput,
   View,
+  type StyleProp,
+  type TextStyle,
 } from 'react-native';
 import { useTranslation } from '@/i18n';
-import { colors, radii, spacing } from '@/ui/theme';
+import { radii, spacing, useThemeColors, type ThemeColors } from '@/ui/theme';
 
 export interface ProjectFormValues {
   title: string;
@@ -45,6 +47,7 @@ interface StemNameFieldProps {
   name: string;
   disabled?: boolean;
   onRename: (stemId: string, name: string) => Promise<boolean>;
+  style: StyleProp<TextStyle>;
 }
 
 /**
@@ -61,7 +64,7 @@ interface StemNameFieldProps {
  * this naturally remounts (and re-seeds) if the stem itself is removed and
  * a different one added in its place.
  */
-function StemNameField({ stemId, name, disabled, onRename }: StemNameFieldProps) {
+function StemNameField({ stemId, name, disabled, onRename, style }: StemNameFieldProps) {
   const [draft, setDraft] = useState(name);
 
   async function commit() {
@@ -85,7 +88,7 @@ function StemNameField({ stemId, name, disabled, onRename }: StemNameFieldProps)
       onBlur={commit}
       editable={!disabled}
       underlineColorAndroid="transparent"
-      style={styles.fileName}
+      style={style}
       testID={`rename-stem-${stemId}`}
     />
   );
@@ -114,6 +117,8 @@ export function ProjectForm({
   onDelete,
 }: ProjectFormProps) {
   const { t } = useTranslation();
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [title, setTitle] = useState(initial.title);
   const [bpmText, setBpmText] = useState(initial.bpm === undefined ? '' : String(initial.bpm));
   const [key, setKey] = useState(initial.key);
@@ -189,6 +194,7 @@ export function ProjectForm({
               name={stem.name}
               disabled={busy}
               onRename={onRenameStem}
+              style={styles.fileName}
             />
             <Pressable
               onPress={() => onRemoveStem(stem.id)}
@@ -245,7 +251,8 @@ export function ProjectForm({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   form: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
@@ -365,4 +372,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
-});
+  });
+}

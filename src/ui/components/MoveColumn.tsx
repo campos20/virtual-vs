@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { colors } from '@/ui/theme';
+import { useThemeColors, type ThemeColors } from '@/ui/theme';
 
 interface MoveColumnProps {
   canMoveUp: boolean;
@@ -30,6 +31,9 @@ export function MoveColumn({
   moveDownAccessibilityLabel,
   testID,
 }: MoveColumnProps) {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.column}>
       <Pressable
@@ -58,7 +62,8 @@ export function MoveColumn({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   column: {
     justifyContent: 'center',
     borderLeftWidth: StyleSheet.hairlineWidth,
@@ -96,4 +101,5 @@ const styles = StyleSheet.create({
   arrowDisabled: {
     opacity: 0.25,
   },
-});
+  });
+}

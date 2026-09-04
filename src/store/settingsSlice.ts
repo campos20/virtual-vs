@@ -2,6 +2,7 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import type { MonitorMode } from '@/engine';
 import type { Locale } from '@/i18n';
 import { readAppSettings } from '@/storage/appSettings';
+import { isThemeOverride, type ThemeOverride } from '@/types/theme';
 import { DEFAULT_LYRICS_FONT_SIZE_PT } from '@/ui/lyricsScroll';
 import { resolveLibraryOrder } from '@/ui/libraryTree';
 
@@ -31,6 +32,8 @@ export interface SettingsState {
    * read this set, not something about any one song.
    */
   lyricsViewActive: boolean;
+  /** Manually picked on the Settings screen. Defaults to "dark" - the app has only ever been dark, so a fresh install must look exactly like it always has, not suddenly follow the device's setting. */
+  themeOverride: ThemeOverride;
 }
 
 const initialState: SettingsState = {
@@ -40,6 +43,7 @@ const initialState: SettingsState = {
   lyricsFontSizePt: readAppSettings().lyricsFontSizePt ?? DEFAULT_LYRICS_FONT_SIZE_PT,
   lyricsAllCaps: readAppSettings().lyricsAllCaps ?? false,
   lyricsViewActive: readAppSettings().lyricsViewActive ?? false,
+  themeOverride: isThemeOverride(readAppSettings().themeOverride) ? readAppSettings().themeOverride! : 'dark',
 };
 
 const settingsSlice = createSlice({
@@ -74,6 +78,10 @@ const settingsSlice = createSlice({
     lyricsViewActiveSet(state, action: PayloadAction<boolean>) {
       state.lyricsViewActive = action.payload;
     },
+    /** State-only, like the above; persisted by the persistThemeOverride thunk. */
+    themeOverrideSet(state, action: PayloadAction<ThemeOverride>) {
+      state.themeOverride = action.payload;
+    },
   },
 });
 
@@ -84,5 +92,6 @@ export const {
   lyricsFontSizeSet,
   lyricsAllCapsSet,
   lyricsViewActiveSet,
+  themeOverrideSet,
 } = settingsSlice.actions;
 export default settingsSlice.reducer;

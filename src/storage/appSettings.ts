@@ -1,5 +1,6 @@
 import { File, Paths } from 'expo-file-system';
 import type { Locale } from '@/i18n';
+import type { ThemeOverride } from '@/types/theme';
 
 export interface PersistedAppSettings {
   /** Manually chosen language, overriding the device locale. Absent means "follow the device". */
@@ -33,6 +34,8 @@ export interface PersistedAppSettings {
   lyricsAllCaps?: boolean;
   /** Whether ProjectScreen shows the lyrics view instead of the waveform - global so switching songs keeps the view the performer left it on. */
   lyricsViewActive?: boolean;
+  /** Manually chosen theme, overriding the device's light/dark setting. Absent means "dark" - see types/theme.ts. */
+  themeOverride?: ThemeOverride;
 }
 
 const settingsFile = new File(Paths.document, 'settings.json');

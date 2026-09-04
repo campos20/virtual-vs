@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PanResponder, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
-import { colors, glow, radii } from '@/ui/theme';
+import { glow, radii, useThemeColors, type ThemeColors } from '@/ui/theme';
 import {
   UNITY_GAIN,
   classifyGestureEnd,
@@ -49,6 +49,8 @@ export function VerticalFader({
   accentColor,
   testID,
 }: VerticalFaderProps) {
+  const colors = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const heightRef = useRef(0);
   const draggingValueRef = useRef(value);
   /** Value the finger grabbed at, which the drag delta is applied to. */
@@ -178,7 +180,8 @@ export function VerticalFader({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   wrapper: {
     alignItems: 'center',
     width: '100%',
@@ -255,4 +258,5 @@ const styles = StyleSheet.create({
     borderRadius: 1,
     backgroundColor: 'rgba(0,0,0,0.25)',
   },
-});
+  });
+}
