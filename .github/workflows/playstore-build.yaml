@@ -5,16 +5,13 @@ name: Build Android AAB (Play Store)
 # EAS's servers and hands it back as a workflow artifact; a person still
 # reviews it and uploads it to Play Console themselves.
 #
-# One-time setup this workflow depends on, done once from a machine with
-# interactive `eas` access (not something this workflow can do for you):
-#   - An `eas.json` with an `appVersionSource: "remote"` and a `production`
-#     build profile (`eas build:configure`) - this repo does not have one yet.
-#   - `EXPO_TOKEN` must exist as a repo secret (an EAS personal or robot
-#     access token - https://expo.dev/accounts/[account]/settings/access-tokens).
+# One-time setup this workflow depends on (`eas.json` and the EXPO_TOKEN
+# secret are already in place - see git history for when those were added):
 #   - Android production signing credentials must already be configured on
 #     EAS (`eas credentials`, or answer the prompts on a first interactive
-#     `eas build -p android -e production`) - `--non-interactive` below can't
-#     create them itself.
+#     `eas build -p android -e production`, done once from a machine with
+#     interactive `eas` access) - `--non-interactive` below can't create them
+#     itself.
 on:
   workflow_dispatch: {}
 

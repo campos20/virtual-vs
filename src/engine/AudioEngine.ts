@@ -269,7 +269,17 @@ export class AudioEngine {
     for (const node of this.tracks.values()) prime(node.buffer);
     if (this.clickBuffer) prime(this.clickBuffer);
 
-    setTimeout(() => silent.disconnect(), 50);
+    // Must fire after `primeUntil`, not a fixed delay - disconnecting `silent`
+    // from the destination before then would cut every primed source out of
+    // the render graph before its scheduled `start()` even happens. A
+    // disconnected node's inputs are never pulled through the renderer at
+    // all (Web Audio only processes what's reachable from the destination),
+    // so an early disconnect means the primed sources never actually render
+    // a block - defeating priming entirely rather than just narrowing its
+    // margin. Was a bare 50ms, which only stayed safe by coincidence while
+    // `primeAt` was computed from the much smaller `STOP_LOOKAHEAD_SEC`.
+    const disconnectDelayMs = (primeUntil - this.ctx.currentTime) * 1000 + 50;
+    setTimeout(() => silent.disconnect(), disconnectDelayMs);
   }
 
   private disposeTracks(): void {

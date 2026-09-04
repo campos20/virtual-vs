@@ -28,7 +28,7 @@ if (!version) {
   process.exit(1);
 }
 
-if (versionCode !== undefined && !/^\d+$/.test(versionCode)) {
+if (versionCode !== undefined && !/^[1-9]\d*$/.test(versionCode)) {
   console.error(`versionCode must be a positive integer, got "${versionCode}"`);
   process.exit(1);
 }
