@@ -22,7 +22,7 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
-      "package": "com.campos20.virtualvs"
+      "package": "com.github.campos20.virtualvs"
     },
     "web": {
       "output": "static",
