@@ -11,7 +11,13 @@ import type { DecodedProject } from '@/storage/types';
 import { generateClickBuffer } from './clickTrack';
 import type { EngineTransportState, MonitorMode, TrackRuntimeState } from './types';
 
-const LOOKAHEAD_SEC = 0.15;
+/**
+ * Lookahead for starting real playback. Also reused for priming (see
+ * `primeSources()`) so both share the same jank tolerance - see git history
+ * around this constant's bump from 0.15 for why priming can't get away with
+ * a much tighter margin than real playback does.
+ */
+const LOOKAHEAD_SEC = 0.3;
 /**
  * Lookahead for stop scheduling. `stopSources()` computes one `stopAt` and
  * passes it to every node so they all stop on the same sample - but
@@ -30,7 +36,7 @@ const STOP_LOOKAHEAD_SEC = 0.01;
  * the lookahead of any real playback. It is inaudible regardless - primed
  * sources run into a silent gain that reaches neither bus.
  */
-const PRIME_DURATION_SEC = 0.005;
+const PRIME_DURATION_SEC = 0.02;
 /** Ramp time for volume/mute/solo changes, short enough to feel instant but long enough to avoid zipper clicks. */
 const GAIN_RAMP_SEC = 0.015;
 
@@ -236,11 +242,17 @@ export class AudioEngine {
     // reason stopSources() is: the clock keeps advancing while this loop
     // runs, so an un-offset value is already in the past by the time a later
     // iteration reaches the audio thread - which silently degrades to "ASAP"
-    // for only *some* of the nodes. Priming exists precisely to give every
-    // buffer the same first-schedule treatment, so a `when` that means
-    // something different per node defeats it. See AGENTS.md
+    // for only *some* of the nodes, and (worse, here) can collapse the
+    // start/stop window to zero so that node never actually renders a block
+    // and never really pays priming's one-time cost. Uses `LOOKAHEAD_SEC`,
+    // not the much tighter `STOP_LOOKAHEAD_SEC`, because this loop runs
+    // right after decoding a project's stems - exactly when Android is most
+    // likely to hit a GC pause or bridge congestion long enough to blow a
+    // 10ms budget. A track priming leaves un-warmed here pays its
+    // first-schedule cost live on the real first `play()` instead, landing
+    // that one track a few ms off from its siblings on stage. See AGENTS.md
     // "Stems stay sample-locked".
-    const primeAt = this.ctx.currentTime + STOP_LOOKAHEAD_SEC;
+    const primeAt = this.ctx.currentTime + LOOKAHEAD_SEC;
     const primeUntil = primeAt + PRIME_DURATION_SEC;
     const silent = this.ctx.createGain();
     silent.gain.value = 0;
@@ -257,7 +269,17 @@ export class AudioEngine {
     for (const node of this.tracks.values()) prime(node.buffer);
     if (this.clickBuffer) prime(this.clickBuffer);
 
-    setTimeout(() => silent.disconnect(), 50);
+    // Must fire after `primeUntil`, not a fixed delay - disconnecting `silent`
+    // from the destination before then would cut every primed source out of
+    // the render graph before its scheduled `start()` even happens. A
+    // disconnected node's inputs are never pulled through the renderer at
+    // all (Web Audio only processes what's reachable from the destination),
+    // so an early disconnect means the primed sources never actually render
+    // a block - defeating priming entirely rather than just narrowing its
+    // margin. Was a bare 50ms, which only stayed safe by coincidence while
+    // `primeAt` was computed from the much smaller `STOP_LOOKAHEAD_SEC`.
+    const disconnectDelayMs = (primeUntil - this.ctx.currentTime) * 1000 + 50;
+    setTimeout(() => silent.disconnect(), disconnectDelayMs);
   }
 
   private disposeTracks(): void {

@@ -22,7 +22,7 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
-      "package": "com.campos20.virtualvs"
+      "package": "com.github.campos20.virtualvs"
     },
     "web": {
       "output": "static",
@@ -43,7 +43,9 @@
         {
           "iosBackgroundMode": true,
           "androidForegroundService": true,
-          "androidFSTypes": ["mediaPlayback"],
+          "androidFSTypes": [
+            "mediaPlayback"
+          ],
           "androidPermissions": [
             "android.permission.FOREGROUND_SERVICE",
             "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
@@ -57,6 +59,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e67937f2-315a-4225-8d84-04aa491feeb3"
+      }
+    },
+    "owner": "campos20"
   }
 }

@@ -49,10 +49,16 @@ interface LyricsViewProps {
  * involved (see AGENTS.md "Stability over appearance"), same convention as
  * StemWaveformLane. With zero tap-corrections it's plain duration-proportional
  * scroll; each line tap refines the interpolation around it (see
- * `@/ui/lyricsScroll`). `scrollEnabled` stays false throughout - tapping a
- * line is the only way a user influences this view; there's no manual
- * drag-scrolling, which would otherwise fight the imperative `scrollTo`
- * called on every playhead update.
+ * `@/ui/lyricsScroll`). Manual drag-scrolling is allowed - a sync correction
+ * often needs a line that's scrolled out of the current viewport (a section
+ * that's already gone by, or one far enough ahead that interpolation hasn't
+ * caught up to it yet) - but only while the user is actively dragging:
+ * `isUserScrollingRef` suspends the imperative `scrollTo` for that window so
+ * it doesn't fight the drag, then lets the very next playhead tick (at ~15fps
+ * while playing, see `usePlayhead`) snap the view straight back to the live
+ * position once the user lets go. That's deliberate, not a bug to smooth
+ * over: a manually-browsed position is for reaching a tap target, not a
+ * standing "pause auto-follow" mode.
  */
 export function LyricsView({
   lyrics,
@@ -78,6 +84,9 @@ export function LyricsView({
   // pixel) anchor. Guarded below so re-measuring the same value doesn't
   // trigger a state update loop.
   const [lineOffsets, setLineOffsets] = useState<Record<number, number>>({});
+  // Not state - flipping it shouldn't itself trigger a render, only gate
+  // whether the next playhead-driven effect run is allowed to call scrollTo.
+  const isUserScrollingRef = useRef(false);
 
   const lines = useMemo(() => lyrics.split("\n"), [lyrics]);
   const isEmpty = lyrics.trim().length === 0;
@@ -116,11 +125,20 @@ export function LyricsView({
   );
 
   useEffect(() => {
+    if (isUserScrollingRef.current) return;
     scrollRef.current?.scrollTo({
       y: computeLyricsScrollY(playheadSec, anchors),
       animated: false,
     });
   }, [playheadSec, anchors]);
+
+  const handleScrollInteractionStart = useCallback(() => {
+    isUserScrollingRef.current = true;
+  }, []);
+
+  const handleScrollInteractionEnd = useCallback(() => {
+    isUserScrollingRef.current = false;
+  }, []);
 
   // Doubles as a karaoke-style "current line" indicator and as immediate
   // visual confirmation that a tap registered - no timer-based flash needed.
@@ -239,9 +257,12 @@ export function LyricsView({
       ) : (
         <ScrollView
           ref={scrollRef}
-          scrollEnabled={false}
           showsVerticalScrollIndicator={false}
           onContentSizeChange={handleContentSizeChange}
+          onScrollBeginDrag={handleScrollInteractionStart}
+          onScrollEndDrag={handleScrollInteractionEnd}
+          onMomentumScrollBegin={handleScrollInteractionStart}
+          onMomentumScrollEnd={handleScrollInteractionEnd}
           contentContainerStyle={styles.linesContainer}
         >
           {lines.map((line, index) => {
