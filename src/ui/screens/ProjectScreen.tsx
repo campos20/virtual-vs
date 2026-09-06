@@ -645,11 +645,24 @@ export function ProjectScreen() {
    * Library, not step backward through every song already passed on the way
    * there. `autoPlay` rides along as a route param read by the effect that
    * loads the new screen - see its "Play next" comment.
+   *
+   * Stops the engine immediately, before any of that. The old song's actual
+   * teardown otherwise only happens once the *new* one finishes loading
+   * (`loadProject` rebuilds the graph atomically - see AGENTS.md), and
+   * decoding a project is real, sometimes multi-second work - without an
+   * explicit stop here, the outgoing song would keep audibly playing for
+   * however long that takes, then abruptly cut over. A definite stop now,
+   * even with a beat of silence while the next one loads, beats an
+   * unpredictable overlap. Safe to call unconditionally: every caller of
+   * this function is gated behind `isCurrent` already (see the folder songs
+   * button/drawer), so the engine is always playing *this* project when it
+   * fires.
    */
   function handleSwitchToSong(
     nextProjectId: string,
     options?: { autoPlay?: boolean },
   ) {
+    audioEngine.stop();
     discardIfEmptyDraft();
     teardownAndNavigate(() =>
       router.replace({

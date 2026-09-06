@@ -405,6 +405,22 @@ describe('ProjectScreen - quick switch between songs in a folder', () => {
     });
   });
 
+  // The old song's own teardown otherwise only happens once the next one
+  // finishes decoding - real, sometimes multi-second work - which would
+  // leave it audibly playing in the meantime. Switching must cut it
+  // immediately instead of overlapping with whatever loads next.
+  it('stops the currently playing song immediately when switching to another', async () => {
+    const songs = [song('a', 'Song A'), song('b', 'Song B'), song('c', 'Song C')];
+    renderInFolder('a', songs);
+    await waitForMixer();
+    audioEngine.play();
+
+    openFolderSongs();
+    fireEvent.press(screen.getByTestId('folder-songs-row-c'));
+
+    expect(audioEngine.getTransportState()).toBe('stopped');
+  });
+
   it('just closes the list, without navigating, when the currently open song is tapped', async () => {
     const songs = [song('a', 'Song A'), song('b', 'Song B')];
     renderInFolder('a', songs);
