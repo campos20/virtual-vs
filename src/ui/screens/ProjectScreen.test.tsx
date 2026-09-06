@@ -323,6 +323,10 @@ describe('ProjectScreen - lyrics', () => {
     fireEvent.press(screen.getByTestId('lyrics-toggle-button'));
   }
 
+  function showWaveform() {
+    fireEvent.press(screen.getByTestId('waveform-view-button'));
+  }
+
   it('swaps the waveform for the lyrics view and back', async () => {
     renderLoaded();
     await waitForMixer();
@@ -335,10 +339,24 @@ describe('ProjectScreen - lyrics', () => {
     expect(screen.queryByText('Bass')).toBeNull();
     expect(screen.getByTestId('edit-lyrics-button')).toBeTruthy();
 
-    toggleLyrics();
+    showWaveform();
 
     expect(screen.getByText('Bass')).toBeTruthy();
     expect(screen.queryByTestId('edit-lyrics-button')).toBeNull();
+  });
+
+  // The two are a segmented pair now, not one toggle - pressing the button
+  // for the view already showing must be a no-op, not flip back out of it.
+  it('does nothing when the already-active view button is pressed again', async () => {
+    renderLoaded();
+    await waitForMixer();
+
+    showWaveform();
+    expect(screen.getByText('Bass')).toBeTruthy();
+
+    toggleLyrics();
+    toggleLyrics();
+    expect(screen.getByTestId('edit-lyrics-button')).toBeTruthy();
   });
 
   // Global rather than per-screen-mount state: a performer switching songs
@@ -386,6 +404,21 @@ describe('ProjectScreen - lyrics', () => {
     toggleLyrics();
 
     expect(screen.queryByText('120 BPM')).toBeNull();
+  });
+
+  // The header shrinks around the title while viewing lyrics (padding, the
+  // BPM/Key pills hidden), but the title itself must not be part of that -
+  // it answers the same "which song is this" question in both views, and
+  // silently rendering it smaller there previously read as inconsistent.
+  it('keeps the title the same size in both waveform and lyrics view', async () => {
+    renderLoaded();
+    await waitForMixer();
+    const waveformTitleSize = screen.getByText('Sync Test').props.style.fontSize;
+
+    toggleLyrics();
+
+    const lyricsTitleSize = screen.getByText('Sync Test').props.style.fontSize;
+    expect(lyricsTitleSize).toBe(waveformTitleSize);
   });
 
   it('saves lyrics entered through the drawer', async () => {

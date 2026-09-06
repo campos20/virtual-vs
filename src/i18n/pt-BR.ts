@@ -73,6 +73,7 @@ export const ptBR: TranslationDictionary = {
       `"${title}" e ${stemCount} ${stemCount === 1 ? 'faixa' : 'faixas'} serão excluídos permanentemente deste aparelho.`,
     deleteConfirmConfirm: 'Excluir',
     mixer: 'Mixer',
+    waveformView: 'Forma de onda',
     lockedWhilePlaying: 'Pare a reprodução para editar',
     lockedWhilePlayingBody:
       'Editar reconstrói o motor de áudio, o que cortaria a música. Pare a reprodução primeiro.',

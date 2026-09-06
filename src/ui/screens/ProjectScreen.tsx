@@ -55,6 +55,7 @@ import { MarkerIcon } from "@/ui/components/MarkerIcon";
 import { MarkersDrawer } from "@/ui/components/MarkersDrawer";
 import { MixerDrawer } from "@/ui/components/MixerDrawer";
 import { ProjectForm, type ProjectFormValues } from "@/ui/components/ProjectForm";
+import { WaveformIcon } from "@/ui/components/WaveformIcon";
 import { WaveformView } from "@/ui/components/WaveformView";
 import { BackButton } from "@/ui/components/BackButton";
 import { HeaderButton } from "@/ui/components/HeaderButton";
@@ -370,8 +371,9 @@ export function ProjectScreen() {
     dispatch(persistLyricsAllCaps(allCaps));
   }
 
-  function handleToggleLyricsView() {
-    dispatch(persistLyricsViewActive(!showLyrics));
+  function handleSetLyricsView(next: boolean) {
+    if (next === showLyrics) return;
+    dispatch(persistLyricsViewActive(next));
   }
 
   function handleStartEditing() {
@@ -597,12 +599,16 @@ export function ProjectScreen() {
   function renderHeader() {
     // Collapsed while viewing lyrics, to give the auto-scrolling text as
     // much of the screen as it reasonably can: the BPM/Key pills are purely
-    // decorative once the user is reading lyrics, and the title shrinks to
-    // a compact single line. The back button and the action icon row are
-    // unchanged either way - those are controls still needed while reading
-    // lyrics. No animation on the switch, matching AGENTS.md's
-    // `animation: 'none'` precedent - an abrupt layout change here avoids
-    // any transition-timing complexity for what is otherwise a plain toggle.
+    // decorative once the user is reading lyrics, so they're hidden and the
+    // header's own padding shrinks. The title itself stays the same size in
+    // both views - it's the one piece of chrome that's still the same
+    // "which song is this" answer either way, so it must not be the thing
+    // that visibly changes underneath the reader. The back button and the
+    // action icon row are unchanged either way - those are controls still
+    // needed while reading lyrics. No animation on the switch, matching
+    // AGENTS.md's `animation: 'none'` precedent - an abrupt layout change
+    // here avoids any transition-timing complexity for what is otherwise a
+    // plain toggle.
     const compact = showLyrics;
     return (
       <View style={[styles.header, compact && styles.headerCompact]}>
@@ -610,37 +616,65 @@ export function ProjectScreen() {
           <BackButton label={t.project.backToLibrary} onPress={handleBackFromProject} testID="back-button" />
           {isCurrent && nowPlaying.manifest && !editing && (
             <View style={styles.headerActions}>
-              <Pressable
-                onPress={() => setMarkersOpen(true)}
-                style={({ pressed }) => [styles.mixerButton, pressed && styles.mixerButtonPressed]}
-                hitSlop={8}
-                testID="markers-menu-button"
-                accessibilityLabel={t.markers.heading}
-              >
-                <MarkerIcon />
-              </Pressable>
-              <Pressable
-                onPress={handleToggleLyricsView}
-                style={({ pressed }) => [styles.mixerButton, pressed && styles.mixerButtonPressed]}
-                hitSlop={8}
-                testID="lyrics-toggle-button"
-                accessibilityLabel={t.lyrics.toggleLabel}
-              >
-                <LyricsIcon />
-              </Pressable>
-              <Pressable
-                onPress={() => setMixerOpen(true)}
-                style={({ pressed }) => [styles.mixerButton, pressed && styles.mixerButtonPressed]}
-                hitSlop={8}
-                testID="mixer-menu-button"
-                accessibilityLabel={t.project.mixer}
-              >
-                <HamburgerIcon />
-              </Pressable>
+              {/* Waveform/Lyrics grouped as one segmented control - the two
+                  are alternate views of the same content, so picking one
+                  switches straight to it rather than toggling a single icon. */}
+              <View style={styles.buttonGroup} testID="view-switch-group">
+                <Pressable
+                  onPress={() => handleSetLyricsView(false)}
+                  style={({ pressed }) => [
+                    styles.groupButton,
+                    !showLyrics && styles.groupButtonActive,
+                    pressed && styles.groupButtonPressed,
+                  ]}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 0 }}
+                  testID="waveform-view-button"
+                  accessibilityLabel={t.project.waveformView}
+                  accessibilityState={{ selected: !showLyrics }}
+                >
+                  <WaveformIcon color={!showLyrics ? colors.surface : colors.textSecondary} />
+                </Pressable>
+                <Pressable
+                  onPress={() => handleSetLyricsView(true)}
+                  style={({ pressed }) => [
+                    styles.groupButton,
+                    showLyrics && styles.groupButtonActive,
+                    pressed && styles.groupButtonPressed,
+                  ]}
+                  hitSlop={{ top: 8, bottom: 8, left: 0, right: 8 }}
+                  testID="lyrics-toggle-button"
+                  accessibilityLabel={t.lyrics.toggleLabel}
+                  accessibilityState={{ selected: showLyrics }}
+                >
+                  <LyricsIcon color={showLyrics ? colors.surface : colors.textSecondary} />
+                </Pressable>
+              </View>
+              {/* Markers/Mixer grouped as one unit - both open a drawer that
+                  overlays the current view, rather than switching it. */}
+              <View style={styles.buttonGroup} testID="overlay-menu-group">
+                <Pressable
+                  onPress={() => setMarkersOpen(true)}
+                  style={({ pressed }) => [styles.groupButton, pressed && styles.groupButtonPressed]}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 0 }}
+                  testID="markers-menu-button"
+                  accessibilityLabel={t.markers.heading}
+                >
+                  <MarkerIcon />
+                </Pressable>
+                <Pressable
+                  onPress={() => setMixerOpen(true)}
+                  style={({ pressed }) => [styles.groupButton, pressed && styles.groupButtonPressed]}
+                  hitSlop={{ top: 8, bottom: 8, left: 0, right: 8 }}
+                  testID="mixer-menu-button"
+                  accessibilityLabel={t.project.mixer}
+                >
+                  <HamburgerIcon />
+                </Pressable>
+              </View>
             </View>
           )}
         </View>
-        <Text style={[styles.title, compact && styles.titleCompact]} numberOfLines={1}>
+        <Text style={styles.title} numberOfLines={1}>
           {headerTitle}
         </Text>
         {isCurrent && nowPlaying.manifest && !editing && !compact && (
@@ -844,10 +878,6 @@ function createStyles(colors: ThemeColors) {
     fontWeight: "800",
     letterSpacing: -0.3,
   },
-  titleCompact: {
-    fontSize: 15,
-    fontWeight: "700",
-  },
   subtitleRow: {
     flexDirection: "row",
     gap: 6,
@@ -882,17 +912,24 @@ function createStyles(colors: ThemeColors) {
     alignItems: "center",
     gap: spacing.sm,
   },
-  mixerButton: {
-    width: 36,
-    height: 36,
+  buttonGroup: {
+    flexDirection: "row",
     borderRadius: radii.pill,
-    alignItems: "center",
-    justifyContent: "center",
+    overflow: "hidden",
     backgroundColor: colors.borderLight,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
   },
-  mixerButtonPressed: {
+  groupButton: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  groupButtonActive: {
+    backgroundColor: colors.accent,
+  },
+  groupButtonPressed: {
     opacity: 0.7,
   },
   error: {

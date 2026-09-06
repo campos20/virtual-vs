@@ -2,6 +2,11 @@ import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useThemeColors, type ThemeColors } from '@/ui/theme';
 
+interface LyricsIconProps {
+  /** Overrides the default `colors.textPrimary` fill - needed when this icon sits on an active/accent-colored segment (see ProjectScreen's view switcher) and would otherwise lose contrast. */
+  color?: string;
+}
+
 /**
  * A single eighth note (head + stem + flag), drawn with Views - see
  * HamburgerIcon/MarkerIcon for the same convention (no icon font/library).
@@ -11,9 +16,9 @@ import { useThemeColors, type ThemeColors } from '@/ui/theme';
  * silhouette, not just a width tweak, and reads unambiguously as "song
  * content" rather than another menu/list glyph.
  */
-export function LyricsIcon() {
+export function LyricsIcon({ color }: LyricsIconProps = {}) {
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(colors, color), [colors, color]);
 
   return (
     <View style={styles.container}>
@@ -24,7 +29,8 @@ export function LyricsIcon() {
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, color?: string) {
+  const fill = color ?? colors.textPrimary;
   return StyleSheet.create({
     container: {
       width: 16,
@@ -37,7 +43,7 @@ function createStyles(colors: ThemeColors) {
       width: 9,
       height: 7,
       borderRadius: 4,
-      backgroundColor: colors.textPrimary,
+      backgroundColor: fill,
     },
     stem: {
       position: 'absolute',
@@ -46,7 +52,7 @@ function createStyles(colors: ThemeColors) {
       width: 2,
       height: 11,
       borderRadius: 1,
-      backgroundColor: colors.textPrimary,
+      backgroundColor: fill,
     },
     flag: {
       position: 'absolute',
@@ -56,7 +62,7 @@ function createStyles(colors: ThemeColors) {
       height: 0,
       borderTopWidth: 6,
       borderRightWidth: 6,
-      borderTopColor: colors.textPrimary,
+      borderTopColor: fill,
       borderRightColor: 'transparent',
     },
   });

@@ -65,6 +65,7 @@ export const en = {
       `"${title}" and its ${stemCount} stem${stemCount === 1 ? '' : 's'} will be permanently deleted from this device.`,
     deleteConfirmConfirm: 'Delete',
     mixer: 'Mixer',
+    waveformView: 'Waveform',
     lockedWhilePlaying: 'Stop playback to edit',
     lockedWhilePlayingBody:
       'Editing rebuilds the audio engine, which would cut the song off. Stop playback first.',
