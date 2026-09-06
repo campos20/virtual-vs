@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react';
-import { audioEngine, type EngineTransportState } from '@/engine';
+import { getAudioEngine, type EngineTransportState } from '@/engine';
 
 /** Subscribes to the engine's transport state (playing/paused/stopped). */
 export function useTransportState(): EngineTransportState {
-  const [state, setState] = useState(() => audioEngine.getTransportState());
+  // A freshly constructed engine always starts 'stopped', so this matches
+  // the real engine without reading it during render - the engine must only
+  // ever be built from an effect/handler (see getAudioEngine's doc comment).
+  const [state, setState] = useState<EngineTransportState>('stopped');
 
-  useEffect(() => audioEngine.onTransportStateChange(setState), []);
+  useEffect(() => {
+    const engine = getAudioEngine();
+    setState(engine.getTransportState());
+    return engine.onTransportStateChange(setState);
+  }, []);
 
   return state;
 }

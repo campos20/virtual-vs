@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { audioEngine } from '@/engine';
+import { getAudioEngine } from '@/engine';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { persistProjectMixer } from '@/store/persistProject';
 import { trackBusSet, trackEntityId, trackMuteToggled, trackSoloToggled, trackVolumeCommitted } from '@/store/tracksSlice';
@@ -45,7 +45,7 @@ export function ChannelStrip({ projectId, track, index }: ChannelStripProps) {
   if (!committed) return null;
 
   function handleLiveVolume(volume: number) {
-    audioEngine.setTrackVolume(track.id, volume);
+    getAudioEngine().setTrackVolume(track.id, volume);
   }
 
   // Each of these commits to the store and then writes the whole mixer back
@@ -56,19 +56,19 @@ export function ChannelStrip({ projectId, track, index }: ChannelStripProps) {
   }
 
   function toggleMute() {
-    audioEngine.setTrackMuted(track.id, !committed!.muted);
+    getAudioEngine().setTrackMuted(track.id, !committed!.muted);
     dispatch(trackMuteToggled({ projectId, trackId: track.id }));
     dispatch(persistProjectMixer(projectId));
   }
 
   function toggleSolo() {
-    audioEngine.setTrackSoloed(track.id, !committed!.soloed);
+    getAudioEngine().setTrackSoloed(track.id, !committed!.soloed);
     dispatch(trackSoloToggled({ projectId, trackId: track.id }));
     dispatch(persistProjectMixer(projectId));
   }
 
   function setBus(bus: Bus) {
-    audioEngine.setTrackBus(track.id, bus);
+    getAudioEngine().setTrackBus(track.id, bus);
     dispatch(trackBusSet({ projectId, trackId: track.id, bus }));
     dispatch(persistProjectMixer(projectId));
   }

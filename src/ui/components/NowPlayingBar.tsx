@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { audioEngine } from '@/engine';
+import { getAudioEngine } from '@/engine';
 import { useNowPlaying } from '@/hooks/useNowPlaying';
 import { usePlayhead } from '@/hooks/usePlayhead';
 import { useTransportState } from '@/hooks/useTransportState';
@@ -78,9 +78,16 @@ function NowPlayingBarContent({ projectId, manifest, durationSec }: NowPlayingBa
           isPlaying={transportState === 'playing'}
           playheadSec={playheadSec}
           durationSec={durationSec}
-          onPlayPause={() => (audioEngine.getTransportState() === 'playing' ? audioEngine.pause() : audioEngine.play())}
-          onStop={() => audioEngine.stop()}
-          onSeek={(seconds) => audioEngine.seek(seconds)}
+          onPlayPause={() => {
+            const engine = getAudioEngine();
+            if (engine.getTransportState() === 'playing') {
+              engine.pause();
+            } else {
+              engine.play();
+            }
+          }}
+          onStop={() => getAudioEngine().stop()}
+          onSeek={(seconds) => getAudioEngine().seek(seconds)}
         />
       </Pressable>
     </SafeAreaView>

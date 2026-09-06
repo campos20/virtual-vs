@@ -1,7 +1,9 @@
-import { audioEngine } from '@/engine';
+import { getAudioEngine } from '@/engine';
 import { decodeProjectAudio, getProjectSourceForEntry } from '@/storage';
 import type { LibraryProjectEntry } from '@/store/projectsSlice';
 import { nowPlayingStore } from './nowPlayingStore';
+
+const audioEngine = getAudioEngine();
 
 jest.mock('@/storage', () => ({
   ...jest.requireActual('@/storage'),

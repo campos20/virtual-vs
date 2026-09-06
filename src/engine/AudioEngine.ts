@@ -473,5 +473,20 @@ export class AudioEngine {
   }
 }
 
-/** One AudioEngine (and therefore one AudioContext / sample clock) for the whole app. */
-export const audioEngine = new AudioEngine();
+let instance: AudioEngine | null = null;
+
+/**
+ * One AudioEngine (and therefore one AudioContext / sample clock) for the
+ * whole app, built on first use rather than at import time. Expo's static
+ * web export pre-renders every route in Node before any effect or press
+ * handler runs, and Node has no `window` - constructing the AudioContext at
+ * module scope crashed that pass with "window is not defined". Every real
+ * caller reaches this from an effect or a handler, both of which only run
+ * in the browser after hydration, so lazy construction never runs in Node.
+ */
+export function getAudioEngine(): AudioEngine {
+  if (!instance) {
+    instance = new AudioEngine();
+  }
+  return instance;
+}

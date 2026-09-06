@@ -1,10 +1,12 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
-import { audioEngine } from '@/engine';
+import { getAudioEngine } from '@/engine';
 import { nowPlayingStore } from '@/playback/nowPlayingStore';
 import { decodeProjectAudio, getProjectSourceForEntry } from '@/storage';
 import type { LibraryProjectEntry } from '@/store/projectsSlice';
 import { renderWithStore } from '@/test-utils/renderWithStore';
 import { NowPlayingBar } from './NowPlayingBar';
+
+const audioEngine = getAudioEngine();
 
 const mockPush = jest.fn();
 

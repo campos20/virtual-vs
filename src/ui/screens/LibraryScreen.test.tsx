@@ -10,7 +10,7 @@ import {
 // Mocked at its own path, not through the barrel: the import thunk reaches
 // for it directly, and a barrel mock would leave the real one running.
 import { importBundle } from '@/storage/bundle';
-import { audioEngine } from '@/engine';
+import { getAudioEngine } from '@/engine';
 import { createStore } from '@/store';
 import { projectsHydrated, type LibraryProjectEntry } from '@/store/projectsSlice';
 import { setlistsHydrated } from '@/store/setlistsSlice';
@@ -18,6 +18,8 @@ import type { SetlistManifest } from '@/types/setlist';
 import * as setlistLibrary from '@/storage/setlistLibrary';
 import { renderWithStore } from '@/test-utils/renderWithStore';
 import { LibraryScreen } from './LibraryScreen';
+
+const audioEngine = getAudioEngine();
 
 const mockPush = jest.fn();
 

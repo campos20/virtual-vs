@@ -7,7 +7,7 @@ import { useNowPlaying } from "@/hooks/useNowPlaying";
 import { File } from "expo-file-system";
 import { getDocumentAsync } from "expo-document-picker";
 import { createDraftProject, shareBundle, writeBundleToCache } from "@/storage";
-import { audioEngine } from "@/engine";
+import { getAudioEngine } from "@/engine";
 import type { ProgressUpdate } from "@/storage/progress";
 import { importBundleIntoLibrary } from "@/store/persistBundle";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -90,7 +90,7 @@ export function LibraryScreen() {
    * player does. Same lock the project screen's edit paths use.
    */
   function transportIsRunning() {
-    return audioEngine.getTransportState() === "playing";
+    return getAudioEngine().getTransportState() === "playing";
   }
 
   function describeProgress(update: ProgressUpdate): string {

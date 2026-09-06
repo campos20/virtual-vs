@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { audioEngine } from "@/engine";
+import { getAudioEngine } from "@/engine";
 import { useTranslation } from "@/i18n";
 import type { ProgressUpdate } from "@/storage/progress";
 import { useNowPlaying } from "@/hooks/useNowPlaying";
@@ -149,7 +149,7 @@ export function ProjectScreen() {
    * graph mid-song. `isPlaying` drives the UI; this decides.
    */
   function transportIsRunning() {
-    return audioEngine.getTransportState() === "playing";
+    return getAudioEngine().getTransportState() === "playing";
   }
 
   const describeProgress = useCallback(
@@ -277,12 +277,12 @@ export function ProjectScreen() {
   }
 
   function handleMonitorModeChange(mode: typeof monitorMode) {
-    audioEngine.setMonitorMode(mode);
+    getAudioEngine().setMonitorMode(mode);
     dispatch(monitorModeSet(mode));
   }
 
   function handleClickEnabledChange(enabled: boolean) {
-    audioEngine.setClickEnabled(enabled);
+    getAudioEngine().setClickEnabled(enabled);
     if (entry) dispatch(persistProjectClick(entry.id, enabled));
   }
 
@@ -314,7 +314,7 @@ export function ProjectScreen() {
   }
 
   function handleJumpToMarker(startSec: number) {
-    audioEngine.seek(startSec);
+    getAudioEngine().seek(startSec);
     setMarkersOpen(false);
   }
 
@@ -435,7 +435,7 @@ export function ProjectScreen() {
       const updated = await addStemsToProject(
         entry.sourceDir,
         assets,
-        audioEngine.context,
+        getAudioEngine().context,
         onProgress,
       );
       dispatch(projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }));

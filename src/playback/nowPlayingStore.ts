@@ -1,4 +1,4 @@
-import { audioEngine, type MonitorMode } from '@/engine';
+import { getAudioEngine, type MonitorMode } from '@/engine';
 import { trackRuntimeStatesFromManifest } from '@/engine/trackRuntimeState';
 import { computeWaveformPeaks, waveformBarCount } from '@/engine/waveform';
 import { decodeProjectAudio, getProjectSourceForEntry } from '@/storage';
@@ -105,6 +105,7 @@ class NowPlayingStore {
   ): Promise<LoadResult> {
     const requestId = ++this.requestId;
 
+    const audioEngine = getAudioEngine();
     const source = await getProjectSourceForEntry(entry);
     const decoded = await decodeProjectAudio(audioEngine.context, source, onProgress);
 
@@ -152,7 +153,7 @@ class NowPlayingStore {
    */
   closeIfCurrent(projectId: string): void {
     if (this.snapshot.projectId !== projectId) return;
-    audioEngine.stop();
+    getAudioEngine().stop();
     this.requestId++; // also supersedes any load still in flight for it
     this.commit(EMPTY_SNAPSHOT);
   }

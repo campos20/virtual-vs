@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { audioEngine } from '@/engine';
+import { getAudioEngine } from '@/engine';
 
 /** How often the hook's React state (and therefore the consumer's render) updates. */
 const DISPLAY_UPDATE_INTERVAL_SEC = 1 / 15;
@@ -41,12 +41,13 @@ export function usePlayhead(): {
   useEffect(() => {
     activeRef.current = true;
     let lastDisplayUpdate = 0;
+    const engine = getAudioEngine();
 
     const tick = (now: number) => {
       // Guards the case where a frame was already queued when `stop` ran.
       if (!activeRef.current) return;
 
-      const value = audioEngine.getPlayhead();
+      const value = engine.getPlayhead();
       ref.current = value;
       if (now - lastDisplayUpdate >= DISPLAY_UPDATE_INTERVAL_SEC * 1000) {
         lastDisplayUpdate = now;

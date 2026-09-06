@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import { getDocumentAsync } from 'expo-document-picker';
-import { audioEngine } from '@/engine';
+import { getAudioEngine } from '@/engine';
 import {
   addStemsToProject,
   deleteProjectDirectory,
@@ -17,6 +17,8 @@ import { projectAdded, type LibraryProjectEntry } from '@/store/projectsSlice';
 import { trackEntityId, tracksInitializedForProject } from '@/store/tracksSlice';
 import { renderWithStore } from '@/test-utils/renderWithStore';
 import { ProjectScreen } from './ProjectScreen';
+
+const audioEngine = getAudioEngine();
 
 const mockBack = jest.fn();
 const mockReplace = jest.fn();

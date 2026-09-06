@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import { Provider } from 'react-redux';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { audioEngine } from '@/engine';
+import { getAudioEngine } from '@/engine';
 import { store } from '@/store';
 import { ProjectLibraryGate } from '@/ui/ProjectLibraryGate';
 import { NowPlayingBar } from '@/ui/components/NowPlayingBar';
@@ -14,7 +14,7 @@ export default function RootLayout() {
   useEffect(() => {
     // Activates the iOS/Android audio session once for the app's lifetime,
     // so playback keeps going in the background / with the screen locked.
-    audioEngine.prepare().catch((error) => {
+    getAudioEngine().prepare().catch((error) => {
       console.warn('Failed to prepare audio session', error);
     });
   }, []);
