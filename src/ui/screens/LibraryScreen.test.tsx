@@ -369,6 +369,34 @@ describe('LibraryScreen', () => {
       expect(store.getState().setlists.entities.sunday?.songs).toEqual(['loose']);
     });
 
+    // Creating from inside a folder's own menu should file the new song
+    // there directly, instead of landing loose and needing a second "add to
+    // folder" pass afterward.
+    it('creates a new song directly inside a folder', async () => {
+      (createDraftProject as jest.Mock).mockResolvedValue({
+        id: 'untitled-abc',
+        title: 'Untitled',
+        key: '',
+        tracks: [],
+        sections: [],
+        origin: 'filesystem',
+        sourceDir: 'file:///mock/document/projects/untitled-abc',
+      });
+      const { store } = renderWithFolders([folder('sunday', 'Sunday Set')], []);
+
+      fireEvent.press(screen.getByTestId('folder-row-sunday-menu'));
+      fireEvent.press(screen.getByTestId('new-song-in-folder-sunday'));
+
+      await waitFor(() => expect(createDraftProject).toHaveBeenCalled());
+      await waitFor(() =>
+        expect(store.getState().setlists.entities.sunday?.songs).toEqual(['untitled-abc'])
+      );
+      expect(mockPush).toHaveBeenCalledWith({
+        pathname: '/project/[projectId]',
+        params: { projectId: 'untitled-abc' },
+      });
+    });
+
     it('takes a song back out of a folder, leaving the song itself alone', async () => {
       const { store } = renderWithFolders(
         [folder('sunday', 'Sunday Set', ['filed'])],

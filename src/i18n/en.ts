@@ -41,6 +41,7 @@ export const en = {
     deleteConfirmBody: (name: string, songCount: number) =>
       `"${name}" will be deleted. Its ${songCount} song${songCount === 1 ? '' : 's'} stay on this device and return to the library.`,
     deleteConfirmConfirm: 'Delete',
+    newSong: 'New song',
     addTo: (name: string) => `Add to ${name}`,
     removeFrom: 'Remove from folder',
     export: 'Export…',

@@ -49,6 +49,7 @@ export const ptBR: TranslationDictionary = {
     deleteConfirmBody: (name: string, songCount: number) =>
       `"${name}" será excluída. ${songCount === 1 ? 'A música dela continua' : `As ${songCount} músicas dela continuam`} neste dispositivo e ${songCount === 1 ? 'volta' : 'voltam'} para a biblioteca.`,
     deleteConfirmConfirm: 'Excluir',
+    newSong: 'Nova música',
     addTo: (name: string) => `Adicionar a ${name}`,
     removeFrom: 'Remover da pasta',
     export: 'Exportar…',

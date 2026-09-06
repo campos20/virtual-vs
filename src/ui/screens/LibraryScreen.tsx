@@ -238,14 +238,20 @@ export function LibraryScreen() {
    * There is no "new project" screen. Creating one means making an empty
    * project and opening it - the project screen shows a stemless project in
    * edit mode, so creating and editing are literally the same view.
+   *
+   * `folderId`, when passed (from a folder's own menu), assigns the draft to
+   * that folder immediately - so a song made from inside a folder lands
+   * there directly instead of appearing loose and needing a separate
+   * "add to folder" pass afterward.
    */
-  async function handleNewProject() {
+  async function handleNewProject(folderId?: string) {
     if (creating) return;
     setCreating(true);
     setError(null);
     try {
       const draft = await createDraftProject();
       dispatch(projectAdded(draft));
+      if (folderId) dispatch(addSongToFolder(folderId, draft.id));
       router.push({
         pathname: "/project/[projectId]",
         params: { projectId: draft.id },
@@ -298,7 +304,7 @@ export function LibraryScreen() {
             <Text style={styles.newFolderText}>{t.library.newFolder}</Text>
           </Pressable>
           <Pressable
-            onPress={handleNewProject}
+            onPress={() => handleNewProject()}
             disabled={creating}
             hitSlop={8}
             testID="new-project-button"
@@ -350,6 +356,12 @@ export function LibraryScreen() {
                     expandAccessibilityLabel={expanded ? t.folder.collapse : t.folder.expand}
                     menuAccessibilityLabel={t.folder.folderOptions}
                     menuItems={[
+                      {
+                        key: "new-song",
+                        label: t.folder.newSong,
+                        onPress: () => handleNewProject(folder.id),
+                        testID: `new-song-in-folder-${folder.id}`,
+                      },
                       {
                         key: "rename",
                         label: t.folder.rename,
