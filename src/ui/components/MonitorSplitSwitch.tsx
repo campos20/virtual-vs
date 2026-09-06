@@ -27,7 +27,7 @@ export function MonitorSplitSwitch({ mode, onChange }: MonitorSplitSwitchProps) 
         <Switch
           value={mode === 'monitor'}
           onValueChange={(isMonitor) => onChange(isMonitor ? 'monitor' : 'split')}
-          trackColor={{ false: '#3a3a3c', true: colors.accent }}
+          trackColor={{ false: colors.border, true: colors.accent }}
         />
         <Text style={[styles.label, mode === 'monitor' && styles.labelActive]}>{t.monitorSplit.sum}</Text>
       </View>

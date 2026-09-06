@@ -266,7 +266,11 @@ function createStyles(colors: ThemeColors) {
       width: 5,
       height: 19,
       borderRadius: 1.5,
-      backgroundColor: "#0a0a0a",
+      // Matches playTriangle above: the play button itself is theme-adaptive
+      // (`colors.accent`), so its icon has to track the theme too, or the
+      // two icons on the same button read with different contrast logic the
+      // moment the theme switches.
+      backgroundColor: colors.surface,
     },
   });
 }
