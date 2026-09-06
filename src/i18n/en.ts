@@ -66,6 +66,8 @@ export const en = {
     deleteConfirmConfirm: 'Delete',
     mixer: 'Mixer',
     waveformView: 'Waveform',
+    folderSongs: 'Songs in this folder',
+    playNextSong: 'Play next song',
     lockedWhilePlaying: 'Stop playback to edit',
     lockedWhilePlayingBody:
       'Editing rebuilds the audio engine, which would cut the song off. Stop playback first.',

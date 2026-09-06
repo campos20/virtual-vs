@@ -293,10 +293,16 @@ export function LibraryScreen() {
     ];
   }
 
-  function openProject(projectId: string) {
+  /**
+   * `folderId`, passed when opening a song filed in a folder, lets
+   * ProjectScreen offer quick prev/next between that folder's songs without
+   * detouring back through the Library. Omitted for a loose song - there is
+   * no "same folder" to page through.
+   */
+  function openProject(projectId: string, folderId?: string) {
     router.push({
       pathname: "/project/[projectId]",
-      params: { projectId },
+      params: folderId ? { projectId, folderId } : { projectId },
     });
   }
 
@@ -482,7 +488,7 @@ export function LibraryScreen() {
                           nowPlayingAccessibilityLabel={t.nowPlaying.heading}
                           menuItems={songMenuItems(song, { id: folder.id, name: folder.name })}
                           menuAccessibilityLabel={t.folder.songOptions}
-                          onPress={() => openProject(song.id)}
+                          onPress={() => openProject(song.id, folder.id)}
                           onMoveUp={() =>
                             handleMoveInFolder(
                               folder.id,

@@ -386,14 +386,16 @@ describe('LibraryScreen', () => {
       expect(screen.queryByTestId('project-row-loose-position')).toBeNull();
     });
 
-    it('opens a song from inside a folder', () => {
+    // The folder id rides along so ProjectScreen can offer quick prev/next
+    // between this folder's songs without a trip back through the Library.
+    it('opens a song from inside a folder, carrying the folder id along', () => {
       renderWithFolders([folder('sunday', 'Sunday Set', ['filed'])], [song('filed', 'Filed Song')]);
 
       fireEvent.press(screen.getByText('Filed Song'));
 
       expect(mockPush).toHaveBeenCalledWith({
         pathname: '/project/[projectId]',
-        params: { projectId: 'filed' },
+        params: { projectId: 'filed', folderId: 'sunday' },
       });
     });
 

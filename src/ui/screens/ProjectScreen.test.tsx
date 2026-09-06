@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import { getDocumentAsync } from 'expo-document-picker';
 import { audioEngine } from '@/engine';
@@ -14,13 +14,15 @@ import {
 import { nowPlayingStore } from '@/playback/nowPlayingStore';
 import { createStore } from '@/store';
 import { projectAdded, type LibraryProjectEntry } from '@/store/projectsSlice';
+import { setlistAdded } from '@/store/setlistsSlice';
 import { trackEntityId, tracksInitializedForProject } from '@/store/tracksSlice';
+import type { SetlistManifest } from '@/types/setlist';
 import { renderWithStore } from '@/test-utils/renderWithStore';
 import { ProjectScreen } from './ProjectScreen';
 
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
-let mockParams: { projectId?: string } = {};
+let mockParams: { projectId?: string; folderId?: string; autoPlay?: string } = {};
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockParams,
@@ -315,6 +317,147 @@ describe('ProjectScreen - markers', () => {
     const [sourceDir, changes] = patchManifestMock.mock.calls.at(-1)!;
     expect(sourceDir).toBe(threeStemProject.sourceDir);
     expect(changes.sections).toEqual([]);
+  });
+});
+
+describe('ProjectScreen - quick switch between songs in a folder', () => {
+  function song(id: string, title: string): LibraryProjectEntry {
+    return {
+      id,
+      title,
+      key: '',
+      tracks: [{ id: 'bass', name: 'Bass', file: 'bass.wav', gain: 0.85, bus: 'main' }],
+      sections: [],
+      origin: 'filesystem',
+      sourceDir: `file:///mock/document/projects/${id}`,
+    };
+  }
+
+  function folder(id: string, songs: string[]): SetlistManifest {
+    return { id, name: id, songs, advance: 'manual', padBetween: false };
+  }
+
+  /** Loads `projectId` (opened, per `folderId`, from inside that folder) with `songs` filed in it, in that order. */
+  function renderInFolder(projectId: string, songs: LibraryProjectEntry[], folderId = 'sunday') {
+    const current = songs.find((entry) => entry.id === projectId)!;
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: current,
+      resolveFile: () => 0,
+    });
+    mockParams = { projectId, folderId };
+    const store = createStore();
+    for (const entry of songs) store.dispatch(projectAdded(entry));
+    store.dispatch(setlistAdded(folder(folderId, songs.map((entry) => entry.id))));
+    return renderWithStore(<ProjectScreen />, store);
+  }
+
+  function openFolderSongs() {
+    fireEvent.press(screen.getByTestId('folder-songs-menu-button'));
+  }
+
+  it('offers no "songs in folder" button for a song opened outside any folder', async () => {
+    renderLoaded();
+    await waitForMixer();
+
+    expect(screen.queryByTestId('folder-songs-menu-button')).toBeNull();
+  });
+
+  // Hidden by default - the whole point is that switching songs is never a
+  // one-tap accident near Markers/Mixer, only ever a deliberate "open the
+  // list, then tap a specific song" pair of taps.
+  it('keeps the folder song list hidden until its icon is pressed', async () => {
+    const songs = [song('a', 'Song A'), song('b', 'Song B')];
+    renderInFolder('a', songs);
+    await waitForMixer();
+
+    expect(screen.queryByTestId('folder-songs-row-b')).toBeNull();
+
+    openFolderSongs();
+
+    expect(screen.getByTestId('folder-songs-row-b')).toBeTruthy();
+  });
+
+  it('lists every song in the folder, in its own order', async () => {
+    const songs = [song('a', 'Song A'), song('b', 'Song B'), song('c', 'Song C')];
+    renderInFolder('a', songs);
+    await waitForMixer();
+
+    openFolderSongs();
+
+    // "Song A" is also the header title (this is the song currently open),
+    // so these are found within their own drawer row rather than by text.
+    expect(within(screen.getByTestId('folder-songs-row-a')).getByText('Song A')).toBeTruthy();
+    expect(within(screen.getByTestId('folder-songs-row-b')).getByText('Song B')).toBeTruthy();
+    expect(within(screen.getByTestId('folder-songs-row-c')).getByText('Song C')).toBeTruthy();
+  });
+
+  it('jumps to whichever song in the list is tapped, carrying the folder id along', async () => {
+    const songs = [song('a', 'Song A'), song('b', 'Song B'), song('c', 'Song C')];
+    renderInFolder('a', songs);
+    await waitForMixer();
+
+    openFolderSongs();
+    fireEvent.press(screen.getByTestId('folder-songs-row-c'));
+
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/project/[projectId]',
+      params: { projectId: 'c', folderId: 'sunday' },
+    });
+  });
+
+  it('just closes the list, without navigating, when the currently open song is tapped', async () => {
+    const songs = [song('a', 'Song A'), song('b', 'Song B')];
+    renderInFolder('a', songs);
+    await waitForMixer();
+
+    openFolderSongs();
+    fireEvent.press(screen.getByTestId('folder-songs-row-a'));
+
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('folder-songs-row-b')).toBeNull();
+  });
+
+  it('disables "Play next" on the last song in the folder - it does not wrap', async () => {
+    const songs = [song('a', 'Song A'), song('b', 'Song B')];
+    renderInFolder('b', songs);
+    await waitForMixer();
+
+    openFolderSongs();
+
+    expect(screen.getByTestId('play-next-song-button').props.accessibilityState.disabled).toBe(true);
+  });
+
+  it('jumps to the next song and closes the list when "Play next" is pressed, marked to autoplay', async () => {
+    const songs = [song('a', 'Song A'), song('b', 'Song B'), song('c', 'Song C')];
+    renderInFolder('a', songs);
+    await waitForMixer();
+
+    openFolderSongs();
+    fireEvent.press(screen.getByTestId('play-next-song-button'));
+
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/project/[projectId]',
+      params: { projectId: 'b', folderId: 'sunday', autoPlay: '1' },
+    });
+    expect(screen.queryByTestId('folder-songs-row-c')).toBeNull();
+  });
+
+  // The button's whole point: unlike every other way to land on a song
+  // (Library, a plain row tap in this same list), this one carries straight
+  // on playing instead of loading and stopping.
+  it('actually starts playback once a song opened this way finishes loading', async () => {
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: threeStemProject,
+      resolveFile: () => 0,
+    });
+    mockParams = { projectId: threeStemProject.id, autoPlay: '1' };
+    const store = createStore();
+    store.dispatch(projectAdded(threeStemProject));
+    renderWithStore(<ProjectScreen />, store);
+
+    await waitForMixer();
+
+    await waitFor(() => expect(audioEngine.getTransportState()).toBe('playing'));
   });
 });
 

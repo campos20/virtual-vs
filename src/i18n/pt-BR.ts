@@ -74,6 +74,8 @@ export const ptBR: TranslationDictionary = {
     deleteConfirmConfirm: 'Excluir',
     mixer: 'Mixer',
     waveformView: 'Forma de onda',
+    folderSongs: 'Músicas desta pasta',
+    playNextSong: 'Tocar a próxima música',
     lockedWhilePlaying: 'Pare a reprodução para editar',
     lockedWhilePlayingBody:
       'Editar reconstrói o motor de áudio, o que cortaria a música. Pare a reprodução primeiro.',

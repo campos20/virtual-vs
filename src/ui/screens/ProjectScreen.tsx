@@ -1,4 +1,68 @@
-import { getDocumentAsync, type DocumentPickerAsset } from "expo-document-picker";
+import { audioEngine } from "@/engine";
+import { useNowPlaying } from "@/hooks/useNowPlaying";
+import { usePlayhead } from "@/hooks/usePlayhead";
+import { useTransportState } from "@/hooks/useTransportState";
+import { useTranslation } from "@/i18n";
+import { nowPlayingStore } from "@/playback/nowPlayingStore";
+import {
+  addStemsToProject,
+  deleteProjectDirectory,
+  removeStemFromProject,
+  renameStemInProject,
+  shareBundle,
+  updateProjectMetadata,
+  writeBundleToCache,
+} from "@/storage";
+import type { ProgressUpdate } from "@/storage/progress";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { removeSongFromAllFolders } from "@/store/persistFolders";
+import {
+  persistProjectClick,
+  persistProjectLyrics,
+  persistProjectLyricsSync,
+  persistProjectSections,
+} from "@/store/persistProject";
+import {
+  persistLyricsAllCaps,
+  persistLyricsFontSize,
+  persistLyricsViewActive,
+} from "@/store/persistSettings";
+import {
+  projectRemoved,
+  projectUpdated,
+  projectsSelectors,
+} from "@/store/projectsSlice";
+import { setlistsSelectors } from "@/store/setlistsSlice";
+import { monitorModeSet } from "@/store/settingsSlice";
+import {
+  tracksInitializedForProject,
+  tracksRemovedForProject,
+} from "@/store/tracksSlice";
+import type { LyricsSyncPoint, SectionManifest } from "@/types/project";
+import { BackButton } from "@/ui/components/BackButton";
+import { FolderSongsDrawer } from "@/ui/components/FolderSongsDrawer";
+import { HamburgerIcon } from "@/ui/components/HamburgerIcon";
+import { HeaderButton } from "@/ui/components/HeaderButton";
+import { LyricsDrawer } from "@/ui/components/LyricsDrawer";
+import { LyricsIcon } from "@/ui/components/LyricsIcon";
+import { LyricsSyncDrawer } from "@/ui/components/LyricsSyncDrawer";
+import { LyricsView } from "@/ui/components/LyricsView";
+import { MarkerIcon } from "@/ui/components/MarkerIcon";
+import { MarkersDrawer } from "@/ui/components/MarkersDrawer";
+import { MixerDrawer } from "@/ui/components/MixerDrawer";
+import {
+  ProjectForm,
+  type ProjectFormValues,
+} from "@/ui/components/ProjectForm";
+import { SongListIcon } from "@/ui/components/SongListIcon";
+import { WaveformIcon } from "@/ui/components/WaveformIcon";
+import { WaveformView } from "@/ui/components/WaveformView";
+import { resolveFolderSongs } from "@/ui/libraryTree";
+import { radii, spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
+import {
+  getDocumentAsync,
+  type DocumentPickerAsset,
+} from "expo-document-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -10,56 +74,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { audioEngine } from "@/engine";
-import { useTranslation } from "@/i18n";
-import type { ProgressUpdate } from "@/storage/progress";
-import { useNowPlaying } from "@/hooks/useNowPlaying";
-import { usePlayhead } from "@/hooks/usePlayhead";
-import { useTransportState } from "@/hooks/useTransportState";
-import { nowPlayingStore } from "@/playback/nowPlayingStore";
-import {
-  addStemsToProject,
-  deleteProjectDirectory,
-  removeStemFromProject,
-  renameStemInProject,
-  shareBundle,
-  updateProjectMetadata,
-  writeBundleToCache,
-} from "@/storage";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { projectRemoved, projectUpdated, projectsSelectors } from "@/store/projectsSlice";
-import {
-  persistProjectClick,
-  persistProjectLyrics,
-  persistProjectLyricsSync,
-  persistProjectSections,
-} from "@/store/persistProject";
-import { removeSongFromAllFolders } from "@/store/persistFolders";
-import {
-  persistLyricsAllCaps,
-  persistLyricsFontSize,
-  persistLyricsViewActive,
-} from "@/store/persistSettings";
-import { monitorModeSet } from "@/store/settingsSlice";
-import {
-  tracksInitializedForProject,
-  tracksRemovedForProject,
-} from "@/store/tracksSlice";
-import type { LyricsSyncPoint, SectionManifest } from "@/types/project";
-import { HamburgerIcon } from "@/ui/components/HamburgerIcon";
-import { LyricsDrawer } from "@/ui/components/LyricsDrawer";
-import { LyricsIcon } from "@/ui/components/LyricsIcon";
-import { LyricsSyncDrawer } from "@/ui/components/LyricsSyncDrawer";
-import { LyricsView } from "@/ui/components/LyricsView";
-import { MarkerIcon } from "@/ui/components/MarkerIcon";
-import { MarkersDrawer } from "@/ui/components/MarkersDrawer";
-import { MixerDrawer } from "@/ui/components/MixerDrawer";
-import { ProjectForm, type ProjectFormValues } from "@/ui/components/ProjectForm";
-import { WaveformIcon } from "@/ui/components/WaveformIcon";
-import { WaveformView } from "@/ui/components/WaveformView";
-import { BackButton } from "@/ui/components/BackButton";
-import { HeaderButton } from "@/ui/components/HeaderButton";
-import { radii, spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
 
 /** Short random id for a newly added marker - only needs to be unique within one project's list. */
 function generateMarkerId(): string {
@@ -82,7 +96,12 @@ function generateMarkerId(): string {
  * the project this screen represents.
  */
 export function ProjectScreen() {
-  const { projectId } = useLocalSearchParams<{ projectId?: string }>();
+  const { projectId, folderId, autoPlay } = useLocalSearchParams<{
+    projectId?: string;
+    folderId?: string;
+    /** Set only by the folder songs drawer's "Play next" button - see `handleSwitchToSong`. */
+    autoPlay?: string;
+  }>();
   const dispatch = useAppDispatch();
   const router = useRouter();
   const { t } = useTranslation();
@@ -92,6 +111,33 @@ export function ProjectScreen() {
   const entry = useAppSelector((s) =>
     projectId ? projectsSelectors.selectById(s.projects, projectId) : undefined,
   );
+  // Only set when this screen was opened from inside a folder (see
+  // LibraryScreen's `openProject`) - powers the "songs in this folder" list,
+  // opened deliberately via its own icon rather than any one-tap control, so
+  // a mis-tap near Markers/Mixer can never jump to a different song. `folder`
+  // is looked up fresh each render rather than trusted from whatever the
+  // Library passed, so a rename is reflected and a deletion (of the folder,
+  // or of this song from it) since this screen opened correctly hides the
+  // list instead of showing something stale.
+  const folder = useAppSelector((s) =>
+    folderId ? setlistsSelectors.selectById(s.setlists, folderId) : undefined,
+  );
+  const allProjects = useAppSelector((s) =>
+    projectsSelectors.selectAll(s.projects),
+  );
+  const folderSongs = useMemo(
+    () => (folder ? resolveFolderSongs(folder, allProjects) : []),
+    [folder, allProjects],
+  );
+  // The very next song after this one in the folder - null at the last song
+  // (never wraps back to the first) and whenever there's no folder context.
+  const currentFolderIndex = folderSongs.findIndex(
+    (song) => song.id === entry?.id,
+  );
+  const nextSongId =
+    currentFolderIndex >= 0 && currentFolderIndex < folderSongs.length - 1
+      ? folderSongs[currentFolderIndex + 1].id
+      : null;
   const monitorMode = useAppSelector((s) => s.settings.monitorMode);
   const lyricsFontSizePt = useAppSelector((s) => s.settings.lyricsFontSizePt);
   const lyricsAllCaps = useAppSelector((s) => s.settings.lyricsAllCaps);
@@ -115,6 +161,7 @@ export function ProjectScreen() {
   const [error, setError] = useState<string | null>(null);
   const [mixerOpen, setMixerOpen] = useState(false);
   const [markersOpen, setMarkersOpen] = useState(false);
+  const [folderSongsOpen, setFolderSongsOpen] = useState(false);
   const [lyricsEditorOpen, setLyricsEditorOpen] = useState(false);
   const [lyricsSyncOpen, setLyricsSyncOpen] = useState(false);
   // A project with no stems can't be played, so it opens straight in edit
@@ -126,7 +173,11 @@ export function ProjectScreen() {
   // decode says so instead of showing an empty screen.
   const [status, setStatus] = useState<string | null>(null);
 
-  const { seconds: playheadSec, ref: playheadRef, stop: stopPlayhead } = usePlayhead();
+  const {
+    seconds: playheadSec,
+    ref: playheadRef,
+    stop: stopPlayhead,
+  } = usePlayhead();
 
   /**
    * Anything that edits a project ends in nowPlayingStore.reload(), and
@@ -156,29 +207,41 @@ export function ProjectScreen() {
   const describeProgress = useCallback(
     (update: ProgressUpdate): string => {
       switch (update.phase) {
-        case 'copying':
+        case "copying":
           return update.total && update.total > 1 && update.current
-            ? t.progress.copyingOf(update.name ?? '', update.current, update.total)
-            : t.progress.copying(update.name ?? '');
-        case 'converting':
+            ? t.progress.copyingOf(
+                update.name ?? "",
+                update.current,
+                update.total,
+              )
+            : t.progress.copying(update.name ?? "");
+        case "converting":
           return update.name
             ? t.progress.converting(update.name)
             : t.progress.convertingGeneric;
-        case 'decoding':
+        case "decoding":
           return update.total && update.total > 1 && update.current
             ? t.progress.decodingOf(update.current, update.total)
             : t.progress.decoding;
-        case 'building':
+        case "building":
           return t.progress.building;
-        case 'waveforms':
+        case "waveforms":
           return t.progress.waveforms;
-        case 'exporting':
-          return t.progress.exporting(update.name ?? '', update.current ?? 0, update.total ?? 0);
-        case 'importing':
-          return t.progress.importing(update.name ?? '', update.current ?? 0, update.total ?? 0);
+        case "exporting":
+          return t.progress.exporting(
+            update.name ?? "",
+            update.current ?? 0,
+            update.total ?? 0,
+          );
+        case "importing":
+          return t.progress.importing(
+            update.name ?? "",
+            update.current ?? 0,
+            update.total ?? 0,
+          );
       }
     },
-    [t]
+    [t],
   );
 
   /**
@@ -206,7 +269,7 @@ export function ProjectScreen() {
       if (!mountedRef.current) return;
       setStatus(describeProgress(update));
     },
-    [describeProgress]
+    [describeProgress],
   );
 
   useEffect(() => {
@@ -229,8 +292,16 @@ export function ProjectScreen() {
         );
         if (cancelled) return;
         dispatch(
-          tracksInitializedForProject({ projectId: entry.id, tracks: manifest.tracks }),
+          tracksInitializedForProject({
+            projectId: entry.id,
+            tracks: manifest.tracks,
+          }),
         );
+        // Set only by the folder songs drawer's "Play next" button - jumping
+        // here any other way (Library, a plain row tap in that same drawer)
+        // loads the song and stops, same as always; only this one path is
+        // meant to carry straight on without a separate Play tap.
+        if (autoPlay === "1") audioEngine.play();
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -256,7 +327,12 @@ export function ProjectScreen() {
       { monitorMode, clickEnabled },
       onProgress,
     );
-    dispatch(tracksInitializedForProject({ projectId: entry.id, tracks: manifest.tracks }));
+    dispatch(
+      tracksInitializedForProject({
+        projectId: entry.id,
+        tracks: manifest.tracks,
+      }),
+    );
   }, [entry, monitorMode, clickEnabled, dispatch, onProgress]);
 
   // Kills this screen's own rAF-driven waveform re-render loop before
@@ -301,7 +377,7 @@ export function ProjectScreen() {
       startSec: playheadRef.current,
     };
     const sections = [...nowPlaying.manifest.sections, section].sort(
-      (a, b) => a.startSec - b.startSec
+      (a, b) => a.startSec - b.startSec,
     );
     nowPlayingStore.setSectionsLocal(sections);
     dispatch(persistProjectSections(entry.id, sections));
@@ -309,7 +385,9 @@ export function ProjectScreen() {
 
   function handleRemoveMarker(sectionId: string) {
     if (!entry || !nowPlaying.manifest) return;
-    const sections = nowPlaying.manifest.sections.filter((s) => s.id !== sectionId);
+    const sections = nowPlaying.manifest.sections.filter(
+      (s) => s.id !== sectionId,
+    );
     nowPlayingStore.setSectionsLocal(sections);
     dispatch(persistProjectSections(entry.id, sections));
   }
@@ -410,11 +488,16 @@ export function ProjectScreen() {
     setFormError(null);
     setBusy(true);
     try {
-      const bundle = await writeBundleToCache({ projects: [entry], folders: [] }, entry.title, onProgress);
+      const bundle = await writeBundleToCache(
+        { projects: [entry], folders: [] },
+        entry.title,
+        onProgress,
+      );
       if (mountedRef.current) setStatus(null);
       await shareBundle(bundle, t.folder.export);
     } catch (e) {
-      if (mountedRef.current) setFormError(e instanceof Error ? e.message : String(e));
+      if (mountedRef.current)
+        setFormError(e instanceof Error ? e.message : String(e));
     } finally {
       if (mountedRef.current) {
         setBusy(false);
@@ -440,10 +523,13 @@ export function ProjectScreen() {
         audioEngine.context,
         onProgress,
       );
-      dispatch(projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }));
+      dispatch(
+        projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }),
+      );
       await reloadAndSeed();
     } catch (e) {
-      if (mountedRef.current) setFormError(e instanceof Error ? e.message : String(e));
+      if (mountedRef.current)
+        setFormError(e instanceof Error ? e.message : String(e));
     } finally {
       if (mountedRef.current) {
         setBusy(false);
@@ -462,10 +548,13 @@ export function ProjectScreen() {
     setBusy(true);
     try {
       const updated = await removeStemFromProject(entry.sourceDir, stemId);
-      dispatch(projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }));
+      dispatch(
+        projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }),
+      );
       await reloadAndSeed();
     } catch (e) {
-      if (mountedRef.current) setFormError(e instanceof Error ? e.message : String(e));
+      if (mountedRef.current)
+        setFormError(e instanceof Error ? e.message : String(e));
     } finally {
       if (mountedRef.current) setBusy(false);
     }
@@ -484,16 +573,22 @@ export function ProjectScreen() {
   // Not blocked while playing, unlike the others: renaming only rewrites a
   // label in the manifest and patches the snapshot in place - it never calls
   // reload(), so the engine graph and the running transport are untouched.
-  async function handleRenameStem(stemId: string, name: string): Promise<boolean> {
+  async function handleRenameStem(
+    stemId: string,
+    name: string,
+  ): Promise<boolean> {
     setFormError(null);
     if (!entry?.sourceDir) return false;
     try {
       const updated = await renameStemInProject(entry.sourceDir, stemId, name);
-      dispatch(projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }));
+      dispatch(
+        projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }),
+      );
       nowPlayingStore.renameTrackLocal(stemId, name);
       return true;
     } catch (e) {
-      if (mountedRef.current) setFormError(e instanceof Error ? e.message : String(e));
+      if (mountedRef.current)
+        setFormError(e instanceof Error ? e.message : String(e));
       return false;
     }
   }
@@ -513,7 +608,8 @@ export function ProjectScreen() {
       // bpm may have changed, which adds or removes the click entirely.
       await reloadAndSeed();
     } catch (e) {
-      if (mountedRef.current) setFormError(e instanceof Error ? e.message : String(e));
+      if (mountedRef.current)
+        setFormError(e instanceof Error ? e.message : String(e));
     } finally {
       if (mountedRef.current) setBusy(false);
     }
@@ -526,7 +622,8 @@ export function ProjectScreen() {
    * with. A project with stems is never touched.
    */
   function discardIfEmptyDraft() {
-    if (!entry || entry.origin !== "filesystem" || entry.tracks.length > 0) return;
+    if (!entry || entry.origin !== "filesystem" || entry.tracks.length > 0)
+      return;
     try {
       if (entry.sourceDir) deleteProjectDirectory(entry.sourceDir);
       dispatch(projectRemoved(entry.id));
@@ -538,6 +635,43 @@ export function ProjectScreen() {
   function handleBackFromProject() {
     discardIfEmptyDraft();
     handleBack();
+  }
+
+  /**
+   * Jumps to a different song, picked from the "songs in this folder" list
+   * (see `folderSongs`), without detouring back through the Library.
+   * `replace`, not `push` - so paging through an entire set doesn't stack a
+   * screen per song; Back from wherever you stop should return to the
+   * Library, not step backward through every song already passed on the way
+   * there. `autoPlay` rides along as a route param read by the effect that
+   * loads the new screen - see its "Play next" comment.
+   */
+  function handleSwitchToSong(
+    nextProjectId: string,
+    options?: { autoPlay?: boolean },
+  ) {
+    discardIfEmptyDraft();
+    teardownAndNavigate(() =>
+      router.replace({
+        pathname: "/project/[projectId]",
+        params: {
+          projectId: nextProjectId,
+          ...(folderId ? { folderId } : {}),
+          ...(options?.autoPlay ? { autoPlay: "1" } : {}),
+        },
+      }),
+    );
+  }
+
+  /**
+   * The folder songs drawer's one CTA that's more than "load and stop where
+   * every other jump leaves you": load the next song in the folder and carry
+   * straight on playing, for a set with no gap between songs.
+   */
+  function handlePlayNextSong() {
+    if (!nextSongId) return;
+    setFolderSongsOpen(false);
+    handleSwitchToSong(nextSongId, { autoPlay: true });
   }
 
   /**
@@ -593,8 +727,12 @@ export function ProjectScreen() {
   }
 
   const canEdit = entry?.origin === "filesystem";
-  const formStems = (entry?.tracks ?? []).map((t) => ({ id: t.id, name: t.name }));
-  const headerTitle = (isCurrent ? nowPlaying.manifest?.title : undefined) ?? entry?.title ?? "";
+  const formStems = (entry?.tracks ?? []).map((t) => ({
+    id: t.id,
+    name: t.name,
+  }));
+  const headerTitle =
+    (isCurrent ? nowPlaying.manifest?.title : undefined) ?? entry?.title ?? "";
 
   function renderHeader() {
     // Collapsed while viewing lyrics, to give the auto-scrolling text as
@@ -613,7 +751,11 @@ export function ProjectScreen() {
     return (
       <View style={[styles.header, compact && styles.headerCompact]}>
         <View style={styles.headerTopRow}>
-          <BackButton label={t.project.backToLibrary} onPress={handleBackFromProject} testID="back-button" />
+          <BackButton
+            label={t.project.backToLibrary}
+            onPress={handleBackFromProject}
+            testID="back-button"
+          />
           {isCurrent && nowPlaying.manifest && !editing && (
             <View style={styles.headerActions}>
               {/* Waveform/Lyrics grouped as one segmented control - the two
@@ -632,7 +774,9 @@ export function ProjectScreen() {
                   accessibilityLabel={t.project.waveformView}
                   accessibilityState={{ selected: !showLyrics }}
                 >
-                  <WaveformIcon color={!showLyrics ? colors.surface : colors.textSecondary} />
+                  <WaveformIcon
+                    color={!showLyrics ? colors.surface : colors.textSecondary}
+                  />
                 </Pressable>
                 <Pressable
                   onPress={() => handleSetLyricsView(true)}
@@ -646,15 +790,26 @@ export function ProjectScreen() {
                   accessibilityLabel={t.lyrics.toggleLabel}
                   accessibilityState={{ selected: showLyrics }}
                 >
-                  <LyricsIcon color={showLyrics ? colors.surface : colors.textSecondary} />
+                  <LyricsIcon
+                    color={showLyrics ? colors.surface : colors.textSecondary}
+                  />
                 </Pressable>
               </View>
+              {/* Its own separate group, apart from Markers/Mixer below - on
+                  its own so there's no chance of it sitting close enough to
+                  either for a mis-tap to land on it (or vice versa), given
+                  it's the one button in this row that can lead to a
+                  different song playing. */}
+
               {/* Markers/Mixer grouped as one unit - both open a drawer that
                   overlays the current view, rather than switching it. */}
               <View style={styles.buttonGroup} testID="overlay-menu-group">
                 <Pressable
                   onPress={() => setMarkersOpen(true)}
-                  style={({ pressed }) => [styles.groupButton, pressed && styles.groupButtonPressed]}
+                  style={({ pressed }) => [
+                    styles.groupButton,
+                    pressed && styles.groupButtonPressed,
+                  ]}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 0 }}
                   testID="markers-menu-button"
                   accessibilityLabel={t.markers.heading}
@@ -663,7 +818,10 @@ export function ProjectScreen() {
                 </Pressable>
                 <Pressable
                   onPress={() => setMixerOpen(true)}
-                  style={({ pressed }) => [styles.groupButton, pressed && styles.groupButtonPressed]}
+                  style={({ pressed }) => [
+                    styles.groupButton,
+                    pressed && styles.groupButtonPressed,
+                  ]}
                   hitSlop={{ top: 8, bottom: 8, left: 0, right: 8 }}
                   testID="mixer-menu-button"
                   accessibilityLabel={t.project.mixer}
@@ -671,6 +829,23 @@ export function ProjectScreen() {
                   <HamburgerIcon />
                 </Pressable>
               </View>
+
+              {folder && (
+                <View style={styles.buttonGroup} testID="folder-songs-group">
+                  <Pressable
+                    onPress={() => setFolderSongsOpen(true)}
+                    style={({ pressed }) => [
+                      styles.groupButton,
+                      pressed && styles.groupButtonPressed,
+                    ]}
+                    hitSlop={8}
+                    testID="folder-songs-menu-button"
+                    accessibilityLabel={t.project.folderSongs}
+                  >
+                    <SongListIcon />
+                  </Pressable>
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -681,11 +856,15 @@ export function ProjectScreen() {
           <View style={styles.subtitleRow}>
             {nowPlaying.manifest.bpm !== undefined && (
               <View style={styles.subtitlePill}>
-                <Text style={styles.subtitlePillText}>{nowPlaying.manifest.bpm} BPM</Text>
+                <Text style={styles.subtitlePillText}>
+                  {nowPlaying.manifest.bpm} BPM
+                </Text>
               </View>
             )}
             <View style={styles.subtitlePill}>
-              <Text style={styles.subtitlePillText}>{nowPlaying.manifest.key || "—"}</Text>
+              <Text style={styles.subtitlePillText}>
+                {nowPlaying.manifest.key || "—"}
+              </Text>
             </View>
           </View>
         )}
@@ -753,7 +932,11 @@ export function ProjectScreen() {
             mixer drawer like the rest of Edit's access: there's no mixer to open here. */}
         {canEdit && (
           <View style={styles.errorActions}>
-            <HeaderButton label={t.project.edit} onPress={handleStartEditing} testID="edit-button" />
+            <HeaderButton
+              label={t.project.edit}
+              onPress={handleStartEditing}
+              testID="edit-button"
+            />
           </View>
         )}
       </SafeAreaView>
@@ -798,6 +981,21 @@ export function ProjectScreen() {
         onJump={handleJumpToMarker}
       />
 
+      {folder && (
+        <FolderSongsDrawer
+          visible={folderSongsOpen}
+          onClose={() => setFolderSongsOpen(false)}
+          folderName={folder.name}
+          songs={folderSongs}
+          currentProjectId={entry?.id}
+          onJump={(nextProjectId) => {
+            setFolderSongsOpen(false);
+            handleSwitchToSong(nextProjectId);
+          }}
+          onPlayNext={nextSongId ? handlePlayNextSong : undefined}
+        />
+      )}
+
       <LyricsDrawer
         visible={lyricsEditorOpen}
         onClose={() => setLyricsEditorOpen(false)}
@@ -823,7 +1021,9 @@ export function ProjectScreen() {
         clickEnabled={clickEnabled}
         onClickEnabledChange={handleClickEnabledChange}
         onEdit={canEdit ? handleStartEditing : undefined}
-        editDisabledReason={isPlaying ? t.project.lockedWhilePlaying : undefined}
+        editDisabledReason={
+          isPlaying ? t.project.lockedWhilePlaying : undefined
+        }
         // Hidden rather than disabled while playing: unlike Edit, which sits
         // in the same row and explains itself, an export is a thing you do
         // between sets - there's nothing useful to say about it mid-song.
@@ -835,112 +1035,112 @@ export function ProjectScreen() {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  loadingStatus: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    marginTop: 14,
-    textAlign: "center",
-    paddingHorizontal: 32,
-  },
-  centeredBody: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
-    backgroundColor: colors.panel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  // While viewing lyrics: shrinks the header down to just the controls row
-  // and a compact title, reclaiming vertical space for the auto-scrolling
-  // text - see renderHeader's `compact` comment.
-  headerCompact: {
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.xs,
-  },
-  headerTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: spacing.sm,
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: 24,
-    fontWeight: "800",
-    letterSpacing: -0.3,
-  },
-  subtitleRow: {
-    flexDirection: "row",
-    gap: 6,
-    marginTop: 6,
-  },
-  subtitlePill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radii.pill,
-    backgroundColor: colors.borderLight,
-  },
-  subtitlePillText: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.3,
-  },
-  notice: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    textAlign: "center",
-    marginTop: 40,
-    paddingHorizontal: 24,
-  },
-  waveformArea: {
-    flex: 1,
-    backgroundColor: colors.background,
-    justifyContent: "center",
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  buttonGroup: {
-    flexDirection: "row",
-    borderRadius: radii.pill,
-    overflow: "hidden",
-    backgroundColor: colors.borderLight,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-  },
-  groupButton: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  groupButtonActive: {
-    backgroundColor: colors.accent,
-  },
-  groupButtonPressed: {
-    opacity: 0.7,
-  },
-  error: {
-    color: colors.danger,
-    fontSize: 15,
-    textAlign: "center",
-    marginTop: 40,
-  },
-  errorActions: {
-    alignItems: "center",
-    marginTop: spacing.lg,
-  },
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    loadingStatus: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      marginTop: 14,
+      textAlign: "center",
+      paddingHorizontal: 32,
+    },
+    centeredBody: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    header: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.md,
+      backgroundColor: colors.panel,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    // While viewing lyrics: shrinks the header down to just the controls row
+    // and a compact title, reclaiming vertical space for the auto-scrolling
+    // text - see renderHeader's `compact` comment.
+    headerCompact: {
+      paddingTop: spacing.xs,
+      paddingBottom: spacing.xs,
+    },
+    headerTopRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: spacing.sm,
+    },
+    title: {
+      color: colors.textPrimary,
+      fontSize: 24,
+      fontWeight: "800",
+      letterSpacing: -0.3,
+    },
+    subtitleRow: {
+      flexDirection: "row",
+      gap: 6,
+      marginTop: 6,
+    },
+    subtitlePill: {
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: radii.pill,
+      backgroundColor: colors.borderLight,
+    },
+    subtitlePillText: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 0.3,
+    },
+    notice: {
+      color: colors.textSecondary,
+      fontSize: 14,
+      textAlign: "center",
+      marginTop: 40,
+      paddingHorizontal: 24,
+    },
+    waveformArea: {
+      flex: 1,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+    },
+    headerActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+    },
+    buttonGroup: {
+      flexDirection: "row",
+      borderRadius: radii.pill,
+      overflow: "hidden",
+      backgroundColor: colors.borderLight,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderLight,
+    },
+    groupButton: {
+      width: 36,
+      height: 36,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    groupButtonActive: {
+      backgroundColor: colors.accent,
+    },
+    groupButtonPressed: {
+      opacity: 0.7,
+    },
+    error: {
+      color: colors.danger,
+      fontSize: 15,
+      textAlign: "center",
+      marginTop: 40,
+    },
+    errorActions: {
+      alignItems: "center",
+      marginTop: spacing.lg,
+    },
   });
 }

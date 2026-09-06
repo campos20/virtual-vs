@@ -3,6 +3,7 @@ import type { SetlistManifest } from '@/types/setlist';
 import {
   buildLibraryTree,
   folderKey,
+  resolveFolderSongs,
   resolveLibraryOrder,
   songKey,
   type LibraryItem,
@@ -88,6 +89,20 @@ describe('buildLibraryTree', () => {
     const tree = buildLibraryTree([project('a')], [], [folderKey('deleted'), songKey('a')]);
 
     expect(describeTree(tree)).toEqual(['project:a']);
+  });
+});
+
+describe('resolveFolderSongs', () => {
+  it("resolves ids to projects in the folder's own order", () => {
+    const result = resolveFolderSongs(folder('set', ['b', 'a']), [project('a'), project('b')]);
+
+    expect(result.map((entry) => entry.id)).toEqual(['b', 'a']);
+  });
+
+  it('drops an id that no longer resolves to a project', () => {
+    const result = resolveFolderSongs(folder('set', ['a', 'deleted']), [project('a')]);
+
+    expect(result.map((entry) => entry.id)).toEqual(['a']);
   });
 });
 
