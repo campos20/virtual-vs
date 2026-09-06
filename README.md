@@ -1,15 +1,19 @@
 # Virtual VS
 
+[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/campos20)
+
 [![CI](https://img.shields.io/github/actions/workflow/status/campos20/virtual-vs/ci.yaml?branch=main&label=CI)](https://github.com/campos20/virtual-vs/actions/workflows/ci.yaml)
 [![Release](https://img.shields.io/github/v/release/campos20/virtual-vs?include_prereleases&sort=semver&label=release)](https://github.com/campos20/virtual-vs/releases/latest)
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Android%20%7C%20iOS-lightgrey)](#running-the-app)
 [![Expo SDK](https://img.shields.io/badge/Expo-SDK%2057-000020?logo=expo&logoColor=white)](https://docs.expo.dev/versions/v57.0.0/)
-[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/campos20)
 
 <!-- The CI and release badges read live GitHub state, so until the first
      workflow run and the first tagged release they read "no status" and "no
      releases found". Both fill themselves in - nothing to change here. -->
+
+> This app is currently in closed testing on Google Play. If you'd like to
+> use it, reach out and I'll send you instructions to join.
 
 An open-source multitrack backing-track player for live musicians - a phone
 replacing the laptop + audio interface + DAW rig (a "VS"/Playback-style
@@ -161,7 +165,7 @@ See `src/types/project.ts` and `src/types/setlist.ts`.
   service/characteristic UUIDs, so adding it later is a known quantity
   rather than a research project.
 - **Automatic cloud backup** - backing up is a deliberate tap today (see
-  *Backup and sharing* below). Uploading on its own, in the background, would
+  _Backup and sharing_ below). Uploading on its own, in the background, would
   need a Google/Microsoft OAuth client per build and token refresh; the
   share-sheet route deliberately avoids both.
 
@@ -176,14 +180,14 @@ owns the upload.
 
 Coming back the other way needs nothing extra either. A bundle someone shares
 from their Drive arrives through the ordinary file picker: **⋯ → Import a
-backup…**, pick the file, and its projects *and* the folder that grouped them
+backup…**, pick the file, and its projects _and_ the folder that grouped them
 land in the library.
 
 - **Folder → ⋯ → Export…** packs that folder and its songs.
 - **Project → mixer drawer → Export…** packs one project.
 - A project whose id is already in the library is left alone, so re-importing
   your own backup changes nothing and a shared set can't overwrite your mixes.
-- A folder that already exists is *merged* - existing order kept, new songs
+- A folder that already exists is _merged_ - existing order kept, new songs
   appended - so someone can send you an updated set without wiping the songs
   you added to your copy.
 
@@ -260,6 +264,7 @@ apksigner verify --print-certs virtual-vs-<version>.apk
 ```
 
 <!-- Once a release keystore is configured, paste its fingerprint here - see docs/RELEASING.md -->
+
 Each release publishes the signing certificate's SHA-256 in its notes. Step 1 is
 the check that actually ties the APK to its source commit; this one additionally
 confirms releases share a signing identity, which is also what lets Android
@@ -285,7 +290,7 @@ device/emulator you pick. The APK lands at
 from there to hand out separately, or skip the install step entirely with
 `cd android && ./gradlew assembleRelease`.
 
-A *local* release build like this signs with Expo's stock debug keystore -
+A _local_ release build like this signs with Expo's stock debug keystore -
 fine for installing on your own devices, but not something to hand out.
 Published releases are different: CI signs them with the project's real
 release key via
