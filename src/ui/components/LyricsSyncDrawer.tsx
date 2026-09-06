@@ -1,3 +1,12 @@
+import { useTranslation } from "@/i18n";
+import type { LyricsSyncPoint } from "@/types/project";
+import {
+  elevation,
+  radii,
+  spacing,
+  useThemeColors,
+  type ThemeColors,
+} from "@/ui/theme";
 import { useMemo } from "react";
 import {
   Modal,
@@ -8,9 +17,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTranslation } from "@/i18n";
-import type { LyricsSyncPoint } from "@/types/project";
-import { elevation, radii, spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
 
 interface LyricsSyncDrawerProps {
   visible: boolean;
@@ -69,13 +75,18 @@ export function LyricsSyncDrawer({
         <View style={styles.sheetHeader}>
           <View>
             <Text style={styles.sheetTitle}>{t.lyrics.syncHeading}</Text>
-            <Text style={styles.sheetSubtitle}>{t.lyrics.syncCount(syncPoints.length)}</Text>
+            <Text style={styles.sheetSubtitle}>
+              {t.lyrics.syncCount(syncPoints.length)}
+            </Text>
           </View>
           <Pressable
             onPress={onClose}
             hitSlop={8}
             testID="close-lyrics-sync-button"
-            style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.closeButton,
+              pressed && styles.pressed,
+            ]}
           >
             <Text style={styles.closeButtonText}>{t.common.close}</Text>
           </Pressable>
@@ -85,13 +96,19 @@ export function LyricsSyncDrawer({
           <Pressable
             onPress={onClearAll}
             testID="clear-all-sync-button"
-            style={({ pressed }) => [styles.clearAllButton, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.clearAllButton,
+              pressed && styles.pressed,
+            ]}
           >
             <Text style={styles.clearAllText}>{t.lyrics.clearSync}</Text>
           </Pressable>
         )}
 
-        <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+        <ScrollView
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+        >
           {sorted.length === 0 ? (
             <Text style={styles.emptyText}>{t.lyrics.tapHint}</Text>
           ) : (
@@ -99,9 +116,12 @@ export function LyricsSyncDrawer({
               <View key={point.lineIndex} style={styles.row}>
                 <View style={styles.rowText}>
                   <Text style={styles.rowLine} numberOfLines={1}>
-                    {lines[point.lineIndex]?.trim() || `#${point.lineIndex + 1}`}
+                    {lines[point.lineIndex]?.trim() ||
+                      `#${point.lineIndex + 1}`}
                   </Text>
-                  <Text style={styles.rowTime}>{formatSyncTime(point.timeSec)}</Text>
+                  <Text style={styles.rowTime}>
+                    {formatSyncTime(point.timeSec)}
+                  </Text>
                 </View>
                 <Pressable
                   onPress={() => onRemoveOne(point.lineIndex)}
@@ -122,111 +142,111 @@ export function LyricsSyncDrawer({
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  sheet: {
-    marginTop: "auto",
-    maxHeight: "80%",
-    backgroundColor: colors.panel,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    ...elevation,
-  },
-  sheetHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  sheetTitle: {
-    color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  sheetSubtitle: {
-    color: colors.textTertiary,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  closeButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radii.pill,
-    backgroundColor: colors.borderLight,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-  },
-  closeButtonText: {
-    color: colors.accent,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  clearAllButton: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    paddingVertical: 10,
-    borderRadius: radii.md,
-    alignItems: "center",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.danger,
-  },
-  clearAllText: {
-    color: colors.danger,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  list: {
-    flexGrow: 0,
-  },
-  listContent: {
-    paddingHorizontal: spacing.lg,
-    // Extra room at the bottom of the scrollable list, same reasoning as
-    // MarkersDrawer's listContent - without it the last row's Remove button
-    // sits flush against the sheet's bottom edge.
-    paddingBottom: spacing.xl,
-  },
-  emptyText: {
-    color: colors.textTertiary,
-    fontSize: 13,
-    paddingVertical: spacing.md,
-    textAlign: "center",
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  rowText: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginRight: 12,
-  },
-  rowLine: {
-    color: colors.textPrimary,
-    fontSize: 15,
-    fontWeight: "600",
-    flexShrink: 1,
-    marginRight: 8,
-  },
-  rowTime: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    fontVariant: ["tabular-nums"],
-  },
-  removeText: {
-    color: colors.danger,
-    fontSize: 13,
-    fontWeight: "600",
-  },
+    sheet: {
+      marginTop: "auto",
+      maxHeight: "80%",
+      backgroundColor: colors.panel,
+      borderTopLeftRadius: radii.xl,
+      borderTopRightRadius: radii.xl,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      ...elevation,
+    },
+    sheetHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.sm,
+    },
+    sheetTitle: {
+      color: colors.textPrimary,
+      fontSize: 18,
+      fontWeight: "800",
+    },
+    sheetSubtitle: {
+      color: colors.textTertiary,
+      fontSize: 12,
+      marginTop: 2,
+    },
+    closeButton: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: 6,
+      borderRadius: radii.pill,
+      backgroundColor: colors.borderLight,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderLight,
+    },
+    closeButtonText: {
+      color: colors.accent,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+    clearAllButton: {
+      marginHorizontal: spacing.lg,
+      marginBottom: spacing.sm,
+      paddingVertical: 10,
+      borderRadius: radii.md,
+      alignItems: "center",
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.danger,
+    },
+    clearAllText: {
+      color: colors.danger,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    list: {
+      flexGrow: 0,
+    },
+    listContent: {
+      paddingHorizontal: spacing.lg,
+      // Extra room at the bottom of the scrollable list, same reasoning as
+      // MarkersDrawer's listContent - without it the last row's Remove button
+      // sits flush against the sheet's bottom edge.
+      paddingBottom: spacing.xl,
+    },
+    emptyText: {
+      color: colors.textTertiary,
+      fontSize: 13,
+      paddingVertical: spacing.md,
+      textAlign: "center",
+    },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    rowText: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginRight: 12,
+    },
+    rowLine: {
+      color: colors.textPrimary,
+      fontSize: 15,
+      fontWeight: "600",
+      flexShrink: 1,
+      marginRight: 8,
+    },
+    rowTime: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      fontVariant: ["tabular-nums"],
+    },
+    removeText: {
+      color: colors.danger,
+      fontSize: 13,
+      fontWeight: "600",
+    },
   });
 }

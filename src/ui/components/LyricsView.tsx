@@ -398,7 +398,7 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: 10,
     },
     addButtonText: {
-      color: "#0a0a0a",
+      color: colors.surface,
       fontSize: 14,
       fontWeight: "700",
     },
