@@ -411,7 +411,7 @@ function createStyles(colors: ThemeColors) {
     },
     lineText: {
       fontFamily: MONOSPACE_FONT,
-      color: colors.textSecondary,
+      color: colors.textPrimary,
     },
     lineTextActive: {
       color: colors.textPrimary,
