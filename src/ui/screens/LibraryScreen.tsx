@@ -6,8 +6,14 @@ import { useTranslation } from "@/i18n";
 import { useNowPlaying } from "@/hooks/useNowPlaying";
 import { File } from "expo-file-system";
 import { getDocumentAsync } from "expo-document-picker";
-import { createDraftProject, shareBundle, writeBundleToCache } from "@/storage";
+import {
+  createDraftProject,
+  deleteProjectDirectory,
+  shareBundle,
+  writeBundleToCache,
+} from "@/storage";
 import { audioEngine } from "@/engine";
+import { nowPlayingStore } from "@/playback/nowPlayingStore";
 import type { ProgressUpdate } from "@/storage/progress";
 import { importBundleIntoLibrary } from "@/store/persistBundle";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -16,16 +22,19 @@ import {
   createFolder,
   deleteFolder,
   persistLibraryOrder,
+  removeSongFromAllFolders,
   removeSongFromFolder,
   renameFolder,
   reorderFolderSongs,
 } from "@/store/persistFolders";
 import {
   projectAdded,
+  projectRemoved,
   projectsSelectors,
   type LibraryProjectEntry,
 } from "@/store/projectsSlice";
 import { setlistsSelectors } from "@/store/setlistsSlice";
+import { tracksRemovedForProject } from "@/store/tracksSlice";
 import { FolderRow } from "@/ui/components/FolderRow";
 import { KebabIcon, OverflowMenu, type OverflowMenuItem } from "@/ui/components/OverflowMenu";
 import { ProjectRow } from "@/ui/components/ProjectRow";
@@ -200,29 +209,86 @@ export function LibraryScreen() {
   }
 
   /**
-   * A song's menu: which folders it can be added to, and - when it's shown
-   * inside one - a way back out. Empty for a song when there are no folders
-   * yet, which is what suppresses the kebab entirely.
+   * Permanently deletes a song's project directory and its stems, same as
+   * the project screen's own delete. Not blocked while playing - deleting
+   * deliberately stops the engine and clears the project rather than
+   * reloading underneath a running transport, so it's safe.
+   *
+   * `containingFolder`, when the song was opened from inside one, adds a
+   * pointer to "Remove from folder" in the confirmation body: someone
+   * meaning to just take the song out of *this* folder, clicking from
+   * inside it, is the exact moment this needs to be impossible to miss.
    */
-  function songMenuItems(projectId: string, containingFolderId?: string): OverflowMenuItem[] {
+  function handleDeleteSong(entry: LibraryProjectEntry, containingFolder?: { name: string }) {
+    if (!entry.sourceDir) return;
+    const body = containingFolder
+      ? `${t.library.deleteConfirmBody(entry.title, entry.tracks.length)}\n\n${t.library.deleteRemoveInsteadHint(containingFolder.name)}`
+      : t.library.deleteConfirmBody(entry.title, entry.tracks.length);
+
+    Alert.alert(
+      t.library.deleteConfirmTitle,
+      body,
+      [
+        { text: t.common.cancel, style: "cancel" },
+        {
+          text: t.library.deleteConfirmConfirm,
+          style: "destructive",
+          onPress: () => {
+            try {
+              deleteProjectDirectory(entry.sourceDir!);
+            } catch (e) {
+              setError(e instanceof Error ? e.message : String(e));
+              return;
+            }
+            nowPlayingStore.closeIfCurrent(entry.id);
+            dispatch(projectRemoved(entry.id));
+            dispatch(tracksRemovedForProject(entry.id));
+            // Folders hold song ids, so any that listed this project would be
+            // left pointing at nothing.
+            dispatch(removeSongFromAllFolders(entry.id));
+          },
+        },
+      ],
+    );
+  }
+
+  /**
+   * A song's menu: which folders it can be added to, a way back out when
+   * it's shown inside one, and delete - always offered, so the kebab is
+   * never suppressed even with no folders to file into.
+   */
+  function songMenuItems(
+    entry: LibraryProjectEntry,
+    containingFolder?: { id: string; name: string },
+  ): OverflowMenuItem[] {
     const additions = folders
-      .filter((folder) => !folder.songs.includes(projectId))
+      .filter((folder) => !folder.songs.includes(entry.id))
       .map((folder) => ({
         key: `add-${folder.id}`,
         label: t.folder.addTo(folder.name),
-        onPress: () => dispatch(addSongToFolder(folder.id, projectId)),
+        onPress: () => dispatch(addSongToFolder(folder.id, entry.id)),
         testID: `add-to-folder-${folder.id}`,
       }));
 
-    if (!containingFolderId) return additions;
+    const removeFromFolder: OverflowMenuItem[] = containingFolder
+      ? [
+          {
+            key: "remove",
+            label: t.folder.removeFrom,
+            onPress: () => dispatch(removeSongFromFolder(containingFolder.id, entry.id)),
+            testID: `remove-from-folder-${containingFolder.id}`,
+          },
+        ]
+      : [];
 
     return [
       ...additions,
+      ...removeFromFolder,
       {
-        key: "remove",
-        label: t.folder.removeFrom,
-        onPress: () => dispatch(removeSongFromFolder(containingFolderId, projectId)),
-        testID: `remove-from-folder-${containingFolderId}`,
+        key: "delete",
+        label: t.library.deleteSong,
+        onPress: () => handleDeleteSong(entry, containingFolder),
+        testID: `delete-song-${entry.id}`,
       },
     ];
   }
@@ -414,7 +480,7 @@ export function LibraryScreen() {
                           moveDownAccessibilityLabel={t.library.moveDown}
                           isNowPlaying={song.id === nowPlayingProjectId}
                           nowPlayingAccessibilityLabel={t.nowPlaying.heading}
-                          menuItems={songMenuItems(song.id, folder.id)}
+                          menuItems={songMenuItems(song, { id: folder.id, name: folder.name })}
                           menuAccessibilityLabel={t.folder.songOptions}
                           onPress={() => openProject(song.id)}
                           onMoveUp={() =>
@@ -456,7 +522,7 @@ export function LibraryScreen() {
                 moveDownAccessibilityLabel={t.library.moveDown}
                 isNowPlaying={project.id === nowPlayingProjectId}
                 nowPlayingAccessibilityLabel={t.nowPlaying.heading}
-                menuItems={songMenuItems(project.id)}
+                menuItems={songMenuItems(project)}
                 menuAccessibilityLabel={t.folder.songOptions}
                 onPress={() => openProject(project.id)}
                 onMoveUp={() => handleMove(index, "up")}

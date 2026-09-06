@@ -1,8 +1,10 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 import { nowPlayingStore } from '@/playback/nowPlayingStore';
 import { getDocumentAsync } from 'expo-document-picker';
 import {
   createDraftProject,
+  deleteProjectDirectory,
   getProjectSourceForEntry,
   shareBundle,
   writeBundleToCache,
@@ -30,6 +32,7 @@ jest.mock('expo-document-picker', () => ({ getDocumentAsync: jest.fn() }));
 jest.mock('@/storage', () => ({
   ...jest.requireActual('@/storage'),
   createDraftProject: jest.fn(),
+  deleteProjectDirectory: jest.fn(),
   getProjectSourceForEntry: jest.fn(),
   writeBundleToCache: jest.fn(),
   shareBundle: jest.fn(),
@@ -86,6 +89,13 @@ function song(id: string, title = id): LibraryProjectEntry {
 
 function folder(id: string, name: string, songs: string[] = []): SetlistManifest {
   return { id, name, songs, advance: 'manual', padBetween: false };
+}
+
+/** Drives Alert.alert by invoking the button matching `label`. */
+function answerAlertWith(label: string) {
+  return jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+    buttons?.find((button) => button.text === label)?.onPress?.();
+  });
 }
 
 describe('LibraryScreen', () => {
@@ -260,6 +270,56 @@ describe('LibraryScreen', () => {
     expect(screen.queryByTestId('edit-project-my-song')).toBeNull();
   });
 
+  // Deleting destroys the audio files, so it must never happen on one tap.
+  it('asks before deleting a song, and does nothing until confirmed', () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const { store } = renderHydrated();
+
+    fireEvent.press(screen.getByTestId('project-row-sync-test-menu'));
+    fireEvent.press(screen.getByTestId('delete-song-sync-test'));
+
+    expect(alertSpy).toHaveBeenCalled();
+    expect(deleteProjectDirectory).not.toHaveBeenCalled();
+    expect(store.getState().projects.entities['sync-test']).toBeTruthy();
+  });
+
+  it('deletes a loose song once confirmed', () => {
+    answerAlertWith('Delete');
+    const { store } = renderHydrated();
+
+    fireEvent.press(screen.getByTestId('project-row-sync-test-menu'));
+    fireEvent.press(screen.getByTestId('delete-song-sync-test'));
+
+    expect(deleteProjectDirectory).toHaveBeenCalledWith(syncTest.sourceDir);
+    expect(store.getState().projects.entities['sync-test']).toBeUndefined();
+  });
+
+  it('leaves a song alone when the delete confirmation is dismissed', () => {
+    (deleteProjectDirectory as jest.Mock).mockClear();
+    answerAlertWith('Cancel');
+    const { store } = renderHydrated();
+
+    fireEvent.press(screen.getByTestId('project-row-sync-test-menu'));
+    fireEvent.press(screen.getByTestId('delete-song-sync-test'));
+
+    expect(deleteProjectDirectory).not.toHaveBeenCalled();
+    expect(store.getState().projects.entities['sync-test']).toBeTruthy();
+  });
+
+  // A loose song has no folder to point to instead, so the confirmation
+  // should read as a plain delete - no "remove from folder instead" hint.
+  it('does not mention folders when deleting a song that is not in one', () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    alertSpy.mockClear();
+    renderHydrated();
+
+    fireEvent.press(screen.getByTestId('project-row-sync-test-menu'));
+    fireEvent.press(screen.getByTestId('delete-song-sync-test'));
+
+    const [, body] = alertSpy.mock.calls[0];
+    expect(body).not.toMatch(/remove from folder/i);
+  });
+
   // Folders are setlists (types/setlist.ts) shown as a Postman-style tree:
   // folders and loose songs in one list, a song filed in a folder shown
   // inside it rather than in both places.
@@ -354,10 +414,14 @@ describe('LibraryScreen', () => {
       expect(screen.queryByText('No projects yet')).toBeNull();
     });
 
-    it('offers no song menu at all until a folder exists to file it in', () => {
+    // Delete is always offered, even with no folders to file into - only the
+    // "add to folder" entries depend on a folder existing.
+    it('offers delete on a loose song even with no folders to file it in', () => {
       renderHydrated();
 
-      expect(screen.queryByTestId('project-row-sync-test-menu')).toBeNull();
+      fireEvent.press(screen.getByTestId('project-row-sync-test-menu'));
+
+      expect(screen.getByTestId('delete-song-sync-test')).toBeTruthy();
     });
 
     it('files a loose song into a folder from the song menu', async () => {
@@ -409,6 +473,48 @@ describe('LibraryScreen', () => {
       expect(store.getState().setlists.entities.sunday?.songs).toEqual([]);
       // The project is untouched - folders hold ids, not audio.
       expect(store.getState().projects.entities.filed).toBeTruthy();
+    });
+
+    // Delete stays alongside "Remove from folder" rather than replacing it -
+    // one takes the song out of this folder, the other destroys it outright.
+    it('still offers delete on a song filed in a folder', () => {
+      renderWithFolders([folder('sunday', 'Sunday Set', ['filed'])], [song('filed')]);
+
+      fireEvent.press(screen.getByTestId('project-row-filed-menu'));
+
+      expect(screen.getByTestId('remove-from-folder-sunday')).toBeTruthy();
+      expect(screen.getByTestId('delete-song-filed')).toBeTruthy();
+    });
+
+    // Deleting from inside a folder is exactly the moment someone might have
+    // meant "take it out of this folder" instead - the confirmation has to
+    // point at that option, by name, so it's not missed.
+    it('points to "remove from folder" instead when deleting from inside one', () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      alertSpy.mockClear();
+      renderWithFolders([folder('sunday', 'Sunday Set', ['filed'])], [song('filed')]);
+
+      fireEvent.press(screen.getByTestId('project-row-filed-menu'));
+      fireEvent.press(screen.getByTestId('delete-song-filed'));
+
+      const [, body] = alertSpy.mock.calls[0];
+      expect(body).toMatch(/remove from folder/i);
+      expect(body).toMatch(/Sunday Set/);
+    });
+
+    it('drops a deleted song from the folder that listed it', () => {
+      answerAlertWith('Delete');
+      const { store } = renderWithFolders(
+        [folder('sunday', 'Sunday Set', ['filed'])],
+        [song('filed')]
+      );
+
+      fireEvent.press(screen.getByTestId('project-row-filed-menu'));
+      fireEvent.press(screen.getByTestId('delete-song-filed'));
+
+      expect(deleteProjectDirectory).toHaveBeenCalledWith('file:///mock/document/projects/filed');
+      expect(store.getState().projects.entities.filed).toBeUndefined();
+      expect(store.getState().setlists.entities.sunday?.songs).toEqual([]);
     });
 
     it('lets the same song be filed in two folders at once', async () => {

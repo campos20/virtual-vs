@@ -34,6 +34,13 @@ export const ptBR: TranslationDictionary = {
       count === 1
         ? 'Essa música já está na sua biblioteca, então nada foi alterado.'
         : `Essas ${count} músicas já estão na sua biblioteca, então nada foi alterado.`,
+    deleteSong: 'Excluir música',
+    deleteConfirmTitle: 'Excluir música?',
+    deleteConfirmBody: (title: string, stemCount: number) =>
+      `"${title}" e ${stemCount} ${stemCount === 1 ? 'faixa' : 'faixas'} serão excluídos permanentemente deste aparelho.`,
+    deleteRemoveInsteadHint: (folderName: string) =>
+      `Só quer tirar a música de "${folderName}"? Use "Remover da pasta" em vez disso - isso mantém a música, só tira ela dessa pasta.`,
+    deleteConfirmConfirm: 'Excluir',
   },
   folder: {
     defaultName: 'Nova pasta',
