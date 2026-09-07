@@ -398,7 +398,7 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: 10,
     },
     addButtonText: {
-      color: "#0a0a0a",
+      color: colors.surface,
       fontSize: 14,
       fontWeight: "700",
     },
@@ -411,7 +411,7 @@ function createStyles(colors: ThemeColors) {
     },
     lineText: {
       fontFamily: MONOSPACE_FONT,
-      color: colors.textSecondary,
+      color: colors.textPrimary,
     },
     lineTextActive: {
       color: colors.textPrimary,

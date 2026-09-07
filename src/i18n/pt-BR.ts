@@ -34,6 +34,13 @@ export const ptBR: TranslationDictionary = {
       count === 1
         ? 'Essa música já está na sua biblioteca, então nada foi alterado.'
         : `Essas ${count} músicas já estão na sua biblioteca, então nada foi alterado.`,
+    deleteSong: 'Excluir música',
+    deleteConfirmTitle: 'Excluir música?',
+    deleteConfirmBody: (title: string, stemCount: number) =>
+      `"${title}" e ${stemCount} ${stemCount === 1 ? 'faixa' : 'faixas'} serão excluídos permanentemente deste aparelho.`,
+    deleteRemoveInsteadHint: (folderName: string) =>
+      `Só quer tirar a música de "${folderName}"? Use "Remover da pasta" em vez disso - isso mantém a música, só tira ela dessa pasta.`,
+    deleteConfirmConfirm: 'Excluir',
   },
   folder: {
     defaultName: 'Nova pasta',
@@ -49,6 +56,7 @@ export const ptBR: TranslationDictionary = {
     deleteConfirmBody: (name: string, songCount: number) =>
       `"${name}" será excluída. ${songCount === 1 ? 'A música dela continua' : `As ${songCount} músicas dela continuam`} neste dispositivo e ${songCount === 1 ? 'volta' : 'voltam'} para a biblioteca.`,
     deleteConfirmConfirm: 'Excluir',
+    newSong: 'Nova música',
     addTo: (name: string) => `Adicionar a ${name}`,
     removeFrom: 'Remover da pasta',
     export: 'Exportar…',
@@ -65,6 +73,9 @@ export const ptBR: TranslationDictionary = {
       `"${title}" e ${stemCount} ${stemCount === 1 ? 'faixa' : 'faixas'} serão excluídos permanentemente deste aparelho.`,
     deleteConfirmConfirm: 'Excluir',
     mixer: 'Mixer',
+    waveformView: 'Forma de onda',
+    folderSongs: 'Músicas desta pasta',
+    playNextSong: 'Tocar a próxima música',
     lockedWhilePlaying: 'Pare a reprodução para editar',
     lockedWhilePlayingBody:
       'Editar reconstrói o motor de áudio, o que cortaria a música. Pare a reprodução primeiro.',

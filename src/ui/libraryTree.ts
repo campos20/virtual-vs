@@ -39,31 +39,40 @@ export function resolveLibraryOrder(settings: PersistedAppSettings): string[] {
 }
 
 /**
+ * `folder`'s songs resolved to actual projects, in the folder's own order.
+ *
+ * Ids that no longer resolve are dropped rather than rendered as blanks: a
+ * folder outlives the songs it points at (a project can be deleted from the
+ * project screen), and a folder full of ghosts is worse than a short folder.
+ */
+export function resolveFolderSongs(
+  folder: SetlistManifest,
+  projects: LibraryProjectEntry[]
+): LibraryProjectEntry[] {
+  const byId = new Map(projects.map((project) => [project.id, project]));
+  return folder.songs
+    .map((id) => byId.get(id))
+    .filter((project): project is LibraryProjectEntry => project !== undefined);
+}
+
+/**
  * Arranges projects and folders into the list the Library renders.
  *
  * A song listed by any folder is shown inside it and *not* at the top level,
  * matching how a request in Postman lives in its collection rather than in
  * both places. A song listed by two folders appears in both - folders hold
  * ids, so membership is not exclusive.
- *
- * Ids that no longer resolve are dropped rather than rendered as blanks: a
- * folder outlives the songs it points at (a project can be deleted from the
- * project screen), and a folder full of ghosts is worse than a short folder.
  */
 export function buildLibraryTree(
   projects: LibraryProjectEntry[],
   folders: SetlistManifest[],
   order: string[] = []
 ): LibraryItem[] {
-  const byId = new Map(projects.map((project) => [project.id, project]));
-
   const folderItems: LibraryItem[] = folders.map((folder) => ({
     kind: 'folder',
     key: folderKey(folder.id),
     folder,
-    songs: folder.songs
-      .map((id) => byId.get(id))
-      .filter((project): project is LibraryProjectEntry => project !== undefined),
+    songs: resolveFolderSongs(folder, projects),
   }));
 
   const filed = new Set(folders.flatMap((folder) => folder.songs));

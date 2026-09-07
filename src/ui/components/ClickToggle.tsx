@@ -17,7 +17,7 @@ export function ClickToggle({ enabled, onChange }: ClickToggleProps) {
   return (
     <View style={styles.container}>
       <Text style={styles.heading}>{t.click.heading}</Text>
-      <Switch value={enabled} onValueChange={onChange} trackColor={{ false: '#3a3a3c', true: colors.accent }} />
+      <Switch value={enabled} onValueChange={onChange} trackColor={{ false: colors.border, true: colors.accent }} />
     </View>
   );
 }

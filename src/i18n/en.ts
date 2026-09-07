@@ -25,6 +25,13 @@ export const en = {
       count === 1
         ? 'That song is already in your library, so nothing was changed.'
         : `Those ${count} songs are already in your library, so nothing was changed.`,
+    deleteSong: 'Delete song',
+    deleteConfirmTitle: 'Delete song?',
+    deleteConfirmBody: (title: string, stemCount: number) =>
+      `"${title}" and its ${stemCount} stem${stemCount === 1 ? '' : 's'} will be permanently deleted from this device.`,
+    deleteRemoveInsteadHint: (folderName: string) =>
+      `Just want it out of "${folderName}"? Use "Remove from folder" instead - that keeps the song, just takes it out of this folder.`,
+    deleteConfirmConfirm: 'Delete',
   },
   folder: {
     /** Name a new folder carries until it's renamed. User data, so it's written in the user's language. */
@@ -41,6 +48,7 @@ export const en = {
     deleteConfirmBody: (name: string, songCount: number) =>
       `"${name}" will be deleted. Its ${songCount} song${songCount === 1 ? '' : 's'} stay on this device and return to the library.`,
     deleteConfirmConfirm: 'Delete',
+    newSong: 'New song',
     addTo: (name: string) => `Add to ${name}`,
     removeFrom: 'Remove from folder',
     export: 'Export…',
@@ -57,6 +65,9 @@ export const en = {
       `"${title}" and its ${stemCount} stem${stemCount === 1 ? '' : 's'} will be permanently deleted from this device.`,
     deleteConfirmConfirm: 'Delete',
     mixer: 'Mixer',
+    waveformView: 'Waveform',
+    folderSongs: 'Songs in this folder',
+    playNextSong: 'Play next song',
     lockedWhilePlaying: 'Stop playback to edit',
     lockedWhilePlayingBody:
       'Editing rebuilds the audio engine, which would cut the song off. Stop playback first.',
