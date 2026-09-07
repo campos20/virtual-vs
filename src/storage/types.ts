@@ -1,5 +1,5 @@
-import type { AudioBuffer, BaseAudioContext } from 'react-native-audio-api';
-import type { ProjectManifest } from '@/types/project';
+import type { AudioBuffer, BaseAudioContext } from "react-native-audio-api";
+import type { ProjectManifest } from "@/types/project";
 
 /** Anything the engine's `context.decodeAudioData()` accepts. */
 export type AudioFileRef = number | string;

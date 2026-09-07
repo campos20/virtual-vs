@@ -1,15 +1,15 @@
-import { useMemo } from 'react';
-import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { audioEngine } from '@/engine';
-import { useNowPlaying } from '@/hooks/useNowPlaying';
-import { usePlayhead } from '@/hooks/usePlayhead';
-import { useTransportState } from '@/hooks/useTransportState';
-import { useTranslation } from '@/i18n';
-import type { ProjectManifest } from '@/types/project';
-import { elevation, useThemeColors, type ThemeColors } from '@/ui/theme';
-import { TransportBar } from './TransportBar';
+import { useMemo } from "react";
+import { useRouter } from "expo-router";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { audioEngine } from "@/engine";
+import { useNowPlaying } from "@/hooks/useNowPlaying";
+import { usePlayhead } from "@/hooks/usePlayhead";
+import { useTransportState } from "@/hooks/useTransportState";
+import { useTranslation } from "@/i18n";
+import type { ProjectManifest } from "@/types/project";
+import { elevation, useThemeColors, type ThemeColors } from "@/ui/theme";
+import { TransportBar } from "./TransportBar";
 
 /**
  * The single, persistent transport bar - rendered once in `_layout.tsx`,
@@ -30,7 +30,13 @@ export function NowPlayingBar() {
 
   if (!projectId || !manifest) return null;
 
-  return <NowPlayingBarContent projectId={projectId} manifest={manifest} durationSec={durationSec} />;
+  return (
+    <NowPlayingBarContent
+      projectId={projectId}
+      manifest={manifest}
+      durationSec={durationSec}
+    />
+  );
 }
 
 interface NowPlayingBarContentProps {
@@ -48,7 +54,11 @@ interface NowPlayingBarContentProps {
  * RN's touch responder system resolves those first - the outer
  * navigation `Pressable` here only fires for taps on the title/background.
  */
-function NowPlayingBarContent({ projectId, manifest, durationSec }: NowPlayingBarContentProps) {
+function NowPlayingBarContent({
+  projectId,
+  manifest,
+  durationSec,
+}: NowPlayingBarContentProps) {
   const router = useRouter();
   const { t } = useTranslation();
   const colors = useThemeColors();
@@ -57,11 +67,11 @@ function NowPlayingBarContent({ projectId, manifest, durationSec }: NowPlayingBa
   const transportState = useTransportState();
 
   function goToSong() {
-    router.push({ pathname: '/project/[projectId]', params: { projectId } });
+    router.push({ pathname: "/project/[projectId]", params: { projectId } });
   }
 
   return (
-    <SafeAreaView edges={['bottom']} style={styles.safeArea}>
+    <SafeAreaView edges={["bottom"]} style={styles.safeArea}>
       <Pressable
         onPress={goToSong}
         testID="now-playing-bar"
@@ -75,10 +85,14 @@ function NowPlayingBarContent({ projectId, manifest, durationSec }: NowPlayingBa
           </Text>
         </View>
         <TransportBar
-          isPlaying={transportState === 'playing'}
+          isPlaying={transportState === "playing"}
           playheadSec={playheadSec}
           durationSec={durationSec}
-          onPlayPause={() => (audioEngine.getTransportState() === 'playing' ? audioEngine.pause() : audioEngine.play())}
+          onPlayPause={() =>
+            audioEngine.getTransportState() === "playing"
+              ? audioEngine.pause()
+              : audioEngine.play()
+          }
           onStop={() => audioEngine.stop()}
           onSeek={(seconds) => audioEngine.seek(seconds)}
         />
@@ -89,33 +103,33 @@ function NowPlayingBarContent({ projectId, manifest, durationSec }: NowPlayingBa
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  safeArea: {
-    backgroundColor: colors.panel,
-  },
-  bar: {
-    backgroundColor: colors.panel,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    ...elevation,
-  },
-  pressed: {
-    opacity: 0.9,
-  },
-  titleRow: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-  },
-  eyebrow: {
-    color: colors.textTertiary,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: 15,
-    fontWeight: '700',
-    marginTop: 2,
-  },
+    safeArea: {
+      backgroundColor: colors.panel,
+    },
+    bar: {
+      backgroundColor: colors.panel,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      ...elevation,
+    },
+    pressed: {
+      opacity: 0.9,
+    },
+    titleRow: {
+      paddingHorizontal: 16,
+      paddingTop: 10,
+    },
+    eyebrow: {
+      color: colors.textTertiary,
+      fontSize: 10,
+      fontWeight: "700",
+      letterSpacing: 1,
+    },
+    title: {
+      color: colors.textPrimary,
+      fontSize: 15,
+      fontWeight: "700",
+      marginTop: 2,
+    },
   });
 }

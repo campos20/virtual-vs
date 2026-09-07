@@ -1,4 +1,4 @@
-import type { AudioBuffer } from 'react-native-audio-api';
+import type { AudioBuffer } from "react-native-audio-api";
 
 /** Horizontal zoom: how many pixels of scrolling timeline represent one second of audio. */
 export const WAVEFORM_PIXELS_PER_SECOND = 40;
@@ -25,8 +25,13 @@ const SAMPLES_PER_BAR_TARGET = 200;
  */
 export function waveformBarCount(durationSec: number, laneCount = 1): number {
   if (durationSec <= 0 || laneCount <= 0) return 0;
-  const desired = Math.round((durationSec * WAVEFORM_PIXELS_PER_SECOND) / TARGET_BAR_WIDTH_PX);
-  const maxForLaneCount = Math.max(MIN_BARS_PER_LANE, Math.floor(MAX_TOTAL_BARS / laneCount));
+  const desired = Math.round(
+    (durationSec * WAVEFORM_PIXELS_PER_SECOND) / TARGET_BAR_WIDTH_PX,
+  );
+  const maxForLaneCount = Math.max(
+    MIN_BARS_PER_LANE,
+    Math.floor(MAX_TOTAL_BARS / laneCount),
+  );
   return Math.max(1, Math.min(desired, maxForLaneCount));
 }
 
@@ -42,7 +47,7 @@ export function waveformBarCount(durationSec: number, laneCount = 1): number {
 export function computeWaveformPeaks(
   buffers: AudioBuffer[],
   durationSec: number,
-  barCount: number
+  barCount: number,
 ): Float32Array {
   const peaks = new Float32Array(Math.max(0, barCount));
   if (barCount <= 0 || durationSec <= 0) return peaks;
@@ -53,7 +58,10 @@ export function computeWaveformPeaks(
     if (buffer.numberOfChannels === 0 || buffer.length === 0) continue;
     const data = buffer.getChannelData(0);
     const samplesPerBar = secondsPerBar * buffer.sampleRate;
-    const stride = Math.max(1, Math.floor(samplesPerBar / SAMPLES_PER_BAR_TARGET));
+    const stride = Math.max(
+      1,
+      Math.floor(samplesPerBar / SAMPLES_PER_BAR_TARGET),
+    );
 
     for (let bar = 0; bar < barCount; bar++) {
       const start = Math.floor(bar * samplesPerBar);

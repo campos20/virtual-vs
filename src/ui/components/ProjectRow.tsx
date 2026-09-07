@@ -1,8 +1,15 @@
-import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { elevation, glow, radii, spacing, useThemeColors, type ThemeColors } from '@/ui/theme';
-import { MoveColumn } from './MoveColumn';
-import { KebabIcon, OverflowMenu, type OverflowMenuItem } from './OverflowMenu';
+import { useMemo } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  elevation,
+  glow,
+  radii,
+  spacing,
+  useThemeColors,
+  type ThemeColors,
+} from "@/ui/theme";
+import { MoveColumn } from "./MoveColumn";
+import { KebabIcon, OverflowMenu, type OverflowMenuItem } from "./OverflowMenu";
 
 interface ProjectRowProps {
   title: string;
@@ -114,7 +121,7 @@ export function ProjectRow({
               </View>
             )}
             <View style={styles.metaPill}>
-              <Text style={styles.metaPillText}>{musicalKey || '—'}</Text>
+              <Text style={styles.metaPillText}>{musicalKey || "—"}</Text>
             </View>
             <View style={styles.metaPill}>
               <Text style={styles.metaPillText}>{stemsLabel}</Text>
@@ -131,7 +138,7 @@ export function ProjectRow({
         <View style={styles.menuColumn}>
           <OverflowMenu
             items={menuItems}
-            accessibilityLabel={menuAccessibilityLabel ?? ''}
+            accessibilityLabel={menuAccessibilityLabel ?? ""}
             testID={testID ? `${testID}-menu` : undefined}
           >
             <KebabIcon />
@@ -154,94 +161,94 @@ export function ProjectRow({
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    borderRadius: radii.lg,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    overflow: 'hidden',
-    ...elevation,
-  },
-  row: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  colorBar: {
-    width: 4,
-    alignSelf: 'stretch',
-    borderRadius: 2,
-    marginRight: spacing.md,
-  },
-  position: {
-    color: colors.textTertiary,
-    fontSize: 15,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
-    minWidth: 18,
-    marginRight: spacing.sm,
-    textAlign: 'right',
-  },
-  rowBody: {
-    flex: 1,
-    gap: 8,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  nowPlayingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.accent,
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: 17,
-    fontWeight: '700',
-    flexShrink: 1,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  metaPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radii.pill,
-    backgroundColor: colors.borderLight,
-  },
-  metaPillText: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  nested: {
-    // Reads as contained by the folder above it rather than as another
-    // top-level row: pulled in from the left, flatter, no drop shadow.
-    marginLeft: spacing.lg,
-    backgroundColor: colors.panelRaised,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  menuColumn: {
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
-  chevron: {
-    color: colors.textTertiary,
-    fontSize: 22,
-    fontWeight: '600',
-    marginLeft: spacing.sm,
-  },
+    container: {
+      borderRadius: radii.lg,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderLight,
+      flexDirection: "row",
+      alignItems: "stretch",
+      overflow: "hidden",
+      ...elevation,
+    },
+    row: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      padding: spacing.md,
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+    colorBar: {
+      width: 4,
+      alignSelf: "stretch",
+      borderRadius: 2,
+      marginRight: spacing.md,
+    },
+    position: {
+      color: colors.textTertiary,
+      fontSize: 15,
+      fontWeight: "800",
+      fontVariant: ["tabular-nums"],
+      minWidth: 18,
+      marginRight: spacing.sm,
+      textAlign: "right",
+    },
+    rowBody: {
+      flex: 1,
+      gap: 8,
+    },
+    titleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    nowPlayingDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.accent,
+    },
+    title: {
+      color: colors.textPrimary,
+      fontSize: 17,
+      fontWeight: "700",
+      flexShrink: 1,
+    },
+    metaRow: {
+      flexDirection: "row",
+      gap: 6,
+    },
+    metaPill: {
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: radii.pill,
+      backgroundColor: colors.borderLight,
+    },
+    metaPillText: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 0.2,
+    },
+    nested: {
+      // Reads as contained by the folder above it rather than as another
+      // top-level row: pulled in from the left, flatter, no drop shadow.
+      marginLeft: spacing.lg,
+      backgroundColor: colors.panelRaised,
+      shadowOpacity: 0,
+      elevation: 0,
+    },
+    menuColumn: {
+      justifyContent: "center",
+      paddingHorizontal: 2,
+    },
+    chevron: {
+      color: colors.textTertiary,
+      fontSize: 22,
+      fontWeight: "600",
+      marginLeft: spacing.sm,
+    },
   });
 }

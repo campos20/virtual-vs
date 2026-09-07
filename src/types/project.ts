@@ -1,4 +1,4 @@
-export type Bus = 'main' | 'cue' | 'both';
+export type Bus = "main" | "cue" | "both";
 
 export interface TrackManifest {
   id: string;

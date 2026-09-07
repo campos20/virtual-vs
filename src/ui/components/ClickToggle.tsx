@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
-import { StyleSheet, Switch, Text, View } from 'react-native';
-import { useTranslation } from '@/i18n';
-import { useThemeColors, type ThemeColors } from '@/ui/theme';
+import { useMemo } from "react";
+import { StyleSheet, Switch, Text, View } from "react-native";
+import { useTranslation } from "@/i18n";
+import { useThemeColors, type ThemeColors } from "@/ui/theme";
 
 interface ClickToggleProps {
   enabled: boolean;
@@ -17,7 +17,11 @@ export function ClickToggle({ enabled, onChange }: ClickToggleProps) {
   return (
     <View style={styles.container}>
       <Text style={styles.heading}>{t.click.heading}</Text>
-      <Switch value={enabled} onValueChange={onChange} trackColor={{ false: colors.border, true: colors.accent }} />
+      <Switch
+        value={enabled}
+        onValueChange={onChange}
+        trackColor={{ false: colors.border, true: colors.accent }}
+      />
     </View>
   );
 }
@@ -26,12 +30,12 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      alignItems: 'center',
+      alignItems: "center",
     },
     heading: {
       color: colors.textTertiary,
       fontSize: 10,
-      fontWeight: '700',
+      fontWeight: "700",
       letterSpacing: 1,
       marginBottom: 8,
     },

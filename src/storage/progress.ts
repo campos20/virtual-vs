@@ -10,15 +10,15 @@
  */
 
 export type ProgressPhase =
-  | 'copying'
-  | 'converting'
-  | 'decoding'
-  | 'building'
-  | 'waveforms'
+  | "copying"
+  | "converting"
+  | "decoding"
+  | "building"
+  | "waveforms"
   // Writing a project (audio included) into a .vvs bundle, and unpacking one.
   // Both move hundreds of megabytes a chunk at a time - see storage/bundle.ts.
-  | 'exporting'
-  | 'importing';
+  | "exporting"
+  | "importing";
 
 export interface ProgressUpdate {
   phase: ProgressPhase;
@@ -49,7 +49,7 @@ export function yieldToUi(): Promise<void> {
  */
 export async function report(
   onProgress: ProgressReporter | undefined,
-  update: ProgressUpdate
+  update: ProgressUpdate,
 ): Promise<void> {
   if (!onProgress) return;
   onProgress(update);

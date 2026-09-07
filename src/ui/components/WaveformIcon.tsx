@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { useThemeColors, type ThemeColors } from '@/ui/theme';
+import { useMemo } from "react";
+import { StyleSheet, View } from "react-native";
+import { useThemeColors, type ThemeColors } from "@/ui/theme";
 
 interface WaveformIconProps {
   /** Overrides the default `colors.textPrimary` fill - needed when this icon sits on an active/accent-colored segment (see ProjectScreen's view switcher) and would otherwise lose contrast. */
@@ -29,9 +29,9 @@ function createStyles(colors: ThemeColors, color?: string) {
     container: {
       width: 18,
       height: 16,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
     },
     bar: {
       width: 2,

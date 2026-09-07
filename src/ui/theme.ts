@@ -1,6 +1,6 @@
-import { useColorScheme } from 'react-native';
-import { useAppSelector } from '@/store/hooks';
-import type { ThemeOverride } from '@/types/theme';
+import { useColorScheme } from "react-native";
+import { useAppSelector } from "@/store/hooks";
+import type { ThemeOverride } from "@/types/theme";
 
 export interface ThemeColors {
   background: string;
@@ -34,37 +34,37 @@ export interface ThemeColors {
  * black to read the same way.
  */
 export const darkColors: ThemeColors = {
-  background: '#000000',
-  panel: '#111114',
-  panelRaised: '#18181c',
-  surface: '#1c1c1f',
-  border: '#2c2c2e',
-  borderLight: 'rgba(255,255,255,0.08)',
-  bevelLight: 'rgba(255,255,255,0.12)',
-  bevelDark: 'rgba(0,0,0,0.5)',
-  textPrimary: '#ffffff',
-  textSecondary: '#9b9b9d',
-  textTertiary: '#5f5f63',
-  accent: '#208AEF',
-  danger: '#ff453a',
-  warning: '#ffd60a',
+  background: "#000000",
+  panel: "#111114",
+  panelRaised: "#18181c",
+  surface: "#1c1c1f",
+  border: "#2c2c2e",
+  borderLight: "rgba(255,255,255,0.08)",
+  bevelLight: "rgba(255,255,255,0.12)",
+  bevelDark: "rgba(0,0,0,0.5)",
+  textPrimary: "#ffffff",
+  textSecondary: "#9b9b9d",
+  textTertiary: "#5f5f63",
+  accent: "#208AEF",
+  danger: "#ff453a",
+  warning: "#ffd60a",
 };
 
 export const lightColors: ThemeColors = {
-  background: '#f2f2f5',
-  panel: '#f7f7f9',
-  panelRaised: '#fbfbfc',
-  surface: '#ffffff',
-  border: '#dcdce1',
-  borderLight: 'rgba(0,0,0,0.08)',
-  bevelLight: 'rgba(255,255,255,0.12)',
-  bevelDark: 'rgba(0,0,0,0.5)',
-  textPrimary: '#161618',
-  textSecondary: '#6b6b6f',
-  textTertiary: '#8e8e93',
-  accent: '#0b5fa8',
-  danger: '#d9362e',
-  warning: '#8a5a00',
+  background: "#f2f2f5",
+  panel: "#f7f7f9",
+  panelRaised: "#fbfbfc",
+  surface: "#ffffff",
+  border: "#dcdce1",
+  borderLight: "rgba(0,0,0,0.08)",
+  bevelLight: "rgba(255,255,255,0.12)",
+  bevelDark: "rgba(0,0,0,0.5)",
+  textPrimary: "#161618",
+  textSecondary: "#6b6b6f",
+  textTertiary: "#8e8e93",
+  accent: "#0b5fa8",
+  danger: "#d9362e",
+  warning: "#8a5a00",
 };
 
 export const radii = {
@@ -85,7 +85,7 @@ export const spacing = {
 
 /** Soft elevation shadow for cards/panels floating above the console background. */
 export const elevation = {
-  shadowColor: '#000000',
+  shadowColor: "#000000",
   shadowOffset: { width: 0, height: 6 },
   shadowOpacity: 0.4,
   shadowRadius: 12,
@@ -114,10 +114,10 @@ export function resolveIsDark(
   // Android can report "unspecified" alongside RN's own null/undefined for
   // "the OS has no opinion" - all three fall back to dark, same as an
   // absent preference does, per this app's own default.
-  systemScheme: string | null | undefined
+  systemScheme: string | null | undefined,
 ): boolean {
-  if (themeOverride === 'system') return systemScheme !== 'light';
-  return themeOverride !== 'light';
+  if (themeOverride === "system") return systemScheme !== "light";
+  return themeOverride !== "light";
 }
 
 function useIsDark(): boolean {
@@ -140,6 +140,6 @@ export function useThemeColors(): ThemeColors {
  * consumer driving `<StatusBar>` from this must invert it - see
  * `_layout.tsx`.
  */
-export function useThemeMode(): 'dark' | 'light' {
-  return useIsDark() ? 'dark' : 'light';
+export function useThemeMode(): "dark" | "light" {
+  return useIsDark() ? "dark" : "light";
 }

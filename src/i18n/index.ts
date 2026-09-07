@@ -1,19 +1,19 @@
-import { useMemo } from 'react';
-import { useLocales } from 'expo-localization';
-import { useAppSelector } from '@/store/hooks';
-import { en, type TranslationDictionary } from './en';
-import { ptBR } from './pt-BR';
+import { useMemo } from "react";
+import { useLocales } from "expo-localization";
+import { useAppSelector } from "@/store/hooks";
+import { en, type TranslationDictionary } from "./en";
+import { ptBR } from "./pt-BR";
 
-export type Locale = 'en' | 'pt-BR';
+export type Locale = "en" | "pt-BR";
 
 const dictionaries: Record<Locale, TranslationDictionary> = {
   en,
-  'pt-BR': ptBR,
+  "pt-BR": ptBR,
 };
 
 /** Only Portuguese gets its own locale for now; everything else falls back to English. */
 export function resolveLocale(languageCode: string | null | undefined): Locale {
-  return languageCode === 'pt' ? 'pt-BR' : 'en';
+  return languageCode === "pt" ? "pt-BR" : "en";
 }
 
 /**

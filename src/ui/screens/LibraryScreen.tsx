@@ -1,6 +1,14 @@
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { Alert, ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Alert,
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "@/i18n";
 import { useNowPlaying } from "@/hooks/useNowPlaying";
@@ -36,7 +44,11 @@ import {
 import { setlistsSelectors } from "@/store/setlistsSlice";
 import { tracksRemovedForProject } from "@/store/tracksSlice";
 import { FolderRow } from "@/ui/components/FolderRow";
-import { KebabIcon, OverflowMenu, type OverflowMenuItem } from "@/ui/components/OverflowMenu";
+import {
+  KebabIcon,
+  OverflowMenu,
+  type OverflowMenuItem,
+} from "@/ui/components/OverflowMenu";
 import { ProjectRow } from "@/ui/components/ProjectRow";
 import { buildLibraryTree } from "@/ui/libraryTree";
 import { moveId } from "@/ui/reorder";
@@ -52,7 +64,9 @@ export function LibraryScreen() {
   const projects = useAppSelector((s) =>
     projectsSelectors.selectAll(s.projects),
   );
-  const folders = useAppSelector((s) => setlistsSelectors.selectAll(s.setlists));
+  const folders = useAppSelector((s) =>
+    setlistsSelectors.selectAll(s.setlists),
+  );
   const libraryOrder = useAppSelector((s) => s.settings.libraryOrder);
   // Folders are only grouping, so the Library is usable before they arrive -
   // it waits on the projects scan alone, as it always has.
@@ -90,7 +104,8 @@ export function LibraryScreen() {
     direction: "up" | "down",
   ) {
     const reordered = moveId(songIds, index, direction);
-    if (reordered !== songIds) dispatch(reorderFolderSongs(folderId, reordered));
+    if (reordered !== songIds)
+      dispatch(reorderFolderSongs(folderId, reordered));
   }
 
   /**
@@ -118,7 +133,11 @@ export function LibraryScreen() {
    * and a bundle shared back the other way arrives through the file picker
    * below like any other file.
    */
-  async function handleExportFolder(folderId: string, name: string, songs: LibraryProjectEntry[]) {
+  async function handleExportFolder(
+    folderId: string,
+    name: string,
+    songs: LibraryProjectEntry[],
+  ) {
     if (transportIsRunning()) {
       setError(t.library.lockedWhilePlaying);
       return;
@@ -130,7 +149,9 @@ export function LibraryScreen() {
 
     setError(null);
     try {
-      const folderManifest = folders.find((candidate) => candidate.id === folderId);
+      const folderManifest = folders.find(
+        (candidate) => candidate.id === folderId,
+      );
       const bundle = await writeBundleToCache(
         { projects: songs, folders: folderManifest ? [folderManifest] : [] },
         name,
@@ -156,7 +177,10 @@ export function LibraryScreen() {
     try {
       // Bundles have no registered MIME type of their own, so the picker has
       // to accept anything - a narrower filter would grey them out in Drive.
-      const picked = await getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
+      const picked = await getDocumentAsync({
+        type: "*/*",
+        copyToCacheDirectory: true,
+      });
       if (picked.canceled || !picked.assets[0]) return;
 
       const result = await dispatch(
@@ -193,7 +217,11 @@ export function LibraryScreen() {
     if (trimmed) dispatch(renameFolder(folderId, trimmed));
   }
 
-  function handleDeleteFolder(folderId: string, name: string, songCount: number) {
+  function handleDeleteFolder(
+    folderId: string,
+    name: string,
+    songCount: number,
+  ) {
     Alert.alert(
       t.folder.deleteConfirmTitle,
       t.folder.deleteConfirmBody(name, songCount),
@@ -219,37 +247,36 @@ export function LibraryScreen() {
    * meaning to just take the song out of *this* folder, clicking from
    * inside it, is the exact moment this needs to be impossible to miss.
    */
-  function handleDeleteSong(entry: LibraryProjectEntry, containingFolder?: { name: string }) {
+  function handleDeleteSong(
+    entry: LibraryProjectEntry,
+    containingFolder?: { name: string },
+  ) {
     if (!entry.sourceDir) return;
     const body = containingFolder
       ? `${t.library.deleteConfirmBody(entry.title, entry.tracks.length)}\n\n${t.library.deleteRemoveInsteadHint(containingFolder.name)}`
       : t.library.deleteConfirmBody(entry.title, entry.tracks.length);
 
-    Alert.alert(
-      t.library.deleteConfirmTitle,
-      body,
-      [
-        { text: t.common.cancel, style: "cancel" },
-        {
-          text: t.library.deleteConfirmConfirm,
-          style: "destructive",
-          onPress: () => {
-            try {
-              deleteProjectDirectory(entry.sourceDir!);
-            } catch (e) {
-              setError(e instanceof Error ? e.message : String(e));
-              return;
-            }
-            nowPlayingStore.closeIfCurrent(entry.id);
-            dispatch(projectRemoved(entry.id));
-            dispatch(tracksRemovedForProject(entry.id));
-            // Folders hold song ids, so any that listed this project would be
-            // left pointing at nothing.
-            dispatch(removeSongFromAllFolders(entry.id));
-          },
+    Alert.alert(t.library.deleteConfirmTitle, body, [
+      { text: t.common.cancel, style: "cancel" },
+      {
+        text: t.library.deleteConfirmConfirm,
+        style: "destructive",
+        onPress: () => {
+          try {
+            deleteProjectDirectory(entry.sourceDir!);
+          } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+            return;
+          }
+          nowPlayingStore.closeIfCurrent(entry.id);
+          dispatch(projectRemoved(entry.id));
+          dispatch(tracksRemovedForProject(entry.id));
+          // Folders hold song ids, so any that listed this project would be
+          // left pointing at nothing.
+          dispatch(removeSongFromAllFolders(entry.id));
         },
-      ],
-    );
+      },
+    ]);
   }
 
   /**
@@ -275,7 +302,8 @@ export function LibraryScreen() {
           {
             key: "remove",
             label: t.folder.removeFrom,
-            onPress: () => dispatch(removeSongFromFolder(containingFolder.id, entry.id)),
+            onPress: () =>
+              dispatch(removeSongFromFolder(containingFolder.id, entry.id)),
             testID: `remove-from-folder-${containingFolder.id}`,
           },
         ]
@@ -371,7 +399,10 @@ export function LibraryScreen() {
             onPress={handleNewFolder}
             hitSlop={8}
             testID="new-folder-button"
-            style={({ pressed }) => [styles.newFolderButton, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.newFolderButton,
+              pressed && styles.pressed,
+            ]}
           >
             <Text style={styles.newFolderText}>{t.library.newFolder}</Text>
           </Pressable>
@@ -387,12 +418,20 @@ export function LibraryScreen() {
           >
             <Text style={styles.newProjectText}>{t.library.newProject}</Text>
           </Pressable>
-          <OverflowMenu items={menuItems} accessibilityLabel={t.menu.moreOptions} testID="library-menu">
+          <OverflowMenu
+            items={menuItems}
+            accessibilityLabel={t.menu.moreOptions}
+            testID="library-menu"
+          >
             <KebabIcon />
           </OverflowMenu>
         </View>
       </View>
-      {status && <Text style={styles.status} testID="library-status">{status}</Text>}
+      {status && (
+        <Text style={styles.status} testID="library-status">
+          {status}
+        </Text>
+      )}
       {error && <Text style={styles.error}>{error}</Text>}
       <ScrollView contentContainerStyle={styles.list}>
         {!hydrated ? (
@@ -425,7 +464,9 @@ export function LibraryScreen() {
                           : [...current, folder.id],
                       )
                     }
-                    expandAccessibilityLabel={expanded ? t.folder.collapse : t.folder.expand}
+                    expandAccessibilityLabel={
+                      expanded ? t.folder.collapse : t.folder.expand
+                    }
                     menuAccessibilityLabel={t.folder.folderOptions}
                     menuItems={[
                       {
@@ -443,20 +484,27 @@ export function LibraryScreen() {
                       {
                         key: "export",
                         label: t.folder.export,
-                        onPress: () => handleExportFolder(folder.id, folder.name, songs),
+                        onPress: () =>
+                          handleExportFolder(folder.id, folder.name, songs),
                         testID: `export-folder-${folder.id}`,
                       },
                       {
                         key: "delete",
                         label: t.folder.delete,
                         onPress: () =>
-                          handleDeleteFolder(folder.id, folder.name, songs.length),
+                          handleDeleteFolder(
+                            folder.id,
+                            folder.name,
+                            songs.length,
+                          ),
                         testID: `delete-folder-${folder.id}`,
                       },
                     ]}
                     renaming={renamingFolderId === folder.id}
                     renamePlaceholder={t.folder.renamePlaceholder}
-                    onRenameSubmit={(name) => handleRenameSubmit(folder.id, name)}
+                    onRenameSubmit={(name) =>
+                      handleRenameSubmit(folder.id, name)
+                    }
                     onRenameCancel={() => setRenamingFolderId(null)}
                     canMoveUp={canMoveUp}
                     canMoveDown={canMoveDown}
@@ -486,7 +534,10 @@ export function LibraryScreen() {
                           moveDownAccessibilityLabel={t.library.moveDown}
                           isNowPlaying={song.id === nowPlayingProjectId}
                           nowPlayingAccessibilityLabel={t.nowPlaying.heading}
-                          menuItems={songMenuItems(song, { id: folder.id, name: folder.name })}
+                          menuItems={songMenuItems(song, {
+                            id: folder.id,
+                            name: folder.name,
+                          })}
                           menuAccessibilityLabel={t.folder.songOptions}
                           onPress={() => openProject(song.id, folder.id)}
                           onMoveUp={() =>
@@ -544,106 +595,106 @@ export function LibraryScreen() {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  eyebrow: {
-    color: colors.textTertiary,
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 1.5,
-    marginBottom: 2,
-  },
-  header: {
-    color: colors.textPrimary,
-    fontSize: 30,
-    fontWeight: "800",
-    letterSpacing: -0.5,
-  },
-  newFolderButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    borderRadius: radii.pill,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  newFolderText: {
-    color: colors.textSecondary,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  status: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  folderGroup: {
-    gap: spacing.sm,
-  },
-  folderEmpty: {
-    color: colors.textTertiary,
-    fontSize: 13,
-    marginLeft: spacing.lg,
-    marginBottom: spacing.xs,
-  },
-  newProjectButton: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 10,
-    borderRadius: radii.pill,
-    backgroundColor: "rgba(32,138,239,0.16)",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(32,138,239,0.5)",
-  },
-  newProjectText: {
-    color: colors.accent,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  list: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
-    gap: spacing.md,
-  },
-  empty: {
-    alignItems: "center",
-    paddingTop: 80,
-    gap: 6,
-  },
-  emptyTitle: {
-    color: colors.textSecondary,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  emptyMeta: {
-    color: colors.textTertiary,
-    fontSize: 13,
-  },
-  loading: {
-    marginTop: 60,
-  },
-  error: {
-    color: colors.danger,
-    fontSize: 13,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      justifyContent: "space-between",
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.md,
+    },
+    headerActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+    },
+    eyebrow: {
+      color: colors.textTertiary,
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 1.5,
+      marginBottom: 2,
+    },
+    header: {
+      color: colors.textPrimary,
+      fontSize: 30,
+      fontWeight: "800",
+      letterSpacing: -0.5,
+    },
+    newFolderButton: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: 10,
+      borderRadius: radii.pill,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    newFolderText: {
+      color: colors.textSecondary,
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    status: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.sm,
+    },
+    folderGroup: {
+      gap: spacing.sm,
+    },
+    folderEmpty: {
+      color: colors.textTertiary,
+      fontSize: 13,
+      marginLeft: spacing.lg,
+      marginBottom: spacing.xs,
+    },
+    newProjectButton: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: 10,
+      borderRadius: radii.pill,
+      backgroundColor: "rgba(32,138,239,0.16)",
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: "rgba(32,138,239,0.5)",
+    },
+    newProjectText: {
+      color: colors.accent,
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+    list: {
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.xl,
+      gap: spacing.md,
+    },
+    empty: {
+      alignItems: "center",
+      paddingTop: 80,
+      gap: 6,
+    },
+    emptyTitle: {
+      color: colors.textSecondary,
+      fontSize: 16,
+      fontWeight: "700",
+    },
+    emptyMeta: {
+      color: colors.textTertiary,
+      fontSize: 13,
+    },
+    loading: {
+      marginTop: 60,
+    },
+    error: {
+      color: colors.danger,
+      fontSize: 13,
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.sm,
+    },
   });
 }

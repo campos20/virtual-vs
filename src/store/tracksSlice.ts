@@ -1,5 +1,9 @@
-import { createEntityAdapter, createSlice, type PayloadAction } from '@reduxjs/toolkit';
-import type { Bus, TrackManifest } from '@/types/project';
+import {
+  createEntityAdapter,
+  createSlice,
+  type PayloadAction,
+} from "@reduxjs/toolkit";
+import type { Bus, TrackManifest } from "@/types/project";
 
 /**
  * Committed per-track mixer state (volume/mute/solo/bus). This is the only
@@ -26,7 +30,7 @@ export function trackEntityId(projectId: string, trackId: string): string {
 const tracksAdapter = createEntityAdapter<TrackCommittedState>();
 
 const tracksSlice = createSlice({
-  name: 'tracks',
+  name: "tracks",
   initialState: tracksAdapter.getInitialState(),
   reducers: {
     /**
@@ -38,37 +42,48 @@ const tracksSlice = createSlice({
      */
     tracksInitializedForProject(
       state,
-      action: PayloadAction<{ projectId: string; tracks: TrackManifest[] }>
+      action: PayloadAction<{ projectId: string; tracks: TrackManifest[] }>,
     ) {
       const { projectId, tracks } = action.payload;
       tracksAdapter.upsertMany(
         state,
-        tracks.map(
-          (t): TrackCommittedState => ({
-            id: trackEntityId(projectId, t.id),
-            projectId,
-            trackId: t.id,
-            volume: t.gain,
-            muted: t.muted ?? false,
-            soloed: t.soloed ?? false,
-            bus: t.bus,
-          })
-        )
+        tracks.map((t): TrackCommittedState => ({
+          id: trackEntityId(projectId, t.id),
+          projectId,
+          trackId: t.id,
+          volume: t.gain,
+          muted: t.muted ?? false,
+          soloed: t.soloed ?? false,
+          bus: t.bus,
+        })),
       );
     },
     trackVolumeCommitted(
       state,
-      action: PayloadAction<{ projectId: string; trackId: string; volume: number }>
+      action: PayloadAction<{
+        projectId: string;
+        trackId: string;
+        volume: number;
+      }>,
     ) {
       const { projectId, trackId, volume } = action.payload;
-      tracksAdapter.updateOne(state, { id: trackEntityId(projectId, trackId), changes: { volume } });
+      tracksAdapter.updateOne(state, {
+        id: trackEntityId(projectId, trackId),
+        changes: { volume },
+      });
     },
-    trackMuteToggled(state, action: PayloadAction<{ projectId: string; trackId: string }>) {
+    trackMuteToggled(
+      state,
+      action: PayloadAction<{ projectId: string; trackId: string }>,
+    ) {
       const { projectId, trackId } = action.payload;
       const entity = state.entities[trackEntityId(projectId, trackId)];
       if (entity) entity.muted = !entity.muted;
     },
-    trackSoloToggled(state, action: PayloadAction<{ projectId: string; trackId: string }>) {
+    trackSoloToggled(
+      state,
+      action: PayloadAction<{ projectId: string; trackId: string }>,
+    ) {
       const { projectId, trackId } = action.payload;
       const entity = state.entities[trackEntityId(projectId, trackId)];
       if (entity) entity.soloed = !entity.soloed;
@@ -80,9 +95,15 @@ const tracksSlice = createSlice({
         .map((entity) => entity!.id);
       tracksAdapter.removeMany(state, stale);
     },
-    trackBusSet(state, action: PayloadAction<{ projectId: string; trackId: string; bus: Bus }>) {
+    trackBusSet(
+      state,
+      action: PayloadAction<{ projectId: string; trackId: string; bus: Bus }>,
+    ) {
       const { projectId, trackId, bus } = action.payload;
-      tracksAdapter.updateOne(state, { id: trackEntityId(projectId, trackId), changes: { bus } });
+      tracksAdapter.updateOne(state, {
+        id: trackEntityId(projectId, trackId),
+        changes: { bus },
+      });
     },
   },
 });

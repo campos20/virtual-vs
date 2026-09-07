@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { useThemeColors, type ThemeColors } from '@/ui/theme';
+import { useMemo } from "react";
+import { StyleSheet, View } from "react-native";
+import { useThemeColors, type ThemeColors } from "@/ui/theme";
 
 interface LyricsIconProps {
   /** Overrides the default `colors.textPrimary` fill - needed when this icon sits on an active/accent-colored segment (see ProjectScreen's view switcher) and would otherwise lose contrast. */
@@ -37,7 +37,7 @@ function createStyles(colors: ThemeColors, color?: string) {
       height: 18,
     },
     head: {
-      position: 'absolute',
+      position: "absolute",
       left: 0,
       bottom: 0,
       width: 9,
@@ -46,7 +46,7 @@ function createStyles(colors: ThemeColors, color?: string) {
       backgroundColor: fill,
     },
     stem: {
-      position: 'absolute',
+      position: "absolute",
       left: 7,
       top: 0,
       width: 2,
@@ -55,7 +55,7 @@ function createStyles(colors: ThemeColors, color?: string) {
       backgroundColor: fill,
     },
     flag: {
-      position: 'absolute',
+      position: "absolute",
       left: 9,
       top: 0,
       width: 0,
@@ -63,7 +63,7 @@ function createStyles(colors: ThemeColors, color?: string) {
       borderTopWidth: 6,
       borderRightWidth: 6,
       borderTopColor: fill,
-      borderRightColor: 'transparent',
+      borderRightColor: "transparent",
     },
   });
 }

@@ -1,6 +1,6 @@
-import { File, Paths } from 'expo-file-system';
-import type { Locale } from '@/i18n';
-import type { ThemeOverride } from '@/types/theme';
+import { File, Paths } from "expo-file-system";
+import type { Locale } from "@/i18n";
+import type { ThemeOverride } from "@/types/theme";
 
 export interface PersistedAppSettings {
   /** Manually chosen language, overriding the device locale. Absent means "follow the device". */
@@ -38,7 +38,7 @@ export interface PersistedAppSettings {
   themeOverride?: ThemeOverride;
 }
 
-const settingsFile = new File(Paths.document, 'settings.json');
+const settingsFile = new File(Paths.document, "settings.json");
 
 /**
  * Synchronous on purpose: read once at store-creation time (see
@@ -64,6 +64,6 @@ export function writeAppSettings(changes: Partial<PersistedAppSettings>): void {
     const updated = { ...readAppSettings(), ...changes };
     settingsFile.write(JSON.stringify(updated, null, 2));
   } catch (error) {
-    console.warn('Failed to persist app settings', error);
+    console.warn("Failed to persist app settings", error);
   }
 }

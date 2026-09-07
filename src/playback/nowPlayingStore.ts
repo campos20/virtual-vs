@@ -1,12 +1,16 @@
-import { audioEngine, type MonitorMode } from '@/engine';
-import { trackRuntimeStatesFromManifest } from '@/engine/trackRuntimeState';
-import { computeWaveformPeaks, waveformBarCount } from '@/engine/waveform';
-import { decodeProjectAudio, getProjectSourceForEntry } from '@/storage';
-import { report, type ProgressReporter } from '@/storage/progress';
-import type { LibraryProjectEntry } from '@/store/projectsSlice';
-import type { LyricsSyncPoint, ProjectManifest, SectionManifest } from '@/types/project';
-import type { StemWaveform } from '@/ui/components/WaveformView';
-import { getTrackColor } from '@/ui/trackColors';
+import { audioEngine, type MonitorMode } from "@/engine";
+import { trackRuntimeStatesFromManifest } from "@/engine/trackRuntimeState";
+import { computeWaveformPeaks, waveformBarCount } from "@/engine/waveform";
+import { decodeProjectAudio, getProjectSourceForEntry } from "@/storage";
+import { report, type ProgressReporter } from "@/storage/progress";
+import type { LibraryProjectEntry } from "@/store/projectsSlice";
+import type {
+  LyricsSyncPoint,
+  ProjectManifest,
+  SectionManifest,
+} from "@/types/project";
+import type { StemWaveform } from "@/ui/components/WaveformView";
+import { getTrackColor } from "@/ui/trackColors";
 
 /** Bounds the number of stem waveform lanes rendered - past this, only the mixer's per-track strips show the rest. */
 const MAX_WAVEFORM_STEMS = 16;
@@ -78,10 +82,13 @@ class NowPlayingStore {
   async openProject(
     entry: LibraryProjectEntry,
     options: EngineOptions,
-    onProgress?: ProgressReporter
+    onProgress?: ProgressReporter,
   ): Promise<LoadResult> {
     if (entry.id === this.snapshot.projectId && this.snapshot.manifest) {
-      return { manifest: this.snapshot.manifest, durationSec: this.snapshot.durationSec };
+      return {
+        manifest: this.snapshot.manifest,
+        durationSec: this.snapshot.durationSec,
+      };
     }
     return this.loadFresh(entry, options, onProgress);
   }
@@ -93,7 +100,7 @@ class NowPlayingStore {
   async reload(
     entry: LibraryProjectEntry,
     options: EngineOptions,
-    onProgress?: ProgressReporter
+    onProgress?: ProgressReporter,
   ): Promise<LoadResult> {
     return this.loadFresh(entry, options, onProgress);
   }
@@ -101,47 +108,65 @@ class NowPlayingStore {
   private async loadFresh(
     entry: LibraryProjectEntry,
     { monitorMode, clickEnabled }: EngineOptions,
-    onProgress?: ProgressReporter
+    onProgress?: ProgressReporter,
   ): Promise<LoadResult> {
     const requestId = ++this.requestId;
 
     const source = await getProjectSourceForEntry(entry);
-    const decoded = await decodeProjectAudio(audioEngine.context, source, onProgress);
+    const decoded = await decodeProjectAudio(
+      audioEngine.context,
+      source,
+      onProgress,
+    );
 
     // A slower, now-superseded request resolving after a newer one already
     // committed must never win - most importantly, must never clobber a
     // *different* project that's since become current (e.g. the user
     // backed out before this one finished decoding and opened another).
     if (requestId !== this.requestId) {
-      throw new Error('Superseded by a newer openProject/reload call');
+      throw new Error("Superseded by a newer openProject/reload call");
     }
 
     // Building the graph also generates the click track, which is a
     // synchronous pass over the whole project length.
-    await report(onProgress, { phase: 'building' });
-    audioEngine.loadProject(decoded, trackRuntimeStatesFromManifest(source.manifest.tracks));
+    await report(onProgress, { phase: "building" });
+    audioEngine.loadProject(
+      decoded,
+      trackRuntimeStatesFromManifest(source.manifest.tracks),
+    );
     audioEngine.setMonitorMode(monitorMode);
     audioEngine.setClickEnabled(clickEnabled);
 
     const durationSec = source.manifest.tracks.reduce(
       (max, t) => Math.max(max, decoded.trackBuffers[t.id]?.duration ?? 0),
-      0
+      0,
     );
 
     // Peak computation walks every sample of every stem, synchronously.
-    await report(onProgress, { phase: 'waveforms' });
+    await report(onProgress, { phase: "waveforms" });
     const waveformStems = source.manifest.tracks.slice(0, MAX_WAVEFORM_STEMS);
     const laneBarCount = waveformBarCount(durationSec, waveformStems.length);
-    const waveformTracks: StemWaveform[] = waveformStems.map((track, index) => ({
-      id: track.id,
-      name: track.name,
-      color: getTrackColor(index),
-      peaks: decoded.trackBuffers[track.id]
-        ? computeWaveformPeaks([decoded.trackBuffers[track.id]], durationSec, laneBarCount)
-        : new Float32Array(laneBarCount),
-    }));
+    const waveformTracks: StemWaveform[] = waveformStems.map(
+      (track, index) => ({
+        id: track.id,
+        name: track.name,
+        color: getTrackColor(index),
+        peaks: decoded.trackBuffers[track.id]
+          ? computeWaveformPeaks(
+              [decoded.trackBuffers[track.id]],
+              durationSec,
+              laneBarCount,
+            )
+          : new Float32Array(laneBarCount),
+      }),
+    );
 
-    this.commit({ projectId: entry.id, manifest: source.manifest, durationSec, waveformTracks });
+    this.commit({
+      projectId: entry.id,
+      manifest: source.manifest,
+      durationSec,
+      waveformTracks,
+    });
     return { manifest: source.manifest, durationSec };
   }
 
@@ -165,9 +190,13 @@ class NowPlayingStore {
       ...this.snapshot,
       manifest: {
         ...manifest,
-        tracks: manifest.tracks.map((t) => (t.id === stemId ? { ...t, name } : t)),
+        tracks: manifest.tracks.map((t) =>
+          t.id === stemId ? { ...t, name } : t,
+        ),
       },
-      waveformTracks: waveformTracks.map((t) => (t.id === stemId ? { ...t, name } : t)),
+      waveformTracks: waveformTracks.map((t) =>
+        t.id === stemId ? { ...t, name } : t,
+      ),
     });
   }
 
@@ -186,14 +215,20 @@ class NowPlayingStore {
   setLyricsLocal(lyrics: string): void {
     const { manifest } = this.snapshot;
     if (!manifest) return;
-    this.commit({ ...this.snapshot, manifest: { ...manifest, lyrics, lyricsSyncPoints: [] } });
+    this.commit({
+      ...this.snapshot,
+      manifest: { ...manifest, lyrics, lyricsSyncPoints: [] },
+    });
   }
 
   /** Patches the current project's lyrics tap-to-correct sync points in place - no re-decode needed, same reasoning as `setSectionsLocal`. */
   setLyricsSyncLocal(syncPoints: LyricsSyncPoint[]): void {
     const { manifest } = this.snapshot;
     if (!manifest) return;
-    this.commit({ ...this.snapshot, manifest: { ...manifest, lyricsSyncPoints: syncPoints } });
+    this.commit({
+      ...this.snapshot,
+      manifest: { ...manifest, lyricsSyncPoints: syncPoints },
+    });
   }
 
   /**

@@ -1,8 +1,21 @@
 import { useTranslation } from "@/i18n";
 import type { LibraryProjectEntry } from "@/store/projectsSlice";
-import { elevation, radii, spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
+import {
+  elevation,
+  radii,
+  spacing,
+  useThemeColors,
+  type ThemeColors,
+} from "@/ui/theme";
 import { useMemo } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 interface FolderSongsDrawerProps {
@@ -60,7 +73,12 @@ export function FolderSongsDrawer({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <Pressable
         style={StyleSheet.absoluteFill}
         onPress={onClose}
@@ -76,13 +94,19 @@ export function FolderSongsDrawer({
             onPress={onClose}
             hitSlop={8}
             testID="close-folder-songs-button"
-            style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.closeButton,
+              pressed && styles.pressed,
+            ]}
           >
             <Text style={styles.closeButtonText}>{t.common.close}</Text>
           </Pressable>
         </View>
 
-        <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+        <ScrollView
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+        >
           {songs.map((song, index) => {
             const isCurrent = song.id === currentProjectId;
             return (
@@ -105,7 +129,12 @@ export function FolderSongsDrawer({
                 >
                   {song.title}
                 </Text>
-                {isCurrent && <View style={styles.nowPlayingDot} testID={`folder-songs-row-${song.id}-now-playing`} />}
+                {isCurrent && (
+                  <View
+                    style={styles.nowPlayingDot}
+                    testID={`folder-songs-row-${song.id}-now-playing`}
+                  />
+                )}
               </Pressable>
             );
           })}
@@ -122,7 +151,9 @@ export function FolderSongsDrawer({
               pressed && styles.pressed,
             ]}
           >
-            <Text style={styles.playNextButtonText}>{t.project.playNextSong}</Text>
+            <Text style={styles.playNextButtonText}>
+              {t.project.playNextSong}
+            </Text>
           </Pressable>
         </View>
       </SafeAreaView>

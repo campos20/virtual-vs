@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
-import { Chevron } from '@/ui/components/Chevron';
-import { spacing, useThemeColors, type ThemeColors } from '@/ui/theme';
+import { useMemo } from "react";
+import { Pressable, StyleSheet, Text } from "react-native";
+import { Chevron } from "@/ui/components/Chevron";
+import { spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
 
 interface BackButtonProps {
   label: string;
@@ -41,9 +41,9 @@ export function BackButton({ label, onPress, testID }: BackButtonProps) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      alignSelf: 'flex-start',
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "flex-start",
       paddingVertical: 6,
       paddingRight: spacing.sm,
     },
@@ -56,7 +56,7 @@ function createStyles(colors: ThemeColors) {
     label: {
       color: colors.accent,
       fontSize: 17,
-      fontWeight: '600',
+      fontWeight: "600",
     },
   });
 }

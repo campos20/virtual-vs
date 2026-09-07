@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { audioEngine } from '@/engine';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { audioEngine } from "@/engine";
 
 /** How often the hook's React state (and therefore the consumer's render) updates. */
 const DISPLAY_UPDATE_INTERVAL_SEC = 1 / 15;

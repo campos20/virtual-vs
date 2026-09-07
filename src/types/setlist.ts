@@ -1,4 +1,4 @@
-export type SetlistAdvance = 'manual' | 'auto';
+export type SetlistAdvance = "manual" | "auto";
 
 /**
  * A named, ordered group of songs - what the Library shows as a **folder**.

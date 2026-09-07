@@ -1,12 +1,13 @@
-import { File, FileMode } from 'expo-file-system';
+import { File, FileMode } from "expo-file-system";
 
 const RIFF_HEADER_BYTES = 4096;
 const BYTES_PER_SAMPLE = 2; // 16-bit PCM
 const STEREO = 2;
 
 function readAscii(view: DataView, offset: number, length: number): string {
-  let out = '';
-  for (let i = 0; i < length; i++) out += String.fromCharCode(view.getUint8(offset + i));
+  let out = "";
+  for (let i = 0; i < length; i++)
+    out += String.fromCharCode(view.getUint8(offset + i));
   return out;
 }
 
@@ -26,7 +27,8 @@ export function readWavChannelCount(file: File): number | null {
     if (bytes.length < 16) return null;
 
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    if (readAscii(view, 0, 4) !== 'RIFF' || readAscii(view, 8, 4) !== 'WAVE') return null;
+    if (readAscii(view, 0, 4) !== "RIFF" || readAscii(view, 8, 4) !== "WAVE")
+      return null;
 
     // Walk the chunk list rather than assuming `fmt ` sits at a fixed offset -
     // real-world files carry JUNK/LIST chunks ahead of it.
@@ -34,8 +36,10 @@ export function readWavChannelCount(file: File): number | null {
     while (offset + 8 <= view.byteLength) {
       const chunkId = readAscii(view, offset, 4);
       const chunkSize = view.getUint32(offset + 4, true);
-      if (chunkId === 'fmt ') {
-        return offset + 10 + 2 <= view.byteLength ? view.getUint16(offset + 10, true) : null;
+      if (chunkId === "fmt ") {
+        return offset + 10 + 2 <= view.byteLength
+          ? view.getUint16(offset + 10, true)
+          : null;
       }
       offset += 8 + chunkSize + (chunkSize % 2);
     }
@@ -51,7 +55,7 @@ export function readWavChannelCount(file: File): number | null {
 export function encodeStereoWav(
   left: Float32Array,
   right: Float32Array,
-  sampleRate: number
+  sampleRate: number,
 ): Uint8Array {
   const frames = Math.min(left.length, right.length);
   const dataBytes = frames * STEREO * BYTES_PER_SAMPLE;
@@ -59,13 +63,14 @@ export function encodeStereoWav(
   const view = new DataView(bytes.buffer);
 
   const writeAscii = (offset: number, text: string) => {
-    for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+    for (let i = 0; i < text.length; i++)
+      view.setUint8(offset + i, text.charCodeAt(i));
   };
 
-  writeAscii(0, 'RIFF');
+  writeAscii(0, "RIFF");
   view.setUint32(4, 36 + dataBytes, true);
-  writeAscii(8, 'WAVE');
-  writeAscii(12, 'fmt ');
+  writeAscii(8, "WAVE");
+  writeAscii(12, "fmt ");
   view.setUint32(16, 16, true); // PCM fmt chunk size
   view.setUint16(20, 1, true); // PCM
   view.setUint16(22, STEREO, true);
@@ -73,7 +78,7 @@ export function encodeStereoWav(
   view.setUint32(28, sampleRate * STEREO * BYTES_PER_SAMPLE, true); // byte rate
   view.setUint16(32, STEREO * BYTES_PER_SAMPLE, true); // block align
   view.setUint16(34, 8 * BYTES_PER_SAMPLE, true);
-  writeAscii(36, 'data');
+  writeAscii(36, "data");
   view.setUint32(40, dataBytes, true);
 
   let offset = 44;

@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
-import { WAVEFORM_PIXELS_PER_SECOND } from '@/engine/waveform';
-import { useThemeColors, type ThemeColors } from '@/ui/theme';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type LayoutChangeEvent,
+} from "react-native";
+import { WAVEFORM_PIXELS_PER_SECOND } from "@/engine/waveform";
+import { useThemeColors, type ThemeColors } from "@/ui/theme";
 
 export const STEM_LANE_BAR_MAX_HEIGHT = 48;
 const MIN_BAR_HEIGHT = 2;
@@ -27,7 +33,13 @@ interface StemWaveformLaneProps {
  * are memoized so that 15fps playhead prop churn only re-runs the
  * imperative scroll, not a reconciliation of every bar view.
  */
-export function StemWaveformLane({ label, color, peaks, durationSec, playheadSec }: StemWaveformLaneProps) {
+export function StemWaveformLane({
+  label,
+  color,
+  peaks,
+  durationSec,
+  playheadSec,
+}: StemWaveformLaneProps) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const scrollRef = useRef<ScrollView>(null);
@@ -38,7 +50,10 @@ export function StemWaveformLane({ label, color, peaks, durationSec, playheadSec
   }, []);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ x: playheadSec * WAVEFORM_PIXELS_PER_SECOND, animated: false });
+    scrollRef.current?.scrollTo({
+      x: playheadSec * WAVEFORM_PIXELS_PER_SECOND,
+      animated: false,
+    });
   }, [playheadSec]);
 
   const contentWidth = Math.max(1, durationSec * WAVEFORM_PIXELS_PER_SECOND);
@@ -54,13 +69,16 @@ export function StemWaveformLane({ label, color, peaks, durationSec, playheadSec
             {
               width: Math.max(1, barWidth - BAR_GAP),
               marginRight: BAR_GAP,
-              height: Math.max(MIN_BAR_HEIGHT, Math.min(1, peak) * STEM_LANE_BAR_MAX_HEIGHT),
+              height: Math.max(
+                MIN_BAR_HEIGHT,
+                Math.min(1, peak) * STEM_LANE_BAR_MAX_HEIGHT,
+              ),
               backgroundColor: color,
             },
           ]}
         />
       )),
-    [peaks, barWidth, color, styles.bar]
+    [peaks, barWidth, color, styles.bar],
   );
 
   return (
@@ -75,7 +93,10 @@ export function StemWaveformLane({ label, color, peaks, durationSec, playheadSec
             horizontal
             scrollEnabled={false}
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[styles.content, { paddingHorizontal: viewportWidth / 2 }]}
+            contentContainerStyle={[
+              styles.content,
+              { paddingHorizontal: viewportWidth / 2 },
+            ]}
           >
             {bars}
           </ScrollView>
@@ -87,27 +108,27 @@ export function StemWaveformLane({ label, color, peaks, durationSec, playheadSec
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  lane: {
-    marginBottom: 10,
-  },
-  label: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '700',
-    marginBottom: 4,
-    marginLeft: 4,
-  },
-  viewport: {
-    height: STEM_LANE_BAR_MAX_HEIGHT,
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  content: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  bar: {
-    borderRadius: 1,
-  },
+    lane: {
+      marginBottom: 10,
+    },
+    label: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: "700",
+      marginBottom: 4,
+      marginLeft: 4,
+    },
+    viewport: {
+      height: STEM_LANE_BAR_MAX_HEIGHT,
+      justifyContent: "center",
+      overflow: "hidden",
+    },
+    content: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    bar: {
+      borderRadius: 1,
+    },
   });
 }

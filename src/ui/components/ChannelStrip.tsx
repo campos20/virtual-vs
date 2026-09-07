@@ -1,22 +1,28 @@
-import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { audioEngine } from '@/engine';
-import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { persistProjectMixer } from '@/store/persistProject';
-import { trackBusSet, trackEntityId, trackMuteToggled, trackSoloToggled, trackVolumeCommitted } from '@/store/tracksSlice';
-import type { Bus, TrackManifest } from '@/types/project';
-import { glow, radii, useThemeColors, type ThemeColors } from '@/ui/theme';
-import { getTrackColor } from '../trackColors';
-import { VerticalFader } from './VerticalFader';
+import { useMemo } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { audioEngine } from "@/engine";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { persistProjectMixer } from "@/store/persistProject";
+import {
+  trackBusSet,
+  trackEntityId,
+  trackMuteToggled,
+  trackSoloToggled,
+  trackVolumeCommitted,
+} from "@/store/tracksSlice";
+import type { Bus, TrackManifest } from "@/types/project";
+import { glow, radii, useThemeColors, type ThemeColors } from "@/ui/theme";
+import { getTrackColor } from "../trackColors";
+import { VerticalFader } from "./VerticalFader";
 
 // "cue"/"main" are the internal bus identifiers (see types/project.ts) - the
 // cue bus is hard-panned left and the main bus hard-panned right (see
 // AudioEngine), so L/R is what actually shows up here since that's the
 // convention musicians read off a mixer.
 const BUS_OPTIONS: { value: Bus; label: string }[] = [
-  { value: 'cue', label: 'L' },
-  { value: 'main', label: 'R' },
-  { value: 'both', label: 'L+R' },
+  { value: "cue", label: "L" },
+  { value: "main", label: "R" },
+  { value: "both", label: "L+R" },
 ];
 
 /**
@@ -26,7 +32,7 @@ const BUS_OPTIONS: { value: Bus; label: string }[] = [
  * `colors.textSecondary` is recalibrated for a *light* surface this one
  * never is (see TransportBar's identical fix for its elapsed-time readout).
  */
-const FIXED_DARK_SURFACE_TEXT_SECONDARY = '#9b9b9d';
+const FIXED_DARK_SURFACE_TEXT_SECONDARY = "#9b9b9d";
 
 interface ChannelStripProps {
   projectId: string;
@@ -75,7 +81,13 @@ export function ChannelStrip({ projectId, track, index }: ChannelStripProps) {
 
   return (
     <View style={styles.strip}>
-      <View style={[styles.colorBar, { backgroundColor: accentColor }, committed.soloed && glow(accentColor, 8)]} />
+      <View
+        style={[
+          styles.colorBar,
+          { backgroundColor: accentColor },
+          committed.soloed && glow(accentColor, 8),
+        ]}
+      />
 
       <Text style={styles.name} numberOfLines={2}>
         {track.name}
@@ -88,9 +100,17 @@ export function ChannelStrip({ projectId, track, index }: ChannelStripProps) {
             <Pressable
               key={value}
               onPress={() => setBus(value)}
-              style={[styles.busPill, active && { backgroundColor: accentColor }, active && glow(accentColor, 6)]}
+              style={[
+                styles.busPill,
+                active && { backgroundColor: accentColor },
+                active && glow(accentColor, 6),
+              ]}
             >
-              <Text style={[styles.busPillText, active && styles.busPillTextActive]}>{label}</Text>
+              <Text
+                style={[styles.busPillText, active && styles.busPillTextActive]}
+              >
+                {label}
+              </Text>
             </Pressable>
           );
         })}
@@ -99,13 +119,21 @@ export function ChannelStrip({ projectId, track, index }: ChannelStripProps) {
       <View style={styles.toggles}>
         <Pressable
           onPress={toggleMute}
-          style={[styles.pill, committed.muted && styles.pillMuteActive, committed.muted && glow(colors.danger, 8)]}
+          style={[
+            styles.pill,
+            committed.muted && styles.pillMuteActive,
+            committed.muted && glow(colors.danger, 8),
+          ]}
         >
           <Text style={styles.pillText}>M</Text>
         </Pressable>
         <Pressable
           onPress={toggleSolo}
-          style={[styles.pill, committed.soloed && styles.pillSoloActive, committed.soloed && glow(colors.warning, 8)]}
+          style={[
+            styles.pill,
+            committed.soloed && styles.pillSoloActive,
+            committed.soloed && glow(colors.warning, 8),
+          ]}
         >
           <Text style={styles.pillText}>S</Text>
         </Pressable>
@@ -125,86 +153,86 @@ export function ChannelStrip({ projectId, track, index }: ChannelStripProps) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  strip: {
-    width: 104,
-    marginVertical: 10,
-    marginHorizontal: 4,
-    paddingBottom: 16,
-    paddingTop: 8,
-    paddingHorizontal: 8,
-    borderRadius: radii.lg,
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.panelRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-    overflow: 'hidden',
-  },
-  colorBar: {
-    height: 4,
-    alignSelf: 'stretch',
-    marginHorizontal: -8,
-    marginTop: -8,
-  },
-  name: {
-    color: colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-    textAlign: 'center',
-    minHeight: 32,
-  },
-  spacer: {
-    flex: 1,
-  },
-  busRow: {
-    flexDirection: 'row',
-    gap: 4,
-    backgroundColor: '#08080a',
-    borderRadius: radii.sm,
-    padding: 3,
-  },
-  busPill: {
-    paddingVertical: 3,
-    paddingHorizontal: 6,
-    borderRadius: 5,
-    backgroundColor: 'transparent',
-  },
-  busPillText: {
-    color: FIXED_DARK_SURFACE_TEXT_SECONDARY,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  busPillTextActive: {
-    color: '#0a0a0a',
-  },
-  toggles: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  pill: {
-    width: 30,
-    height: 26,
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.bevelLight,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.bevelDark,
-  },
-  pillMuteActive: {
-    backgroundColor: colors.danger,
-    borderTopColor: 'rgba(255,255,255,0.4)',
-  },
-  pillSoloActive: {
-    backgroundColor: colors.warning,
-    borderTopColor: 'rgba(255,255,255,0.4)',
-  },
-  pillText: {
-    color: colors.textPrimary,
-    fontWeight: '700',
-    fontSize: 12,
-  },
+    strip: {
+      width: 104,
+      marginVertical: 10,
+      marginHorizontal: 4,
+      paddingBottom: 16,
+      paddingTop: 8,
+      paddingHorizontal: 8,
+      borderRadius: radii.lg,
+      alignItems: "center",
+      gap: 10,
+      backgroundColor: colors.panelRaised,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderLight,
+      overflow: "hidden",
+    },
+    colorBar: {
+      height: 4,
+      alignSelf: "stretch",
+      marginHorizontal: -8,
+      marginTop: -8,
+    },
+    name: {
+      color: colors.textPrimary,
+      fontSize: 13,
+      fontWeight: "700",
+      textAlign: "center",
+      minHeight: 32,
+    },
+    spacer: {
+      flex: 1,
+    },
+    busRow: {
+      flexDirection: "row",
+      gap: 4,
+      backgroundColor: "#08080a",
+      borderRadius: radii.sm,
+      padding: 3,
+    },
+    busPill: {
+      paddingVertical: 3,
+      paddingHorizontal: 6,
+      borderRadius: 5,
+      backgroundColor: "transparent",
+    },
+    busPillText: {
+      color: FIXED_DARK_SURFACE_TEXT_SECONDARY,
+      fontSize: 10,
+      fontWeight: "700",
+    },
+    busPillTextActive: {
+      color: "#0a0a0a",
+    },
+    toggles: {
+      flexDirection: "row",
+      gap: 6,
+    },
+    pill: {
+      width: 30,
+      height: 26,
+      borderRadius: radii.sm,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.surface,
+      borderTopWidth: 1,
+      borderTopColor: colors.bevelLight,
+      borderBottomWidth: 2,
+      borderBottomColor: colors.bevelDark,
+    },
+    pillMuteActive: {
+      backgroundColor: colors.danger,
+      borderTopColor: "rgba(255,255,255,0.4)",
+    },
+    pillSoloActive: {
+      backgroundColor: colors.warning,
+      borderTopColor: "rgba(255,255,255,0.4)",
+    },
+    pillText: {
+      color: colors.textPrimary,
+      fontWeight: "700",
+      fontSize: 12,
+    },
   });
 }

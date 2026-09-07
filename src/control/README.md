@@ -13,6 +13,7 @@ intentionally not installed**.
    enough.
 
 2. **Config plugin**: add to `app.json`'s `expo.plugins`:
+
    ```json
    [
      "react-native-ble-plx",
@@ -23,7 +24,8 @@ intentionally not installed**.
      }
    ]
    ```
-   `modes: ["central"]` is enough - the app only *connects to* a footswitch,
+
+   `modes: ["central"]` is enough - the app only _connects to_ a footswitch,
    it never advertises itself as a BLE peripheral.
 
 3. **Android permissions**: the plugin adds `BLUETOOTH_SCAN` /

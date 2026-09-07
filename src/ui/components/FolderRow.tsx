@@ -1,8 +1,14 @@
-import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { elevation, radii, spacing, useThemeColors, type ThemeColors } from '@/ui/theme';
-import { MoveColumn } from './MoveColumn';
-import { KebabIcon, OverflowMenu, type OverflowMenuItem } from './OverflowMenu';
+import { useMemo } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  elevation,
+  radii,
+  spacing,
+  useThemeColors,
+  type ThemeColors,
+} from "@/ui/theme";
+import { MoveColumn } from "./MoveColumn";
+import { KebabIcon, OverflowMenu, type OverflowMenuItem } from "./OverflowMenu";
 
 interface FolderRowProps {
   name: string;
@@ -72,9 +78,17 @@ export function FolderRow({
         accessibilityLabel={expandAccessibilityLabel}
         accessibilityState={{ expanded }}
         testID={testID}
-        style={({ pressed }) => [styles.row, pressed && !renaming && styles.pressed]}
+        style={({ pressed }) => [
+          styles.row,
+          pressed && !renaming && styles.pressed,
+        ]}
       >
-        <View style={[styles.triangle, expanded ? styles.triangleOpen : styles.triangleClosed]} />
+        <View
+          style={[
+            styles.triangle,
+            expanded ? styles.triangleOpen : styles.triangleClosed,
+          ]}
+        />
         <View style={styles.body}>
           {renaming ? (
             <TextInput
@@ -85,7 +99,9 @@ export function FolderRow({
               autoFocus
               selectTextOnFocus
               returnKeyType="done"
-              onSubmitEditing={(event) => onRenameSubmit?.(event.nativeEvent.text)}
+              onSubmitEditing={(event) =>
+                onRenameSubmit?.(event.nativeEvent.text)
+              }
               onBlur={onRenameCancel}
               testID={testID ? `${testID}-rename-input` : undefined}
             />
@@ -123,67 +139,67 @@ export function FolderRow({
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    borderRadius: radii.lg,
-    backgroundColor: colors.panel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    overflow: 'hidden',
-    ...elevation,
-  },
-  row: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  triangle: {
-    width: 0,
-    height: 0,
-    marginLeft: 4,
-    borderTopWidth: 6,
-    borderBottomWidth: 6,
-    borderLeftWidth: 9,
-    borderTopColor: 'transparent',
-    borderBottomColor: 'transparent',
-    borderLeftColor: colors.textSecondary,
-  },
-  triangleClosed: {
-    transform: [{ rotate: '0deg' }],
-  },
-  triangleOpen: {
-    transform: [{ rotate: '90deg' }],
-  },
-  body: {
-    flex: 1,
-    gap: 4,
-  },
-  name: {
-    color: colors.textPrimary,
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  input: {
-    color: colors.textPrimary,
-    fontSize: 17,
-    fontWeight: '800',
-    padding: 0,
-  },
-  meta: {
-    color: colors.textTertiary,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  menuColumn: {
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
+    container: {
+      borderRadius: radii.lg,
+      backgroundColor: colors.panel,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      flexDirection: "row",
+      alignItems: "stretch",
+      overflow: "hidden",
+      ...elevation,
+    },
+    row: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.md,
+      padding: spacing.md,
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+    triangle: {
+      width: 0,
+      height: 0,
+      marginLeft: 4,
+      borderTopWidth: 6,
+      borderBottomWidth: 6,
+      borderLeftWidth: 9,
+      borderTopColor: "transparent",
+      borderBottomColor: "transparent",
+      borderLeftColor: colors.textSecondary,
+    },
+    triangleClosed: {
+      transform: [{ rotate: "0deg" }],
+    },
+    triangleOpen: {
+      transform: [{ rotate: "90deg" }],
+    },
+    body: {
+      flex: 1,
+      gap: 4,
+    },
+    name: {
+      color: colors.textPrimary,
+      fontSize: 17,
+      fontWeight: "800",
+    },
+    input: {
+      color: colors.textPrimary,
+      fontSize: 17,
+      fontWeight: "800",
+      padding: 0,
+    },
+    meta: {
+      color: colors.textTertiary,
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 0.3,
+    },
+    menuColumn: {
+      justifyContent: "center",
+      paddingHorizontal: 2,
+    },
   });
 }

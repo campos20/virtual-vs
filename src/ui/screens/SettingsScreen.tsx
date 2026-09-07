@@ -1,22 +1,28 @@
-import { useMemo } from 'react';
-import { useRouter } from 'expo-router';
-import { StyleSheet, Text, View, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { type Locale, useTranslation } from '@/i18n';
-import { persistLanguageOverride, persistThemeOverride } from '@/store/persistSettings';
-import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import type { ThemeOverride } from '@/types/theme';
-import { BackButton } from '@/ui/components/BackButton';
-import { Chevron } from '@/ui/components/Chevron';
-import { OverflowMenu, type OverflowMenuItem } from '@/ui/components/OverflowMenu';
-import { radii, spacing, useThemeColors, type ThemeColors } from '@/ui/theme';
+import { useMemo } from "react";
+import { useRouter } from "expo-router";
+import { StyleSheet, Text, View, ScrollView } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { type Locale, useTranslation } from "@/i18n";
+import {
+  persistLanguageOverride,
+  persistThemeOverride,
+} from "@/store/persistSettings";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import type { ThemeOverride } from "@/types/theme";
+import { BackButton } from "@/ui/components/BackButton";
+import { Chevron } from "@/ui/components/Chevron";
+import {
+  OverflowMenu,
+  type OverflowMenuItem,
+} from "@/ui/components/OverflowMenu";
+import { radii, spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
 
-type LanguageKey = 'system' | Locale;
+type LanguageKey = "system" | Locale;
 
 const LANGUAGE_FLAGS: Record<LanguageKey, string> = {
-  system: '🌐',
-  en: '🇺🇸',
-  'pt-BR': '🇧🇷',
+  system: "🌐",
+  en: "🇺🇸",
+  "pt-BR": "🇧🇷",
 };
 
 // Named in their own language, regardless of the app's current language -
@@ -24,14 +30,14 @@ const LANGUAGE_FLAGS: Record<LanguageKey, string> = {
 // "Português (Brasil)" reads the same whether browsing from English or
 // Portuguese, so a reader can always find their own language.
 const LANGUAGE_NAMES: Record<Locale, string> = {
-  en: 'English',
-  'pt-BR': 'Português (Brasil)',
+  en: "English",
+  "pt-BR": "Português (Brasil)",
 };
 
 const THEME_ICONS: Record<ThemeOverride, string> = {
-  system: '🌐',
-  light: '☀️',
-  dark: '🌙',
+  system: "🌐",
+  light: "☀️",
+  dark: "🌙",
 };
 
 /**
@@ -51,14 +57,19 @@ export function SettingsScreen() {
   const languageOverride = useAppSelector((s) => s.settings.languageOverride);
   const themeOverride = useAppSelector((s) => s.settings.themeOverride);
 
-  const currentLanguageKey: LanguageKey = languageOverride ?? 'system';
+  const currentLanguageKey: LanguageKey = languageOverride ?? "system";
   const currentLanguageLabel =
-    currentLanguageKey === 'system' ? t.settings.languageSystem : LANGUAGE_NAMES[currentLanguageKey];
+    currentLanguageKey === "system"
+      ? t.settings.languageSystem
+      : LANGUAGE_NAMES[currentLanguageKey];
 
-  const languageMenuItems: OverflowMenuItem[] = (['system', 'en', 'pt-BR'] as const).map((key) => ({
+  const languageMenuItems: OverflowMenuItem[] = (
+    ["system", "en", "pt-BR"] as const
+  ).map((key) => ({
     key,
-    label: `${LANGUAGE_FLAGS[key]} ${key === 'system' ? t.settings.languageSystem : LANGUAGE_NAMES[key]}`,
-    onPress: () => dispatch(persistLanguageOverride(key === 'system' ? null : key)),
+    label: `${LANGUAGE_FLAGS[key]} ${key === "system" ? t.settings.languageSystem : LANGUAGE_NAMES[key]}`,
+    onPress: () =>
+      dispatch(persistLanguageOverride(key === "system" ? null : key)),
     testID: `language-option-${key}`,
     active: key === currentLanguageKey,
   }));
@@ -70,7 +81,9 @@ export function SettingsScreen() {
   };
   const currentThemeLabel = THEME_LABELS[themeOverride];
 
-  const themeMenuItems: OverflowMenuItem[] = (['system', 'light', 'dark'] as const).map((key) => ({
+  const themeMenuItems: OverflowMenuItem[] = (
+    ["system", "light", "dark"] as const
+  ).map((key) => ({
     key,
     label: `${THEME_ICONS[key]} ${THEME_LABELS[key]}`,
     onPress: () => dispatch(persistThemeOverride(key)),
@@ -79,9 +92,13 @@ export function SettingsScreen() {
   }));
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <View style={styles.header}>
-        <BackButton label={t.project.backToLibrary} onPress={() => router.back()} testID="settings-back-button" />
+        <BackButton
+          label={t.project.backToLibrary}
+          onPress={() => router.back()}
+          testID="settings-back-button"
+        />
         <Text style={styles.title}>{t.settings.title}</Text>
       </View>
 
@@ -138,7 +155,7 @@ function createStyles(colors: ThemeColors) {
     title: {
       color: colors.textPrimary,
       fontSize: 26,
-      fontWeight: '800',
+      fontWeight: "800",
       letterSpacing: -0.3,
       marginTop: spacing.xs,
     },
@@ -153,13 +170,13 @@ function createStyles(colors: ThemeColors) {
     sectionHeading: {
       color: colors.textTertiary,
       fontSize: 11,
-      fontWeight: '700',
+      fontWeight: "700",
       letterSpacing: 1,
     },
     optionTrigger: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
       borderRadius: radii.lg,
       backgroundColor: colors.surface,
       borderWidth: StyleSheet.hairlineWidth,
@@ -170,7 +187,7 @@ function createStyles(colors: ThemeColors) {
     optionTriggerValue: {
       color: colors.textPrimary,
       fontSize: 15,
-      fontWeight: '600',
+      fontWeight: "600",
     },
   });
 }

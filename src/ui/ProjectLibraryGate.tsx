@@ -1,8 +1,8 @@
-import { useEffect, type ReactNode } from 'react';
-import { listSetlists, loadProjectLibrary } from '@/storage';
-import { useAppDispatch } from '@/store/hooks';
-import { projectsHydrated } from '@/store/projectsSlice';
-import { setlistsHydrated } from '@/store/setlistsSlice';
+import { useEffect, type ReactNode } from "react";
+import { listSetlists, loadProjectLibrary } from "@/storage";
+import { useAppDispatch } from "@/store/hooks";
+import { projectsHydrated } from "@/store/projectsSlice";
+import { setlistsHydrated } from "@/store/setlistsSlice";
 
 /**
  * Reads the project library, and the folders that organise it, off disk once
@@ -28,7 +28,7 @@ export function ProjectLibraryGate({ children }: { children: ReactNode }) {
         if (!cancelled) dispatch(projectsHydrated(projects));
       })
       .catch((error) => {
-        console.warn('Failed to read the project library', error);
+        console.warn("Failed to read the project library", error);
         // Still hydrate, empty: the Library then shows its empty state rather
         // than spinning forever on a scan that already failed.
         if (!cancelled) dispatch(projectsHydrated([]));
@@ -39,7 +39,7 @@ export function ProjectLibraryGate({ children }: { children: ReactNode }) {
         if (!cancelled) dispatch(setlistsHydrated(folders));
       })
       .catch((error) => {
-        console.warn('Failed to read the Library folders', error);
+        console.warn("Failed to read the Library folders", error);
         if (!cancelled) dispatch(setlistsHydrated([]));
       });
 

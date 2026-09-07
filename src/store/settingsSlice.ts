@@ -1,10 +1,10 @@
-import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
-import type { MonitorMode } from '@/engine';
-import type { Locale } from '@/i18n';
-import { readAppSettings } from '@/storage/appSettings';
-import { isThemeOverride, type ThemeOverride } from '@/types/theme';
-import { DEFAULT_LYRICS_FONT_SIZE_PT } from '@/ui/lyricsScroll';
-import { resolveLibraryOrder } from '@/ui/libraryTree';
+import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import type { MonitorMode } from "@/engine";
+import type { Locale } from "@/i18n";
+import { readAppSettings } from "@/storage/appSettings";
+import { isThemeOverride, type ThemeOverride } from "@/types/theme";
+import { DEFAULT_LYRICS_FONT_SIZE_PT } from "@/ui/lyricsScroll";
+import { resolveLibraryOrder } from "@/ui/libraryTree";
 
 export interface SettingsState {
   /**
@@ -41,17 +41,19 @@ export interface SettingsState {
 const persisted = readAppSettings();
 
 const initialState: SettingsState = {
-  monitorMode: 'split',
+  monitorMode: "split",
   languageOverride: persisted.languageOverride ?? null,
   libraryOrder: resolveLibraryOrder(persisted),
   lyricsFontSizePt: persisted.lyricsFontSizePt ?? DEFAULT_LYRICS_FONT_SIZE_PT,
   lyricsAllCaps: persisted.lyricsAllCaps ?? false,
   lyricsViewActive: persisted.lyricsViewActive ?? false,
-  themeOverride: isThemeOverride(persisted.themeOverride) ? persisted.themeOverride : 'dark',
+  themeOverride: isThemeOverride(persisted.themeOverride)
+    ? persisted.themeOverride
+    : "dark",
 };
 
 const settingsSlice = createSlice({
-  name: 'settings',
+  name: "settings",
   initialState,
   reducers: {
     monitorModeSet(state, action: PayloadAction<MonitorMode>) {

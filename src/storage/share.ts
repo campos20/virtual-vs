@@ -1,5 +1,5 @@
-import { File } from 'expo-file-system';
-import { isAvailableAsync, shareAsync } from 'expo-sharing';
+import { File } from "expo-file-system";
+import { isAvailableAsync, shareAsync } from "expo-sharing";
 
 /**
  * The app's one entry point to the OS share sheet.
@@ -14,9 +14,12 @@ import { isAvailableAsync, shareAsync } from 'expo-sharing';
  * Wrapped here rather than imported directly at the call sites so the
  * dependency has a single seam - see AGENTS.md on runtime dependencies.
  */
-export async function shareBundle(file: File, dialogTitle: string): Promise<void> {
+export async function shareBundle(
+  file: File,
+  dialogTitle: string,
+): Promise<void> {
   if (!(await isAvailableAsync())) {
-    throw new Error('Sharing is not available on this device.');
+    throw new Error("Sharing is not available on this device.");
   }
 
   await shareAsync(file.uri, {
@@ -24,7 +27,7 @@ export async function shareBundle(file: File, dialogTitle: string): Promise<void
     // A bundle has no registered type of its own. Declaring it as generic
     // binary keeps every target in the sheet - a stricter type would hide the
     // cloud apps this exists to reach.
-    mimeType: 'application/octet-stream',
-    UTI: 'public.data',
+    mimeType: "application/octet-stream",
+    UTI: "public.data",
   });
 }

@@ -21,7 +21,7 @@ solves a different problem.
 
 ## Optional: a stable release keystore
 
-Android requires every APK to be signed with *something*; without a keystore
+Android requires every APK to be signed with _something_; without a keystore
 secret the build uses Expo's default key and still ships.
 
 What a stable release key adds is **in-place upgrades**. Android refuses to
@@ -44,14 +44,14 @@ repository. It is never committed; CI receives it as a secret.
 
 ### Repository secrets
 
-Settings → Secrets and variables → Actions → *New repository secret*:
+Settings → Secrets and variables → Actions → _New repository secret_:
 
-| Secret | Value |
-| --- | --- |
-| `ANDROID_KEYSTORE_BASE64` | `base64 -i virtual-vs-release.jks` (macOS) or `base64 -w0 virtual-vs-release.jks` (Linux) |
-| `ANDROID_KEYSTORE_PASSWORD` | the keystore password from `keytool` |
-| `ANDROID_KEY_ALIAS` | `virtual-vs` |
-| `ANDROID_KEY_PASSWORD` | the key password (same as the keystore password unless you set a different one) |
+| Secret                      | Value                                                                                     |
+| --------------------------- | ----------------------------------------------------------------------------------------- |
+| `ANDROID_KEYSTORE_BASE64`   | `base64 -i virtual-vs-release.jks` (macOS) or `base64 -w0 virtual-vs-release.jks` (Linux) |
+| `ANDROID_KEYSTORE_PASSWORD` | the keystore password from `keytool`                                                      |
+| `ANDROID_KEY_ALIAS`         | `virtual-vs`                                                                              |
+| `ANDROID_KEY_PASSWORD`      | the key password (same as the keystore password unless you set a different one)           |
 
 If `ANDROID_KEYSTORE_BASE64` is absent the workflow says so and carries on with
 default signing. If it is present but doesn't take effect, the build fails
@@ -61,7 +61,7 @@ installed.
 ### Publish the fingerprint
 
 After the first release, copy the signing certificate SHA-256 from the release
-notes into the README's *Verifying a download* section, so people can confirm
+notes into the README's _Verifying a download_ section, so people can confirm
 later releases come from the same key.
 
 ## Cutting a release
@@ -83,7 +83,7 @@ containing a `-` (`1.0.0-alpha.0`) are published as **pre-releases**.
 
 Tests don't run again during a release. CI ([`ci.yaml`](../.github/workflows/ci.yaml))
 already typechecks, lints and tests every push, so the release checks the
-*result* instead: the tagged commit has to be on `main` and have a successful
+_result_ instead: the tagged commit has to be on `main` and have a successful
 CI run. Tagging a commit that never reached main, or whose CI is red, fails
 before anything is built.
 

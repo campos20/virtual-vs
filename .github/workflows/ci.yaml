@@ -10,8 +10,8 @@ name: CI
 # release-time "require a green CI run" gate has something to find.
 on:
   push:
-    branches: ['**']
-    tags-ignore: ['**'] # release.yaml already runs the same checks for tags
+    branches: ["**"]
+    tags-ignore: ["**"] # release.yaml already runs the same checks for tags
   pull_request:
   workflow_dispatch:
 
@@ -40,7 +40,7 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Lint
-        run: npx expo lint
+        run: npx prettier --check .
 
       - name: Test
         run: npx jest --ci

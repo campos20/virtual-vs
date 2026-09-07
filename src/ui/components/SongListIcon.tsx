@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { useThemeColors, type ThemeColors } from '@/ui/theme';
+import { useMemo } from "react";
+import { StyleSheet, View } from "react-native";
+import { useThemeColors, type ThemeColors } from "@/ui/theme";
 
 interface SongListIconProps {
   /** Overrides the default `colors.textPrimary` fill - needed when this icon sits on an active/accent-colored segment and would otherwise lose contrast. */
@@ -36,11 +36,11 @@ function createStyles(colors: ThemeColors, color?: string) {
     container: {
       width: 18,
       height: 16,
-      justifyContent: 'space-between',
+      justifyContent: "space-between",
     },
     row: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      flexDirection: "row",
+      alignItems: "center",
       gap: 3,
     },
     bullet: {

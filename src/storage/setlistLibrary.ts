@@ -1,27 +1,31 @@
-import { File } from 'expo-file-system';
-import type { SetlistManifest } from '@/types/setlist';
+import { File } from "expo-file-system";
+import type { SetlistManifest } from "@/types/setlist";
 import {
   ensureSetlistsDirectoryExists,
   setlistFile,
   setlistsDirectory,
-} from './paths';
+} from "./paths";
 
 /** Name a freshly created folder carries until the user renames it. */
-export const DRAFT_FOLDER_NAME = 'New folder';
+export const DRAFT_FOLDER_NAME = "New folder";
 
 function slugify(value: string): string {
   const slug = value
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return slug || 'folder';
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || "folder";
 }
 
 /** Enough of a manifest to be usable - anything less is treated as corrupt and skipped. */
 function isUsable(manifest: unknown): manifest is SetlistManifest {
   const candidate = manifest as SetlistManifest | null;
-  return Boolean(candidate?.id) && typeof candidate?.name === 'string' && Array.isArray(candidate?.songs);
+  return (
+    Boolean(candidate?.id) &&
+    typeof candidate?.name === "string" &&
+    Array.isArray(candidate?.songs)
+  );
 }
 
 /**
@@ -37,7 +41,10 @@ export async function listSetlists(): Promise<SetlistManifest[]> {
 
   const files = setlistsDirectory
     .list()
-    .filter((item): item is File => item instanceof File && item.name.endsWith('.json'));
+    .filter(
+      (item): item is File =>
+        item instanceof File && item.name.endsWith(".json"),
+    );
 
   const manifests = await Promise.all(
     files.map(async (file): Promise<SetlistManifest | null> => {
@@ -47,10 +54,12 @@ export async function listSetlists(): Promise<SetlistManifest[]> {
       } catch {
         return null;
       }
-    })
+    }),
   );
 
-  return manifests.filter((manifest): manifest is SetlistManifest => manifest !== null);
+  return manifests.filter(
+    (manifest): manifest is SetlistManifest => manifest !== null,
+  );
 }
 
 /**
@@ -76,7 +85,7 @@ export function createSetlist(name = DRAFT_FOLDER_NAME): SetlistManifest {
     songs: [],
     // Controller defaults, unused until setlist mode exists. Written now so
     // the file is already the shape that feature will expect.
-    advance: 'manual',
+    advance: "manual",
     padBetween: false,
   };
   writeSetlist(manifest);

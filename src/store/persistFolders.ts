@@ -1,15 +1,19 @@
-import { writeAppSettings } from '@/storage/appSettings';
-import { createSetlist, deleteSetlist, writeSetlist } from '@/storage/setlistLibrary';
-import type { SetlistManifest } from '@/types/setlist';
-import { folderKey } from '@/ui/libraryTree';
-import type { AppDispatch, RootState } from './index';
+import { writeAppSettings } from "@/storage/appSettings";
+import {
+  createSetlist,
+  deleteSetlist,
+  writeSetlist,
+} from "@/storage/setlistLibrary";
+import type { SetlistManifest } from "@/types/setlist";
+import { folderKey } from "@/ui/libraryTree";
+import type { AppDispatch, RootState } from "./index";
 import {
   setlistAdded,
   setlistRemoved,
   setlistUpdated,
   setlistsSelectors,
-} from './setlistsSlice';
-import { libraryOrderSet } from './settingsSlice';
+} from "./setlistsSlice";
+import { libraryOrderSet } from "./settingsSlice";
 
 /**
  * Library folder writes.
@@ -39,19 +43,27 @@ export function persistLibraryOrder(orderedKeys: string[]) {
  * immediately instead of appended below however many songs the user has.
  */
 export function createFolder(name?: string) {
-  return (dispatch: AppDispatch, getState: () => RootState): SetlistManifest | null => {
+  return (
+    dispatch: AppDispatch,
+    getState: () => RootState,
+  ): SetlistManifest | null => {
     let folder: SetlistManifest;
     try {
       folder = createSetlist(name);
     } catch (error) {
       // Same contract as every other write here: the file is the record, so a
       // folder that isn't on disk must not appear in the Library either.
-      console.warn('Failed to create a folder', error);
+      console.warn("Failed to create a folder", error);
       return null;
     }
 
     dispatch(setlistAdded(folder));
-    dispatch(persistLibraryOrder([folderKey(folder.id), ...getState().settings.libraryOrder]));
+    dispatch(
+      persistLibraryOrder([
+        folderKey(folder.id),
+        ...getState().settings.libraryOrder,
+      ]),
+    );
     return folder;
   };
 }
@@ -89,7 +101,9 @@ export function addSongToFolder(folderId: string, projectId: string) {
   return (dispatch: AppDispatch, getState: () => RootState) => {
     const folder = selectFolder(getState(), folderId);
     if (!folder || folder.songs.includes(projectId)) return;
-    patch(dispatch, getState, folderId, { songs: [...folder.songs, projectId] });
+    patch(dispatch, getState, folderId, {
+      songs: [...folder.songs, projectId],
+    });
   };
 }
 
@@ -130,7 +144,10 @@ export function removeSongFromAllFolders(projectId: string) {
   };
 }
 
-function selectFolder(state: RootState, id: string): SetlistManifest | undefined {
+function selectFolder(
+  state: RootState,
+  id: string,
+): SetlistManifest | undefined {
   return setlistsSelectors.selectById(state.setlists, id);
 }
 
@@ -139,7 +156,7 @@ function patch(
   dispatch: AppDispatch,
   getState: () => RootState,
   id: string,
-  changes: Partial<Omit<SetlistManifest, 'id'>>
+  changes: Partial<Omit<SetlistManifest, "id">>,
 ): void {
   const folder = selectFolder(getState(), id);
   if (!folder) return;

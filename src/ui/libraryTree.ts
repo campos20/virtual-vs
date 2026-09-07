@@ -1,6 +1,6 @@
-import type { PersistedAppSettings } from '@/storage/appSettings';
-import type { LibraryProjectEntry } from '@/store/projectsSlice';
-import type { SetlistManifest } from '@/types/setlist';
+import type { PersistedAppSettings } from "@/storage/appSettings";
+import type { LibraryProjectEntry } from "@/store/projectsSlice";
+import type { SetlistManifest } from "@/types/setlist";
 
 /**
  * The Library shows folders and loose songs interleaved in one list, the way
@@ -17,13 +17,13 @@ export function songKey(id: string): string {
 
 export type LibraryItem =
   | {
-      kind: 'folder';
+      kind: "folder";
       key: string;
       folder: SetlistManifest;
       /** The folder's songs, resolved and in the folder's own order. */
       songs: LibraryProjectEntry[];
     }
-  | { kind: 'song'; key: string; project: LibraryProjectEntry };
+  | { kind: "song"; key: string; project: LibraryProjectEntry };
 
 /**
  * The saved top-level order, tolerating installs that predate folders.
@@ -47,7 +47,7 @@ export function resolveLibraryOrder(settings: PersistedAppSettings): string[] {
  */
 export function resolveFolderSongs(
   folder: SetlistManifest,
-  projects: LibraryProjectEntry[]
+  projects: LibraryProjectEntry[],
 ): LibraryProjectEntry[] {
   const byId = new Map(projects.map((project) => [project.id, project]));
   return folder.songs
@@ -66,10 +66,10 @@ export function resolveFolderSongs(
 export function buildLibraryTree(
   projects: LibraryProjectEntry[],
   folders: SetlistManifest[],
-  order: string[] = []
+  order: string[] = [],
 ): LibraryItem[] {
   const folderItems: LibraryItem[] = folders.map((folder) => ({
-    kind: 'folder',
+    kind: "folder",
     key: folderKey(folder.id),
     folder,
     songs: resolveFolderSongs(folder, projects),
@@ -78,7 +78,7 @@ export function buildLibraryTree(
   const filed = new Set(folders.flatMap((folder) => folder.songs));
   const looseItems: LibraryItem[] = projects
     .filter((project) => !filed.has(project.id))
-    .map((project) => ({ kind: 'song', key: songKey(project.id), project }));
+    .map((project) => ({ kind: "song", key: songKey(project.id), project }));
 
   // Folders first among the not-yet-ordered, so a folder the user just made
   // is visible without scrolling past a long song list to find it.
