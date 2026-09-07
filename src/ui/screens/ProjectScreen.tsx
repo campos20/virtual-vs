@@ -808,12 +808,6 @@ export function ProjectScreen() {
                   />
                 </Pressable>
               </View>
-              {/* Its own separate group, apart from Markers/Mixer below - on
-                  its own so there's no chance of it sitting close enough to
-                  either for a mis-tap to land on it (or vice versa), given
-                  it's the one button in this row that can lead to a
-                  different song playing. */}
-
               {/* Markers/Mixer grouped as one unit - both open a drawer that
                   overlays the current view, rather than switching it. */}
               <View style={styles.buttonGroup} testID="overlay-menu-group">
@@ -843,6 +837,11 @@ export function ProjectScreen() {
                 </Pressable>
               </View>
 
+              {/* Its own separate group, apart from Markers/Mixer above - on
+                  its own so there's no chance of it sitting close enough to
+                  either for a mis-tap to land on it (or vice versa), given
+                  it's the one button in this row that can lead to a
+                  different song playing. */}
               {folder && (
                 <View style={styles.buttonGroup} testID="folder-songs-group">
                   <Pressable
@@ -1121,11 +1120,13 @@ function createStyles(colors: ThemeColors) {
       justifyContent: "center",
     },
     headerActions: {
+      flex: 1,
       flexDirection: "row",
       alignItems: "center",
       gap: spacing.sm,
     },
     buttonGroup: {
+      flex: 1,
       flexDirection: "row",
       borderRadius: radii.pill,
       overflow: "hidden",
@@ -1134,7 +1135,7 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.borderLight,
     },
     groupButton: {
-      width: 36,
+      flex: 1,
       height: 36,
       alignItems: "center",
       justifyContent: "center",
