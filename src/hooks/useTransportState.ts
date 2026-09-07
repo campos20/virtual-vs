@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { audioEngine, type EngineTransportState } from '@/engine';
+import { useEffect, useState } from "react";
+import { audioEngine, type EngineTransportState } from "@/engine";
 
 /** Subscribes to the engine's transport state (playing/paused/stopped). */
 export function useTransportState(): EngineTransportState {

@@ -1,6 +1,6 @@
 # Setlist mode (controller not implemented)
 
-This folder is a placeholder for the multi-song setlist *controller*
+This folder is a placeholder for the multi-song setlist _controller_
 described in AGENTS.md. Nothing in this folder runs yet.
 
 The data model is no longer just persisted - it ships. A `SetlistManifest` is
@@ -8,7 +8,7 @@ what the Library shows as a **folder**: `src/storage/setlistLibrary.ts` reads
 and writes one `Documents/setlists/<id>.json` per folder,
 `src/store/persistFolders.ts` mutates them, and `src/ui/libraryTree.ts` turns
 them plus the project list into the tree the Library renders. A folder holds
-song *ids*, so a song can be in several folders and reorganising never moves
+song _ids_, so a song can be in several folders and reorganising never moves
 audio.
 
 What that means for the controller: `songs` is already a real, user-curated,
@@ -36,5 +36,5 @@ folder the user already has - not introducing setlists.
   a hard cut.
 - Give a Library folder a "play this set" affordance once the controller
   exists. There is deliberately no separate Setlist screen to build: the
-  folder tree in the Library *is* the setlist list, so this is a play button
+  folder tree in the Library _is_ the setlist list, so this is a play button
   on `FolderRow` plus a queue view, not a new section of the app.

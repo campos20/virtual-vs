@@ -14,11 +14,11 @@ name: Release Android APK
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release, without the leading v (e.g. 1.2.0 or 1.2.0-alpha.1)'
+        description: "Version to release, without the leading v (e.g. 1.2.0 or 1.2.0-alpha.1)"
         required: true
         type: string
 
@@ -115,7 +115,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: Check the tag matches package.json
         run: |

@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
-import { useThemeColors, type ThemeColors } from '@/ui/theme';
-import { StemWaveformLane } from './StemWaveformLane';
+import { useMemo } from "react";
+import { ScrollView, StyleSheet, View } from "react-native";
+import { useThemeColors, type ThemeColors } from "@/ui/theme";
+import { StemWaveformLane } from "./StemWaveformLane";
 
 export interface StemWaveform {
   id: string;
@@ -29,7 +29,11 @@ interface WaveformViewProps {
  * (unlike each lane's horizontal one, which is programmatic-only) - user
  * touch scrolling here is exactly what's wanted for browsing stems.
  */
-export function WaveformView({ tracks, durationSec, playheadSec }: WaveformViewProps) {
+export function WaveformView({
+  tracks,
+  durationSec,
+  playheadSec,
+}: WaveformViewProps) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -62,8 +66,8 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: 4,
     },
     playhead: {
-      position: 'absolute',
-      left: '50%',
+      position: "absolute",
+      left: "50%",
       top: 0,
       bottom: 0,
       width: 2,

@@ -16,7 +16,7 @@ Concretely:
   ones wrapping newer/native-only platform APIs (e.g. iOS Liquid Glass).
   `expo-glass-effect` was tried for a "modern" visual pass and caused a
   hard-to-reproduce Android Fabric crash (`addViewAt: ... already has a
-  parent`) on the Player -> Library back transition, confirmed only after
+parent`) on the Player -> Library back transition, confirmed only after
   several rounds of investigation (see git history for the full trail).
   Fixing it took four changes together, not any single one in isolation:
   1. Dropped `expo-glass-effect`/`GlassView` entirely (reverted to plain
@@ -41,14 +41,14 @@ Concretely:
      `SafeAreaProvider` (react-native-safe-area-context requires it as an
      ancestor of any `SafeAreaView`; every screen was using `SafeAreaView`
      without one).
-  Confirmed fixed by the user after 20+ consecutive Player <-> Library
-  round trips with no repro (previously it reproduced within 3-6). If it
-  ever resurfaces, re-read the git history around these four commits before
-  reaching for a new theory - the working hypothesis was an accumulation
-  across mount/unmount cycles (view tag numbers climbed each attempt: 126,
-  1378, 1694) rather than a one-shot race, and step 4 is the most likely of
-  the four to be load-bearing, but this was never isolated with a minimal
-  repro.
+     Confirmed fixed by the user after 20+ consecutive Player <-> Library
+     round trips with no repro (previously it reproduced within 3-6). If it
+     ever resurfaces, re-read the git history around these four commits before
+     reaching for a new theory - the working hypothesis was an accumulation
+     across mount/unmount cycles (view tag numbers climbed each attempt: 126,
+     1378, 1694) rather than a one-shot race, and step 4 is the most likely of
+     the four to be load-bearing, but this was never isolated with a minimal
+     repro.
 
   UPDATE - it did resurface, and the cause was finally isolated with a
   minimal repro. **Never give a `Pressable` that triggers navigation a
@@ -57,7 +57,7 @@ Concretely:
 
   A function child re-creates the child `View`/`Text` elements on every
   press-state change. Releasing the button sets `pressed` back to `false`,
-  so those children are re-created in the *same frame* that the `onPress`
+  so those children are re-created in the _same frame_ that the `onPress`
   handler's `router.back()` is tearing the screen's native views down, and
   Fabric tries to insert a `ReactTextView` that still belongs to the
   outgoing parent. Styling the `Pressable` itself only updates props on an
@@ -75,6 +75,7 @@ Concretely:
     screen or the navigator.
   - Note a redbox does NOT kill the process, so "is the pid still alive?"
     is not a valid health check - grep logcat for `already has a parent`.
+
 - Before adding a new dependency (especially anything touching rendering,
   native views, audio, or navigation), weigh whether it's well-established
   and battle-tested for this use case, not just whether it looks nice or is
@@ -86,7 +87,7 @@ Concretely:
   built app and isn't a stability concern the same way - this principle is
   about runtime dependencies.
 - `expo-sharing` is the one dependency added for backup/sharing, and it is
-  deliberately the *only* one. It opens the OS share sheet for a local file
+  deliberately the _only_ one. It opens the OS share sheet for a local file
   and does nothing else - no background work, no rendering, no native views.
   Everything else that feature needs was already in `expo-file-system`:
   `FileHandle.readBytes`/`writeBytes` for streaming, and the file picker for
@@ -111,7 +112,7 @@ of care AGENTS.md asks for Fabric/navigation crashes above.
 How this is guaranteed today:
 
 - **One `AudioContext` for the whole app** (`AudioEngine`/`audioEngine`, a
-  singleton). Every stem is a sibling node in the *same* render graph, so
+  singleton). Every stem is a sibling node in the _same_ render graph, so
   there is no independent per-track clock that could drift over time -
   once two nodes are scheduled against the same context time, the audio
   hardware renders them from the same sample position onward. Drift between
@@ -120,7 +121,7 @@ How this is guaranteed today:
 - **`scheduleSources()` is the only place stems ever start**, and `play()`/
   the resume path/`seek()` all funnel through it. It computes exactly one
   `startAt` (context time) / `offsetSec` (position) pair and passes that
-  *same* pair to every stem's `.start()` call and to the click's - never a
+  _same_ pair to every stem's `.start()` call and to the click's - never a
   per-track value, never computed inside a per-track loop.
 - **`stopSources()` stops every stem and the click at one shared explicit
   context time**, the same way. This used to call each node's `.stop()`
@@ -131,7 +132,7 @@ How this is guaranteed today:
   clock keeps advancing while the loop runs, so an un-offset value can
   already be behind `currentTime` by the time a later call in the same loop
   reaches the audio thread - which falls back to the same "ASAP" behavior
-  this exists to avoid, just for only *some* of the nodes. See
+  this exists to avoid, just for only _some_ of the nodes. See
   `AudioEngine.test.ts`'s "keeps every stem sample-locked" describe block,
   which asserts every `start`/`stop` call in a play/pause-resume/seek/stop
   cycle shares one identical, explicitly-passed time.
@@ -152,7 +153,7 @@ Known, narrow, deliberately-not-"fixed" gaps:
   one's tail could in theory still be rendering for a few samples after the
   transport flips to `'stopped'`. Sub-audio-block, inaudible in practice -
   not worth chasing without a concrete repro.
-- Stems are trusted to already be time-aligned *in their source files*
+- Stems are trusted to already be time-aligned _in their source files_
   (same start offset, same lead-in silence). Nothing validates this at
   import (`addStemsToProject`/`copyStems`) - there's no way to infer
   "these should line up" from the audio alone. A misaligned stem will still
@@ -172,7 +173,7 @@ Guardrails for touching `AudioEngine.ts`:
   iteration - a JS-thread delay between iterations is exactly how
   inter-track timing skew would sneak in.
 - Never introduce a second `AudioContext`/engine instance (e.g. one per
-  track). The single shared context is *the* invariant that makes drift
+  track). The single shared context is _the_ invariant that makes drift
   structurally impossible in the first place.
 - A stem being added, removed, or replaced must always go through a full
   `loadProject()` rebuild, never a partial graph patch while the transport

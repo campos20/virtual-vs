@@ -1,9 +1,9 @@
-import { Directory, File } from 'expo-file-system';
-import type { LibraryProjectEntry } from '@/store/projectsSlice';
-import type { ProjectManifest } from '@/types/project';
-import { foldToStereo } from './downmix';
-import { report, type ProgressReporter } from './progress';
-import type { BaseAudioContext, DecodedProject, ProjectSource } from './types';
+import { Directory, File } from "expo-file-system";
+import type { LibraryProjectEntry } from "@/store/projectsSlice";
+import type { ProjectManifest } from "@/types/project";
+import { foldToStereo } from "./downmix";
+import { report, type ProgressReporter } from "./progress";
+import type { BaseAudioContext, DecodedProject, ProjectSource } from "./types";
 
 /** Short random id, unique enough within one project's marker list. */
 function generateSectionId(): string {
@@ -23,7 +23,10 @@ function generateSectionId(): string {
  * here, means ids are stable from the very first read onward rather than
  * being silently re-derived (and drifting) on every subsequent read.
  */
-function normalizeSections(directory: Directory, manifest: ProjectManifest): ProjectManifest {
+function normalizeSections(
+  directory: Directory,
+  manifest: ProjectManifest,
+): ProjectManifest {
   const sections = manifest.sections ?? [];
   const needsBackfill = sections.some((section) => !section.id);
   if (!needsBackfill) {
@@ -35,20 +38,28 @@ function normalizeSections(directory: Directory, manifest: ProjectManifest): Pro
 
   const normalized: ProjectManifest = {
     ...manifest,
-    sections: sections.map((section) => (section.id ? section : { ...section, id: generateSectionId() })),
+    sections: sections.map((section) =>
+      section.id ? section : { ...section, id: generateSectionId() },
+    ),
   };
-  new File(directory, 'manifest.json').write(JSON.stringify(normalized, null, 2));
+  new File(directory, "manifest.json").write(
+    JSON.stringify(normalized, null, 2),
+  );
   return normalized;
 }
 
-export async function readProjectManifest(directory: Directory): Promise<ProjectManifest> {
-  const manifestFile = new File(directory, 'manifest.json');
+export async function readProjectManifest(
+  directory: Directory,
+): Promise<ProjectManifest> {
+  const manifestFile = new File(directory, "manifest.json");
   const manifest = (await manifestFile.json()) as ProjectManifest;
   return normalizeSections(directory, manifest);
 }
 
 /** Builds a `ProjectSource` for a project that lives on the filesystem (e.g. imported by the user). */
-export async function createFilesystemProjectSource(directory: Directory): Promise<ProjectSource> {
+export async function createFilesystemProjectSource(
+  directory: Directory,
+): Promise<ProjectSource> {
   const manifest = await readProjectManifest(directory);
   return {
     manifest,
@@ -57,9 +68,13 @@ export async function createFilesystemProjectSource(directory: Directory): Promi
 }
 
 /** Resolves a Library entry back to a decodable `ProjectSource`. */
-export async function getProjectSourceForEntry(entry: LibraryProjectEntry): Promise<ProjectSource> {
+export async function getProjectSourceForEntry(
+  entry: LibraryProjectEntry,
+): Promise<ProjectSource> {
   if (!entry.sourceDir) {
-    throw new Error(`Filesystem project "${entry.id}" is missing its sourceDir`);
+    throw new Error(
+      `Filesystem project "${entry.id}" is missing its sourceDir`,
+    );
   }
   return createFilesystemProjectSource(new Directory(entry.sourceDir));
 }
@@ -73,7 +88,7 @@ export async function getProjectSourceForEntry(entry: LibraryProjectEntry): Prom
 export async function decodeProjectAudio(
   context: BaseAudioContext,
   source: ProjectSource,
-  onProgress?: ProgressReporter
+  onProgress?: ProgressReporter,
 ): Promise<DecodedProject> {
   const { manifest } = source;
 
@@ -82,20 +97,30 @@ export async function decodeProjectAudio(
   // for the sake of a nicer label. Progress is reported as each one lands.
   let done = 0;
   const total = manifest.tracks.length;
-  await report(onProgress, { phase: 'decoding', current: 0, total });
+  await report(onProgress, { phase: "decoding", current: 0, total });
 
   const trackEntries = await Promise.all(
     manifest.tracks.map(async (track) => {
-      const buffer = await context.decodeAudioData(source.resolveFile(track.file));
+      const buffer = await context.decodeAudioData(
+        source.resolveFile(track.file),
+      );
       const folded = foldToStereo(context, buffer);
       done += 1;
-      onProgress?.({ phase: 'decoding', name: track.name, current: done, total });
+      onProgress?.({
+        phase: "decoding",
+        name: track.name,
+        current: done,
+        total,
+      });
       return [track.id, folded] as const;
-    })
+    }),
   );
 
   const padBuffer = manifest.pad
-    ? foldToStereo(context, await context.decodeAudioData(source.resolveFile(manifest.pad.file)))
+    ? foldToStereo(
+        context,
+        await context.decodeAudioData(source.resolveFile(manifest.pad.file)),
+      )
     : undefined;
 
   return {

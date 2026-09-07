@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { PanResponder, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
-import { glow, radii, useThemeColors, type ThemeColors } from '@/ui/theme';
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  UNITY_GAIN,
-  classifyGestureEnd,
-  valueFromDrag,
-} from './faderGesture';
+  PanResponder,
+  StyleSheet,
+  Text,
+  View,
+  type LayoutChangeEvent,
+} from "react-native";
+import { glow, radii, useThemeColors, type ThemeColors } from "@/ui/theme";
+import { UNITY_GAIN, classifyGestureEnd, valueFromDrag } from "./faderGesture";
 
 /**
  * The volume readout sits on a fixed dark, LCD-style surface regardless of
@@ -15,7 +17,7 @@ import {
  * recalibrated for a *light* surface this one never is (see TransportBar's
  * identical fix for its elapsed-time readout and scrub-progress fill).
  */
-const FIXED_DARK_SURFACE_TEXT_SECONDARY = '#9b9b9d';
+const FIXED_DARK_SURFACE_TEXT_SECONDARY = "#9b9b9d";
 
 interface VerticalFaderProps {
   /** Committed value from the store; only reflected while not actively dragging. */
@@ -100,7 +102,12 @@ export function VerticalFader({
     function applyDelta(dy: number) {
       const height = heightRef.current;
       if (height <= 0) return;
-      const next = valueFromDrag(startValueRef.current, dy, height, latest.current.maxValue);
+      const next = valueFromDrag(
+        startValueRef.current,
+        dy,
+        height,
+        latest.current.maxValue,
+      );
       draggingValueRef.current = next;
       setLiveValue(next);
       latest.current.onLiveChange(next);
@@ -119,15 +126,15 @@ export function VerticalFader({
       const now = Date.now();
 
       switch (classifyGestureEnd(dy, now, lastTapAtRef.current)) {
-        case 'drag':
+        case "drag":
           lastTapAtRef.current = 0;
           latest.current.onCommit(draggingValueRef.current);
           return;
-        case 'double-tap':
+        case "double-tap":
           lastTapAtRef.current = 0;
           resetToUnity();
           return;
-        case 'tap':
+        case "tap":
           // A single tap moved nothing, so there is nothing to write back -
           // this keeps a stray touch from rewriting the project's manifest.
           lastTapAtRef.current = now;
@@ -163,7 +170,9 @@ export function VerticalFader({
   return (
     <View style={styles.wrapper}>
       <View style={[styles.readout, dragging && glow(accentColor, 6)]}>
-        <Text style={[styles.readoutText, dragging && { color: accentColor }]}>{Math.round(ratio * 100)}</Text>
+        <Text style={[styles.readoutText, dragging && { color: accentColor }]}>
+          {Math.round(ratio * 100)}
+        </Text>
       </View>
       <View
         style={styles.track}
@@ -173,8 +182,17 @@ export function VerticalFader({
       >
         <View style={styles.groove} pointerEvents="none" />
         {/* Unity-gain (1.0) reference mark, like the 0 dB tick on a real fader. */}
-        <View style={[styles.unityTick, { bottom: unityPercent }]} pointerEvents="none" />
-        <View style={[styles.fill, { height: fillPercent, backgroundColor: accentColor }]} pointerEvents="none" />
+        <View
+          style={[styles.unityTick, { bottom: unityPercent }]}
+          pointerEvents="none"
+        />
+        <View
+          style={[
+            styles.fill,
+            { height: fillPercent, backgroundColor: accentColor },
+          ]}
+          pointerEvents="none"
+        />
         <View
           style={[
             styles.cap,
@@ -192,81 +210,81 @@ export function VerticalFader({
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  wrapper: {
-    alignItems: 'center',
-    width: '100%',
-  },
-  readout: {
-    backgroundColor: '#08080a',
-    borderRadius: radii.sm,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginBottom: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.bevelDark,
-  },
-  readoutText: {
-    color: FIXED_DARK_SURFACE_TEXT_SECONDARY,
-    fontSize: 11,
-    fontVariant: ['tabular-nums'],
-    fontWeight: '700',
-  },
-  track: {
-    // Fixed throw rather than flex: a fader that stretches to the full
-    // screen height has a uselessly long travel distance and doesn't read
-    // as a mixer fader.
-    height: 260,
-    width: 36,
-    borderRadius: radii.sm,
-    backgroundColor: '#0a0a0c',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    borderTopColor: colors.bevelDark,
-  },
-  groove: {
-    position: 'absolute',
-    left: '50%',
-    marginLeft: -2,
-    top: 6,
-    bottom: 6,
-    width: 4,
-    borderRadius: 2,
-    backgroundColor: '#000000',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.8)',
-  },
-  unityTick: {
-    position: 'absolute',
-    left: -3,
-    right: -3,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-  },
-  fill: {
-    position: 'absolute',
-    left: '50%',
-    marginLeft: -2,
-    width: 4,
-    bottom: 0,
-    borderRadius: 2,
-  },
-  cap: {
-    position: 'absolute',
-    left: -8,
-    right: -8,
-    height: 18,
-    marginBottom: -9,
-    borderRadius: 4,
-    backgroundColor: '#e8e8ea',
-    borderWidth: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  capRidge: {
-    width: '60%',
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-  },
+    wrapper: {
+      alignItems: "center",
+      width: "100%",
+    },
+    readout: {
+      backgroundColor: "#08080a",
+      borderRadius: radii.sm,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      marginBottom: 8,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.bevelDark,
+    },
+    readoutText: {
+      color: FIXED_DARK_SURFACE_TEXT_SECONDARY,
+      fontSize: 11,
+      fontVariant: ["tabular-nums"],
+      fontWeight: "700",
+    },
+    track: {
+      // Fixed throw rather than flex: a fader that stretches to the full
+      // screen height has a uselessly long travel distance and doesn't read
+      // as a mixer fader.
+      height: 260,
+      width: 36,
+      borderRadius: radii.sm,
+      backgroundColor: "#0a0a0c",
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      borderTopColor: colors.bevelDark,
+    },
+    groove: {
+      position: "absolute",
+      left: "50%",
+      marginLeft: -2,
+      top: 6,
+      bottom: 6,
+      width: 4,
+      borderRadius: 2,
+      backgroundColor: "#000000",
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: "rgba(0,0,0,0.8)",
+    },
+    unityTick: {
+      position: "absolute",
+      left: -3,
+      right: -3,
+      height: 1,
+      backgroundColor: "rgba(255,255,255,0.25)",
+    },
+    fill: {
+      position: "absolute",
+      left: "50%",
+      marginLeft: -2,
+      width: 4,
+      bottom: 0,
+      borderRadius: 2,
+    },
+    cap: {
+      position: "absolute",
+      left: -8,
+      right: -8,
+      height: 18,
+      marginBottom: -9,
+      borderRadius: 4,
+      backgroundColor: "#e8e8ea",
+      borderWidth: 3,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    capRidge: {
+      width: "60%",
+      height: 2,
+      borderRadius: 1,
+      backgroundColor: "rgba(0,0,0,0.25)",
+    },
   });
 }

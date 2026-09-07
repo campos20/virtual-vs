@@ -1,6 +1,12 @@
 import { useTranslation } from "@/i18n";
 import type { SectionManifest } from "@/types/project";
-import { elevation, radii, spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
+import {
+  elevation,
+  radii,
+  spacing,
+  useThemeColors,
+  type ThemeColors,
+} from "@/ui/theme";
 import { useMemo, useState } from "react";
 import {
   Modal,
@@ -192,139 +198,139 @@ export function MarkersDrawer({
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  sheet: {
-    marginTop: "auto",
-    maxHeight: "80%",
-    backgroundColor: colors.panel,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    ...elevation,
-  },
-  sheetHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  sheetTitle: {
-    color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  closeButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radii.pill,
-    backgroundColor: colors.borderLight,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-  },
-  closeButtonText: {
-    color: colors.accent,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  addSection: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    gap: spacing.sm,
-  },
-  input: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  presetRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.xs,
-  },
-  presetChip: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: radii.pill,
-    backgroundColor: colors.borderLight,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-  },
-  presetChipText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  addButton: {
-    backgroundColor: colors.accent,
-    borderRadius: radii.md,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  addButtonDisabled: {
-    opacity: 0.4,
-  },
-  addButtonText: {
-    color: "#0a0a0a",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  list: {
-    flexGrow: 0,
-  },
-  listContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    // Extra room at the bottom of the scrollable list, same reasoning as
-    // MixerDrawer's stripsContent - without it the last row's Remove button
-    // sits flush against the sheet's bottom edge.
-    paddingBottom: spacing.xl,
-  },
-  emptyText: {
-    color: colors.textTertiary,
-    fontSize: 13,
-    paddingVertical: spacing.md,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  rowJump: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginRight: 12,
-  },
-  rowName: {
-    color: colors.textPrimary,
-    fontSize: 15,
-    fontWeight: "600",
-    flexShrink: 1,
-    marginRight: 8,
-  },
-  rowTime: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    fontVariant: ["tabular-nums"],
-  },
-  removeText: {
-    color: colors.danger,
-    fontSize: 13,
-    fontWeight: "600",
-  },
+    sheet: {
+      marginTop: "auto",
+      maxHeight: "80%",
+      backgroundColor: colors.panel,
+      borderTopLeftRadius: radii.xl,
+      borderTopRightRadius: radii.xl,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      ...elevation,
+    },
+    sheetHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.sm,
+    },
+    sheetTitle: {
+      color: colors.textPrimary,
+      fontSize: 18,
+      fontWeight: "800",
+    },
+    closeButton: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: 6,
+      borderRadius: radii.pill,
+      backgroundColor: colors.borderLight,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderLight,
+    },
+    closeButtonText: {
+      color: colors.accent,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+    addSection: {
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      gap: spacing.sm,
+    },
+    input: {
+      color: colors.textPrimary,
+      fontSize: 16,
+      backgroundColor: colors.surface,
+      borderRadius: radii.md,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    presetRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.xs,
+    },
+    presetChip: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 6,
+      borderRadius: radii.pill,
+      backgroundColor: colors.borderLight,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderLight,
+    },
+    presetChipText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    addButton: {
+      backgroundColor: colors.accent,
+      borderRadius: radii.md,
+      paddingVertical: 12,
+      alignItems: "center",
+    },
+    addButtonDisabled: {
+      opacity: 0.4,
+    },
+    addButtonText: {
+      color: "#0a0a0a",
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    list: {
+      flexGrow: 0,
+    },
+    listContent: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.sm,
+      // Extra room at the bottom of the scrollable list, same reasoning as
+      // MixerDrawer's stripsContent - without it the last row's Remove button
+      // sits flush against the sheet's bottom edge.
+      paddingBottom: spacing.xl,
+    },
+    emptyText: {
+      color: colors.textTertiary,
+      fontSize: 13,
+      paddingVertical: spacing.md,
+    },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    rowJump: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginRight: 12,
+    },
+    rowName: {
+      color: colors.textPrimary,
+      fontSize: 15,
+      fontWeight: "600",
+      flexShrink: 1,
+      marginRight: 8,
+    },
+    rowTime: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      fontVariant: ["tabular-nums"],
+    },
+    removeText: {
+      color: colors.danger,
+      fontSize: 13,
+      fontWeight: "600",
+    },
   });
 }

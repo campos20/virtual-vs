@@ -1,4 +1,4 @@
-import type { AudioBuffer, BaseAudioContext } from 'react-native-audio-api';
+import type { AudioBuffer, BaseAudioContext } from "react-native-audio-api";
 
 const STEREO = 2;
 /** -3 dB, the conventional gain for folding a channel into both sides. */
@@ -45,7 +45,10 @@ const LAYOUT_GAINS: Record<number, [number, number][]> = {
  */
 function genericGains(channels: number): [number, number][] {
   const gain = 1 / Math.sqrt(channels);
-  return Array.from({ length: channels }, () => [gain, gain] as [number, number]);
+  return Array.from(
+    { length: channels },
+    () => [gain, gain] as [number, number],
+  );
 }
 
 /**
@@ -62,12 +65,15 @@ function genericGains(channels: number): [number, number][] {
  * Doing the fold here makes the result identical regardless of the library's
  * internal mixing rules, which is worth the one-time cost at load.
  */
-export function foldToStereo(context: BaseAudioContext, buffer: AudioBuffer): AudioBuffer {
+export function foldToStereo(
+  context: BaseAudioContext,
+  buffer: AudioBuffer,
+): AudioBuffer {
   const channels = buffer.numberOfChannels;
   if (channels <= STEREO) return buffer;
 
   const sources = Array.from({ length: channels }, (_, channel) =>
-    buffer.getChannelData(channel)
+    buffer.getChannelData(channel),
   );
   const { left, right } = mixChannelsToStereo(sources, buffer.length);
 
@@ -84,9 +90,10 @@ export function foldToStereo(context: BaseAudioContext, buffer: AudioBuffer): Au
  */
 export function mixChannelsToStereo(
   channelData: Float32Array[],
-  frames: number
+  frames: number,
 ): { left: Float32Array<ArrayBuffer>; right: Float32Array<ArrayBuffer> } {
-  const gains = LAYOUT_GAINS[channelData.length] ?? genericGains(channelData.length);
+  const gains =
+    LAYOUT_GAINS[channelData.length] ?? genericGains(channelData.length);
   const left = new Float32Array(frames);
   const right = new Float32Array(frames);
 

@@ -1,8 +1,13 @@
-import { patchProjectManifest } from '@/storage';
-import type { LyricsSyncPoint, ProjectManifest, SectionManifest, TrackManifest } from '@/types/project';
-import type { AppDispatch, RootState } from './index';
-import { projectUpdated, projectsSelectors } from './projectsSlice';
-import { trackEntityId, tracksSelectors } from './tracksSlice';
+import { patchProjectManifest } from "@/storage";
+import type {
+  LyricsSyncPoint,
+  ProjectManifest,
+  SectionManifest,
+  TrackManifest,
+} from "@/types/project";
+import type { AppDispatch, RootState } from "./index";
+import { projectUpdated, projectsSelectors } from "./projectsSlice";
+import { trackEntityId, tracksSelectors } from "./tracksSlice";
 
 /**
  * Writes the project's current mixer state back to its manifest.json.
@@ -25,7 +30,7 @@ export function persistProjectMixer(projectId: string) {
     const tracks: TrackManifest[] = entry.tracks.map((track) => {
       const committed = tracksSelectors.selectById(
         state.tracks,
-        trackEntityId(projectId, track.id)
+        trackEntityId(projectId, track.id),
       );
       if (!committed) return track;
       return {
@@ -58,7 +63,10 @@ export function persistProjectClick(projectId: string, clickEnabled: boolean) {
  * rename, this only rewrites data in the manifest and never touches the
  * audio graph, so adding/removing a marker mid-song is safe.
  */
-export function persistProjectSections(projectId: string, sections: SectionManifest[]) {
+export function persistProjectSections(
+  projectId: string,
+  sections: SectionManifest[],
+) {
   return (dispatch: AppDispatch, getState: () => RootState) => {
     const entry = projectsSelectors.selectById(getState().projects, projectId);
     dispatch(projectUpdated({ id: projectId, changes: { sections } }));
@@ -80,7 +88,12 @@ export function persistProjectSections(projectId: string, sections: SectionManif
 export function persistProjectLyrics(projectId: string, lyrics: string) {
   return (dispatch: AppDispatch, getState: () => RootState) => {
     const entry = projectsSelectors.selectById(getState().projects, projectId);
-    dispatch(projectUpdated({ id: projectId, changes: { lyrics, lyricsSyncPoints: [] } }));
+    dispatch(
+      projectUpdated({
+        id: projectId,
+        changes: { lyrics, lyricsSyncPoints: [] },
+      }),
+    );
     if (!entry?.sourceDir) return;
     writeManifest(entry.sourceDir, { lyrics, lyricsSyncPoints: [] });
   };
@@ -91,10 +104,18 @@ export function persistProjectLyrics(projectId: string, lyrics: string) {
  * transport running - tapping a line to fix its timing is meant to work
  * mid-song, same reasoning as persistProjectSections.
  */
-export function persistProjectLyricsSync(projectId: string, syncPoints: LyricsSyncPoint[]) {
+export function persistProjectLyricsSync(
+  projectId: string,
+  syncPoints: LyricsSyncPoint[],
+) {
   return (dispatch: AppDispatch, getState: () => RootState) => {
     const entry = projectsSelectors.selectById(getState().projects, projectId);
-    dispatch(projectUpdated({ id: projectId, changes: { lyricsSyncPoints: syncPoints } }));
+    dispatch(
+      projectUpdated({
+        id: projectId,
+        changes: { lyricsSyncPoints: syncPoints },
+      }),
+    );
     if (!entry?.sourceDir) return;
     writeManifest(entry.sourceDir, { lyricsSyncPoints: syncPoints });
   };
@@ -108,6 +129,10 @@ export function persistProjectLyricsSync(projectId: string, syncPoints: LyricsSy
  */
 function writeManifest(sourceDir: string, changes: Partial<ProjectManifest>) {
   patchProjectManifest(sourceDir, changes).catch((error) => {
-    console.warn('Failed to persist project manifest changes', Object.keys(changes), error);
+    console.warn(
+      "Failed to persist project manifest changes",
+      Object.keys(changes),
+      error,
+    );
   });
 }

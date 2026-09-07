@@ -1,7 +1,12 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react-native';
-import { Alert } from 'react-native';
-import { getDocumentAsync } from 'expo-document-picker';
-import { audioEngine } from '@/engine';
+import {
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react-native";
+import { Alert } from "react-native";
+import { getDocumentAsync } from "expo-document-picker";
+import { audioEngine } from "@/engine";
 import {
   addStemsToProject,
   deleteProjectDirectory,
@@ -10,29 +15,33 @@ import {
   removeStemFromProject,
   renameStemInProject,
   updateProjectMetadata,
-} from '@/storage';
-import { nowPlayingStore } from '@/playback/nowPlayingStore';
-import { createStore } from '@/store';
-import { projectAdded, type LibraryProjectEntry } from '@/store/projectsSlice';
-import { setlistAdded } from '@/store/setlistsSlice';
-import { trackEntityId, tracksInitializedForProject } from '@/store/tracksSlice';
-import type { SetlistManifest } from '@/types/setlist';
-import { renderWithStore } from '@/test-utils/renderWithStore';
-import { ProjectScreen } from './ProjectScreen';
+} from "@/storage";
+import { nowPlayingStore } from "@/playback/nowPlayingStore";
+import { createStore } from "@/store";
+import { projectAdded, type LibraryProjectEntry } from "@/store/projectsSlice";
+import { setlistAdded } from "@/store/setlistsSlice";
+import {
+  trackEntityId,
+  tracksInitializedForProject,
+} from "@/store/tracksSlice";
+import type { SetlistManifest } from "@/types/setlist";
+import { renderWithStore } from "@/test-utils/renderWithStore";
+import { ProjectScreen } from "./ProjectScreen";
 
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
-let mockParams: { projectId?: string; folderId?: string; autoPlay?: string } = {};
+let mockParams: { projectId?: string; folderId?: string; autoPlay?: string } =
+  {};
 
-jest.mock('expo-router', () => ({
+jest.mock("expo-router", () => ({
   useLocalSearchParams: () => mockParams,
   useRouter: () => ({ back: mockBack, replace: mockReplace }),
 }));
 
-jest.mock('expo-document-picker', () => ({ getDocumentAsync: jest.fn() }));
+jest.mock("expo-document-picker", () => ({ getDocumentAsync: jest.fn() }));
 
-jest.mock('@/storage', () => ({
-  ...jest.requireActual('@/storage'),
+jest.mock("@/storage", () => ({
+  ...jest.requireActual("@/storage"),
   updateProjectMetadata: jest.fn(),
   addStemsToProject: jest.fn(),
   removeStemFromProject: jest.fn(),
@@ -50,8 +59,8 @@ const pickerMock = getDocumentAsync as jest.Mock;
 // batching, which trips act() warnings once it outlives the test that started
 // it. No test here asserts on the live-ticking readout, so never schedule.
 beforeEach(() => {
-  jest.spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(0);
-  jest.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation(() => {});
+  jest.spyOn(globalThis, "requestAnimationFrame").mockReturnValue(0);
+  jest.spyOn(globalThis, "cancelAnimationFrame").mockImplementation(() => {});
 });
 
 afterEach(() => {
@@ -67,27 +76,39 @@ beforeEach(() => {
   nowPlayingStore.resetForTests();
   // Real behaviour by default; individual tests override it.
   (getProjectSourceForEntry as jest.Mock).mockImplementation(
-    jest.requireActual('@/storage').getProjectSourceForEntry
+    jest.requireActual("@/storage").getProjectSourceForEntry,
   );
   patchManifestMock.mockResolvedValue({});
 });
 
 function asset(name: string, uri: string) {
-  return { name, uri, size: 1, mimeType: 'audio/wav', lastModified: 0 };
+  return { name, uri, size: 1, mimeType: "audio/wav", lastModified: 0 };
 }
 
 const filesystemProject = {
-  id: 'my-song',
-  title: 'My Song',
+  id: "my-song",
+  title: "My Song",
   bpm: 100,
-  key: 'C',
+  key: "C",
   tracks: [
-    { id: 'bass', name: 'Bass', file: 'bass.wav', gain: 1, bus: 'main' as const },
-    { id: 'keys', name: 'Keys', file: 'keys.wav', gain: 1, bus: 'main' as const },
+    {
+      id: "bass",
+      name: "Bass",
+      file: "bass.wav",
+      gain: 1,
+      bus: "main" as const,
+    },
+    {
+      id: "keys",
+      name: "Keys",
+      file: "keys.wav",
+      gain: 1,
+      bus: "main" as const,
+    },
   ],
   sections: [],
-  origin: 'filesystem' as const,
-  sourceDir: 'file:///mock/document/projects/my-song',
+  origin: "filesystem" as const,
+  sourceDir: "file:///mock/document/projects/my-song",
 };
 
 /**
@@ -97,18 +118,24 @@ const filesystemProject = {
  * so the load actually succeeds and the mixer renders.
  */
 const threeStemProject: LibraryProjectEntry = {
-  id: 'sync-test',
-  title: 'Sync Test',
+  id: "sync-test",
+  title: "Sync Test",
   bpm: 120,
-  key: 'A minor',
+  key: "A minor",
   tracks: [
-    { id: 'bass', name: 'Bass', file: 'bass.wav', gain: 0.85, bus: 'main' },
-    { id: 'keys', name: 'Keys', file: 'keys.wav', gain: 0.85, bus: 'main' },
-    { id: 'guide', name: 'Guide Vocal', file: 'guide.wav', gain: 0.9, bus: 'cue' },
+    { id: "bass", name: "Bass", file: "bass.wav", gain: 0.85, bus: "main" },
+    { id: "keys", name: "Keys", file: "keys.wav", gain: 0.85, bus: "main" },
+    {
+      id: "guide",
+      name: "Guide Vocal",
+      file: "guide.wav",
+      gain: 0.9,
+      bus: "cue",
+    },
   ],
   sections: [],
-  origin: 'filesystem',
-  sourceDir: 'file:///mock/document/projects/sync-test',
+  origin: "filesystem",
+  sourceDir: "file:///mock/document/projects/sync-test",
 };
 
 function renderLoaded(manifest: LibraryProjectEntry = threeStemProject) {
@@ -124,54 +151,57 @@ function renderLoaded(manifest: LibraryProjectEntry = threeStemProject) {
 }
 
 async function waitForMixer() {
-  await waitFor(() => expect(screen.getByTestId('mixer-menu-button')).toBeTruthy());
+  await waitFor(() =>
+    expect(screen.getByTestId("mixer-menu-button")).toBeTruthy(),
+  );
 }
 
 /** Volume/output/click controls live behind the hamburger drawer now - open it before touching them. */
 function openMixer() {
-  fireEvent.press(screen.getByTestId('mixer-menu-button'));
+  fireEvent.press(screen.getByTestId("mixer-menu-button"));
 }
 
-describe('ProjectScreen - playing', () => {
-  it('loads a project and renders a channel strip per track', async () => {
+describe("ProjectScreen - playing", () => {
+  it("loads a project and renders a channel strip per track", async () => {
     renderLoaded();
     await waitForMixer();
 
-    expect(screen.getByText('Sync Test')).toBeTruthy();
-    expect(screen.getByText('120 BPM')).toBeTruthy();
+    expect(screen.getByText("Sync Test")).toBeTruthy();
+    expect(screen.getByText("120 BPM")).toBeTruthy();
     // The waveform view labels each stem's lane too, so "Keys" is already on screen.
-    expect(screen.getByText('Keys')).toBeTruthy();
+    expect(screen.getByText("Keys")).toBeTruthy();
 
     openMixer();
     // Now it appears twice: once for its waveform lane, once for its channel strip.
-    expect(screen.getAllByText('Keys')).toHaveLength(2);
-    expect(screen.getAllByText('Guide Vocal')).toHaveLength(2);
+    expect(screen.getAllByText("Keys")).toHaveLength(2);
+    expect(screen.getAllByText("Guide Vocal")).toHaveLength(2);
   });
 
   // Play/pause/stop/seek are exclusively the global NowPlayingBar's job now
   // (see NowPlayingBar.test.tsx) - this screen only loads a project in and
   // lets the shared engine transport drive its waveform.
-  it('loads the project into the engine, ready to play', async () => {
+  it("loads the project into the engine, ready to play", async () => {
     renderLoaded();
     await waitForMixer();
 
     expect(audioEngine.getManifestTrackIds().length).toBeGreaterThan(0);
     audioEngine.play();
-    expect(audioEngine.getTransportState()).toBe('playing');
+    expect(audioEngine.getTransportState()).toBe("playing");
     audioEngine.stop();
   });
 
-  it('toggling mute commits to the engine and the store', async () => {
+  it("toggling mute commits to the engine and the store", async () => {
     const { store } = renderLoaded();
     await waitForMixer();
     openMixer();
 
-    const [bassMute] = screen.getAllByText('M');
+    const [bassMute] = screen.getAllByText("M");
     fireEvent.press(bassMute);
 
-    expect(audioEngine.getTrackState('bass')?.muted).toBe(true);
+    expect(audioEngine.getTrackState("bass")?.muted).toBe(true);
     expect(
-      store.getState().tracks.entities[trackEntityId('sync-test', 'bass')]?.muted
+      store.getState().tracks.entities[trackEntityId("sync-test", "bass")]
+        ?.muted,
     ).toBe(true);
   });
 
@@ -179,31 +209,31 @@ describe('ProjectScreen - playing', () => {
   // solo are the tell: AudioEngine's fallback for a track it wasn't given
   // state for hardcodes them off, so a screen that fails to pass the manifest
   // mix through would show a muted channel while playing it at full level.
-  it('seeds the engine with the mix stored in the project manifest', async () => {
+  it("seeds the engine with the mix stored in the project manifest", async () => {
     renderLoaded({
       ...threeStemProject,
       tracks: threeStemProject.tracks.map((track) =>
-        track.id === 'bass'
-          ? { ...track, gain: 0.25, bus: 'both' as const, muted: true }
-          : track.id === 'keys'
+        track.id === "bass"
+          ? { ...track, gain: 0.25, bus: "both" as const, muted: true }
+          : track.id === "keys"
             ? { ...track, soloed: true }
-            : track
+            : track,
       ),
     });
     await waitForMixer();
 
-    expect(audioEngine.getTrackState('bass')?.muted).toBe(true);
-    expect(audioEngine.getTrackState('bass')?.volume).toBeCloseTo(0.25, 5);
-    expect(audioEngine.getTrackState('bass')?.bus).toBe('both');
-    expect(audioEngine.getTrackState('keys')?.soloed).toBe(true);
+    expect(audioEngine.getTrackState("bass")?.muted).toBe(true);
+    expect(audioEngine.getTrackState("bass")?.volume).toBeCloseTo(0.25, 5);
+    expect(audioEngine.getTrackState("bass")?.bus).toBe("both");
+    expect(audioEngine.getTrackState("keys")?.soloed).toBe(true);
   });
 
   // The core of the "now playing" feature: playback used to be tied to this
   // screen's mount lifecycle (stopped on Back/unmount/entering Edit) - it no
   // longer is. Only the mini-player, deleting the project, or the user
   // explicitly hitting stop/pause should ever stop the engine now.
-  it('keeps playing across unmount, instead of stopping like it used to', async () => {
-    const stopSpy = jest.spyOn(audioEngine, 'stop');
+  it("keeps playing across unmount, instead of stopping like it used to", async () => {
+    const stopSpy = jest.spyOn(audioEngine, "stop");
 
     const { unmount } = renderLoaded();
     await waitForMixer();
@@ -213,11 +243,11 @@ describe('ProjectScreen - playing', () => {
     unmount();
 
     expect(stopSpy).not.toHaveBeenCalled();
-    expect(audioEngine.getTransportState()).toBe('playing');
+    expect(audioEngine.getTransportState()).toBe("playing");
     audioEngine.stop();
   });
 
-  it('does not re-decode or restart playback when re-opening the same project', async () => {
+  it("does not re-decode or restart playback when re-opening the same project", async () => {
     const { unmount } = renderLoaded();
     await waitForMixer();
     audioEngine.play();
@@ -228,14 +258,14 @@ describe('ProjectScreen - playing', () => {
     await waitForMixer();
 
     expect(getProjectSourceForEntry).not.toHaveBeenCalled();
-    expect(audioEngine.getTransportState()).toBe('playing');
+    expect(audioEngine.getTransportState()).toBe("playing");
     audioEngine.stop();
   });
 
   // "Stop A, show B" - opening a *different* project is the one case that's
   // still supposed to interrupt whatever was playing (unlike Back/Edit/
   // re-opening the same project, which no longer do).
-  it('opening a different project stops the previous one and replaces it', async () => {
+  it("opening a different project stops the previous one and replaces it", async () => {
     const { unmount } = renderLoaded();
     await waitForMixer();
     audioEngine.play();
@@ -245,100 +275,106 @@ describe('ProjectScreen - playing', () => {
       manifest: filesystemProject,
       resolveFile: () => 0,
     });
-    mockParams = { projectId: 'my-song' };
+    mockParams = { projectId: "my-song" };
     const store = createStore();
     store.dispatch(projectAdded(filesystemProject));
     renderWithStore(<ProjectScreen />, store);
     await waitForMixer();
 
-    expect(audioEngine.getTransportState()).toBe('stopped');
-    expect(screen.getByText('My Song')).toBeTruthy();
+    expect(audioEngine.getTransportState()).toBe("stopped");
+    expect(screen.getByText("My Song")).toBeTruthy();
   });
 });
 
-describe('ProjectScreen - markers', () => {
+describe("ProjectScreen - markers", () => {
   function openMarkers() {
-    fireEvent.press(screen.getByTestId('markers-menu-button'));
+    fireEvent.press(screen.getByTestId("markers-menu-button"));
   }
 
-  it('adds a marker at the current position from a preset chip', async () => {
+  it("adds a marker at the current position from a preset chip", async () => {
     renderLoaded();
     await waitForMixer();
     openMarkers();
 
-    fireEvent.press(screen.getByTestId('marker-preset-presetChorus'));
-    fireEvent.press(screen.getByTestId('add-marker-button'));
+    fireEvent.press(screen.getByTestId("marker-preset-presetChorus"));
+    fireEvent.press(screen.getByTestId("add-marker-button"));
 
     // The row is numbered ("1. Chorus"), distinct from the preset chip's plain "Chorus".
-    expect(screen.getByText('1. Chorus')).toBeTruthy();
+    expect(screen.getByText("1. Chorus")).toBeTruthy();
     const [sourceDir, changes] = patchManifestMock.mock.calls.at(-1)!;
     expect(sourceDir).toBe(threeStemProject.sourceDir);
     expect(changes.sections).toEqual([
-      expect.objectContaining({ name: 'Chorus', startSec: expect.any(Number) }),
+      expect.objectContaining({ name: "Chorus", startSec: expect.any(Number) }),
     ]);
   });
 
-  it('does not add a marker with an empty name', async () => {
+  it("does not add a marker with an empty name", async () => {
     renderLoaded();
     await waitForMixer();
     openMarkers();
 
-    fireEvent.press(screen.getByTestId('add-marker-button'));
+    fireEvent.press(screen.getByTestId("add-marker-button"));
 
     expect(patchManifestMock).not.toHaveBeenCalled();
   });
 
-  it('jumps to a marker and closes the drawer', async () => {
-    const seekSpy = jest.spyOn(audioEngine, 'seek');
+  it("jumps to a marker and closes the drawer", async () => {
+    const seekSpy = jest.spyOn(audioEngine, "seek");
     renderLoaded({
       ...threeStemProject,
-      sections: [{ id: 'chorus', name: 'Chorus', startSec: 42 }],
+      sections: [{ id: "chorus", name: "Chorus", startSec: 42 }],
     });
     await waitForMixer();
     openMarkers();
 
-    fireEvent.press(screen.getByTestId('jump-marker-chorus'));
+    fireEvent.press(screen.getByTestId("jump-marker-chorus"));
 
     expect(seekSpy).toHaveBeenCalledWith(42);
-    expect(screen.queryByTestId('close-markers-button')).toBeNull();
+    expect(screen.queryByTestId("close-markers-button")).toBeNull();
   });
 
-  it('removes a marker', async () => {
+  it("removes a marker", async () => {
     renderLoaded({
       ...threeStemProject,
-      sections: [{ id: 'chorus', name: 'Chorus', startSec: 42 }],
+      sections: [{ id: "chorus", name: "Chorus", startSec: 42 }],
     });
     await waitForMixer();
     openMarkers();
 
-    fireEvent.press(screen.getByTestId('remove-marker-chorus'));
+    fireEvent.press(screen.getByTestId("remove-marker-chorus"));
 
-    expect(screen.queryByTestId('jump-marker-chorus')).toBeNull();
+    expect(screen.queryByTestId("jump-marker-chorus")).toBeNull();
     const [sourceDir, changes] = patchManifestMock.mock.calls.at(-1)!;
     expect(sourceDir).toBe(threeStemProject.sourceDir);
     expect(changes.sections).toEqual([]);
   });
 });
 
-describe('ProjectScreen - quick switch between songs in a folder', () => {
+describe("ProjectScreen - quick switch between songs in a folder", () => {
   function song(id: string, title: string): LibraryProjectEntry {
     return {
       id,
       title,
-      key: '',
-      tracks: [{ id: 'bass', name: 'Bass', file: 'bass.wav', gain: 0.85, bus: 'main' }],
+      key: "",
+      tracks: [
+        { id: "bass", name: "Bass", file: "bass.wav", gain: 0.85, bus: "main" },
+      ],
       sections: [],
-      origin: 'filesystem',
+      origin: "filesystem",
       sourceDir: `file:///mock/document/projects/${id}`,
     };
   }
 
   function folder(id: string, songs: string[]): SetlistManifest {
-    return { id, name: id, songs, advance: 'manual', padBetween: false };
+    return { id, name: id, songs, advance: "manual", padBetween: false };
   }
 
   /** Loads `projectId` (opened, per `folderId`, from inside that folder) with `songs` filed in it, in that order. */
-  function renderInFolder(projectId: string, songs: LibraryProjectEntry[], folderId = 'sunday') {
+  function renderInFolder(
+    projectId: string,
+    songs: LibraryProjectEntry[],
+    folderId = "sunday",
+  ) {
     const current = songs.find((entry) => entry.id === projectId)!;
     (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
       manifest: current,
@@ -347,61 +383,82 @@ describe('ProjectScreen - quick switch between songs in a folder', () => {
     mockParams = { projectId, folderId };
     const store = createStore();
     for (const entry of songs) store.dispatch(projectAdded(entry));
-    store.dispatch(setlistAdded(folder(folderId, songs.map((entry) => entry.id))));
+    store.dispatch(
+      setlistAdded(
+        folder(
+          folderId,
+          songs.map((entry) => entry.id),
+        ),
+      ),
+    );
     return renderWithStore(<ProjectScreen />, store);
   }
 
   function openFolderSongs() {
-    fireEvent.press(screen.getByTestId('folder-songs-menu-button'));
+    fireEvent.press(screen.getByTestId("folder-songs-menu-button"));
   }
 
   it('offers no "songs in folder" button for a song opened outside any folder', async () => {
     renderLoaded();
     await waitForMixer();
 
-    expect(screen.queryByTestId('folder-songs-menu-button')).toBeNull();
+    expect(screen.queryByTestId("folder-songs-menu-button")).toBeNull();
   });
 
   // Hidden by default - the whole point is that switching songs is never a
   // one-tap accident near Markers/Mixer, only ever a deliberate "open the
   // list, then tap a specific song" pair of taps.
-  it('keeps the folder song list hidden until its icon is pressed', async () => {
-    const songs = [song('a', 'Song A'), song('b', 'Song B')];
-    renderInFolder('a', songs);
+  it("keeps the folder song list hidden until its icon is pressed", async () => {
+    const songs = [song("a", "Song A"), song("b", "Song B")];
+    renderInFolder("a", songs);
     await waitForMixer();
 
-    expect(screen.queryByTestId('folder-songs-row-b')).toBeNull();
+    expect(screen.queryByTestId("folder-songs-row-b")).toBeNull();
 
     openFolderSongs();
 
-    expect(screen.getByTestId('folder-songs-row-b')).toBeTruthy();
+    expect(screen.getByTestId("folder-songs-row-b")).toBeTruthy();
   });
 
-  it('lists every song in the folder, in its own order', async () => {
-    const songs = [song('a', 'Song A'), song('b', 'Song B'), song('c', 'Song C')];
-    renderInFolder('a', songs);
+  it("lists every song in the folder, in its own order", async () => {
+    const songs = [
+      song("a", "Song A"),
+      song("b", "Song B"),
+      song("c", "Song C"),
+    ];
+    renderInFolder("a", songs);
     await waitForMixer();
 
     openFolderSongs();
 
     // "Song A" is also the header title (this is the song currently open),
     // so these are found within their own drawer row rather than by text.
-    expect(within(screen.getByTestId('folder-songs-row-a')).getByText('Song A')).toBeTruthy();
-    expect(within(screen.getByTestId('folder-songs-row-b')).getByText('Song B')).toBeTruthy();
-    expect(within(screen.getByTestId('folder-songs-row-c')).getByText('Song C')).toBeTruthy();
+    expect(
+      within(screen.getByTestId("folder-songs-row-a")).getByText("Song A"),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByTestId("folder-songs-row-b")).getByText("Song B"),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByTestId("folder-songs-row-c")).getByText("Song C"),
+    ).toBeTruthy();
   });
 
-  it('jumps to whichever song in the list is tapped, carrying the folder id along', async () => {
-    const songs = [song('a', 'Song A'), song('b', 'Song B'), song('c', 'Song C')];
-    renderInFolder('a', songs);
+  it("jumps to whichever song in the list is tapped, carrying the folder id along", async () => {
+    const songs = [
+      song("a", "Song A"),
+      song("b", "Song B"),
+      song("c", "Song C"),
+    ];
+    renderInFolder("a", songs);
     await waitForMixer();
 
     openFolderSongs();
-    fireEvent.press(screen.getByTestId('folder-songs-row-c'));
+    fireEvent.press(screen.getByTestId("folder-songs-row-c"));
 
     expect(mockReplace).toHaveBeenCalledWith({
-      pathname: '/project/[projectId]',
-      params: { projectId: 'c', folderId: 'sunday' },
+      pathname: "/project/[projectId]",
+      params: { projectId: "c", folderId: "sunday" },
     });
   });
 
@@ -409,113 +466,126 @@ describe('ProjectScreen - quick switch between songs in a folder', () => {
   // finishes decoding - real, sometimes multi-second work - which would
   // leave it audibly playing in the meantime. Switching must cut it
   // immediately instead of overlapping with whatever loads next.
-  it('stops the currently playing song immediately when switching to another', async () => {
-    const songs = [song('a', 'Song A'), song('b', 'Song B'), song('c', 'Song C')];
-    renderInFolder('a', songs);
+  it("stops the currently playing song immediately when switching to another", async () => {
+    const songs = [
+      song("a", "Song A"),
+      song("b", "Song B"),
+      song("c", "Song C"),
+    ];
+    renderInFolder("a", songs);
     await waitForMixer();
     audioEngine.play();
 
     openFolderSongs();
-    fireEvent.press(screen.getByTestId('folder-songs-row-c'));
+    fireEvent.press(screen.getByTestId("folder-songs-row-c"));
 
-    expect(audioEngine.getTransportState()).toBe('stopped');
+    expect(audioEngine.getTransportState()).toBe("stopped");
   });
 
-  it('just closes the list, without navigating, when the currently open song is tapped', async () => {
-    const songs = [song('a', 'Song A'), song('b', 'Song B')];
-    renderInFolder('a', songs);
+  it("just closes the list, without navigating, when the currently open song is tapped", async () => {
+    const songs = [song("a", "Song A"), song("b", "Song B")];
+    renderInFolder("a", songs);
     await waitForMixer();
 
     openFolderSongs();
-    fireEvent.press(screen.getByTestId('folder-songs-row-a'));
+    fireEvent.press(screen.getByTestId("folder-songs-row-a"));
 
     expect(mockReplace).not.toHaveBeenCalled();
-    expect(screen.queryByTestId('folder-songs-row-b')).toBeNull();
+    expect(screen.queryByTestId("folder-songs-row-b")).toBeNull();
   });
 
   it('disables "Play next" on the last song in the folder - it does not wrap', async () => {
-    const songs = [song('a', 'Song A'), song('b', 'Song B')];
-    renderInFolder('b', songs);
+    const songs = [song("a", "Song A"), song("b", "Song B")];
+    renderInFolder("b", songs);
     await waitForMixer();
 
     openFolderSongs();
 
-    expect(screen.getByTestId('play-next-song-button').props.accessibilityState.disabled).toBe(true);
+    expect(
+      screen.getByTestId("play-next-song-button").props.accessibilityState
+        .disabled,
+    ).toBe(true);
   });
 
   it('jumps to the next song and closes the list when "Play next" is pressed, marked to autoplay', async () => {
-    const songs = [song('a', 'Song A'), song('b', 'Song B'), song('c', 'Song C')];
-    renderInFolder('a', songs);
+    const songs = [
+      song("a", "Song A"),
+      song("b", "Song B"),
+      song("c", "Song C"),
+    ];
+    renderInFolder("a", songs);
     await waitForMixer();
 
     openFolderSongs();
-    fireEvent.press(screen.getByTestId('play-next-song-button'));
+    fireEvent.press(screen.getByTestId("play-next-song-button"));
 
     expect(mockReplace).toHaveBeenCalledWith({
-      pathname: '/project/[projectId]',
-      params: { projectId: 'b', folderId: 'sunday', autoPlay: '1' },
+      pathname: "/project/[projectId]",
+      params: { projectId: "b", folderId: "sunday", autoPlay: "1" },
     });
-    expect(screen.queryByTestId('folder-songs-row-c')).toBeNull();
+    expect(screen.queryByTestId("folder-songs-row-c")).toBeNull();
   });
 
   // The button's whole point: unlike every other way to land on a song
   // (Library, a plain row tap in this same list), this one carries straight
   // on playing instead of loading and stopping.
-  it('actually starts playback once a song opened this way finishes loading', async () => {
+  it("actually starts playback once a song opened this way finishes loading", async () => {
     (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
       manifest: threeStemProject,
       resolveFile: () => 0,
     });
-    mockParams = { projectId: threeStemProject.id, autoPlay: '1' };
+    mockParams = { projectId: threeStemProject.id, autoPlay: "1" };
     const store = createStore();
     store.dispatch(projectAdded(threeStemProject));
     renderWithStore(<ProjectScreen />, store);
 
     await waitForMixer();
 
-    await waitFor(() => expect(audioEngine.getTransportState()).toBe('playing'));
+    await waitFor(() =>
+      expect(audioEngine.getTransportState()).toBe("playing"),
+    );
   });
 });
 
-describe('ProjectScreen - lyrics', () => {
+describe("ProjectScreen - lyrics", () => {
   function toggleLyrics() {
-    fireEvent.press(screen.getByTestId('lyrics-toggle-button'));
+    fireEvent.press(screen.getByTestId("lyrics-toggle-button"));
   }
 
   function showWaveform() {
-    fireEvent.press(screen.getByTestId('waveform-view-button'));
+    fireEvent.press(screen.getByTestId("waveform-view-button"));
   }
 
-  it('swaps the waveform for the lyrics view and back', async () => {
+  it("swaps the waveform for the lyrics view and back", async () => {
     renderLoaded();
     await waitForMixer();
 
-    expect(screen.getByText('Bass')).toBeTruthy();
-    expect(screen.queryByTestId('edit-lyrics-button')).toBeNull();
+    expect(screen.getByText("Bass")).toBeTruthy();
+    expect(screen.queryByTestId("edit-lyrics-button")).toBeNull();
 
     toggleLyrics();
 
-    expect(screen.queryByText('Bass')).toBeNull();
-    expect(screen.getByTestId('edit-lyrics-button')).toBeTruthy();
+    expect(screen.queryByText("Bass")).toBeNull();
+    expect(screen.getByTestId("edit-lyrics-button")).toBeTruthy();
 
     showWaveform();
 
-    expect(screen.getByText('Bass')).toBeTruthy();
-    expect(screen.queryByTestId('edit-lyrics-button')).toBeNull();
+    expect(screen.getByText("Bass")).toBeTruthy();
+    expect(screen.queryByTestId("edit-lyrics-button")).toBeNull();
   });
 
   // The two are a segmented pair now, not one toggle - pressing the button
   // for the view already showing must be a no-op, not flip back out of it.
-  it('does nothing when the already-active view button is pressed again', async () => {
+  it("does nothing when the already-active view button is pressed again", async () => {
     renderLoaded();
     await waitForMixer();
 
     showWaveform();
-    expect(screen.getByText('Bass')).toBeTruthy();
+    expect(screen.getByText("Bass")).toBeTruthy();
 
     toggleLyrics();
     toggleLyrics();
-    expect(screen.getByTestId('edit-lyrics-button')).toBeTruthy();
+    expect(screen.getByTestId("edit-lyrics-button")).toBeTruthy();
   });
 
   // Global rather than per-screen-mount state: a performer switching songs
@@ -523,12 +593,12 @@ describe('ProjectScreen - lyrics', () => {
   // time, so this simulates "switch songs" as unmounting and remounting
   // ProjectScreen against the same store with a different project, the way
   // navigating Library -> a different song's ProjectScreen actually works.
-  it('keeps showing the lyrics view after switching to a different project', async () => {
+  it("keeps showing the lyrics view after switching to a different project", async () => {
     const secondProject: LibraryProjectEntry = {
       ...threeStemProject,
-      id: 'song-two',
-      title: 'Song Two',
-      sourceDir: 'file:///mock/document/projects/song-two',
+      id: "song-two",
+      title: "Song Two",
+      sourceDir: "file:///mock/document/projects/song-two",
     };
     (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
       manifest: threeStemProject,
@@ -541,7 +611,7 @@ describe('ProjectScreen - lyrics', () => {
     const { unmount } = renderWithStore(<ProjectScreen />, store);
     await waitForMixer();
     toggleLyrics();
-    expect(screen.getByTestId('edit-lyrics-button')).toBeTruthy();
+    expect(screen.getByTestId("edit-lyrics-button")).toBeTruthy();
     unmount();
 
     mockParams = { projectId: secondProject.id };
@@ -552,66 +622,70 @@ describe('ProjectScreen - lyrics', () => {
     renderWithStore(<ProjectScreen />, store);
     await waitForMixer();
 
-    expect(screen.getByTestId('edit-lyrics-button')).toBeTruthy();
+    expect(screen.getByTestId("edit-lyrics-button")).toBeTruthy();
   });
 
-  it('collapses the BPM/Key header pills while viewing lyrics', async () => {
+  it("collapses the BPM/Key header pills while viewing lyrics", async () => {
     renderLoaded();
     await waitForMixer();
-    expect(screen.getByText('120 BPM')).toBeTruthy();
+    expect(screen.getByText("120 BPM")).toBeTruthy();
 
     toggleLyrics();
 
-    expect(screen.queryByText('120 BPM')).toBeNull();
+    expect(screen.queryByText("120 BPM")).toBeNull();
   });
 
   // The header shrinks around the title while viewing lyrics (padding, the
   // BPM/Key pills hidden), but the title itself must not be part of that -
   // it answers the same "which song is this" question in both views, and
   // silently rendering it smaller there previously read as inconsistent.
-  it('keeps the title the same size in both waveform and lyrics view', async () => {
+  it("keeps the title the same size in both waveform and lyrics view", async () => {
     renderLoaded();
     await waitForMixer();
-    const waveformTitleSize = screen.getByText('Sync Test').props.style.fontSize;
+    const waveformTitleSize =
+      screen.getByText("Sync Test").props.style.fontSize;
 
     toggleLyrics();
 
-    const lyricsTitleSize = screen.getByText('Sync Test').props.style.fontSize;
+    const lyricsTitleSize = screen.getByText("Sync Test").props.style.fontSize;
     expect(lyricsTitleSize).toBe(waveformTitleSize);
   });
 
-  it('saves lyrics entered through the drawer', async () => {
+  it("saves lyrics entered through the drawer", async () => {
     renderLoaded();
     await waitForMixer();
     toggleLyrics();
 
-    fireEvent.press(screen.getByTestId('add-lyrics-button'));
-    fireEvent.changeText(screen.getByTestId('lyrics-input'), 'Line one\nLine two');
-    fireEvent.press(screen.getByTestId('save-lyrics-button'));
+    fireEvent.press(screen.getByTestId("add-lyrics-button"));
+    fireEvent.changeText(
+      screen.getByTestId("lyrics-input"),
+      "Line one\nLine two",
+    );
+    fireEvent.press(screen.getByTestId("save-lyrics-button"));
 
     expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
-      lyrics: 'Line one\nLine two',
+      lyrics: "Line one\nLine two",
       lyricsSyncPoints: [],
     });
-    expect(screen.getByText('Line one')).toBeTruthy();
+    expect(screen.getByText("Line one")).toBeTruthy();
   });
 
-  it('tapping a line persists a sync point at the precise playhead', async () => {
-    renderLoaded({ ...threeStemProject, lyrics: 'Line one\nLine two' });
+  it("tapping a line persists a sync point at the precise playhead", async () => {
+    renderLoaded({ ...threeStemProject, lyrics: "Line one\nLine two" });
     await waitForMixer();
     toggleLyrics();
 
-    fireEvent.press(screen.getByTestId('lyrics-line-1'));
+    fireEvent.press(screen.getByTestId("lyrics-line-1"));
 
     expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
       lyricsSyncPoints: [{ lineIndex: 1, timeSec: expect.any(Number) }],
     });
   });
 
-  it('badges the Sync button, and the drawer lists, removes and clears sync points', async () => {
+  it("badges the Sync button, and the drawer lists, removes and clears sync points", async () => {
     renderLoaded({
       ...threeStemProject,
-      lyrics: 'Line one\nLine two',
+      lyrics: "Line one\nLine two",
       lyricsSyncPoints: [
         { lineIndex: 0, timeSec: 1 },
         { lineIndex: 1, timeSec: 5 },
@@ -619,65 +693,65 @@ describe('ProjectScreen - lyrics', () => {
     });
     await waitForMixer();
     toggleLyrics();
-    expect(screen.getByTestId('lyrics-sync-badge')).toBeTruthy();
+    expect(screen.getByTestId("lyrics-sync-badge")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId('open-lyrics-sync-button'));
-    expect(screen.getByTestId('remove-sync-0')).toBeTruthy();
-    expect(screen.getByTestId('remove-sync-1')).toBeTruthy();
+    fireEvent.press(screen.getByTestId("open-lyrics-sync-button"));
+    expect(screen.getByTestId("remove-sync-0")).toBeTruthy();
+    expect(screen.getByTestId("remove-sync-1")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId('remove-sync-0'));
+    fireEvent.press(screen.getByTestId("remove-sync-0"));
     expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
       lyricsSyncPoints: [{ lineIndex: 1, timeSec: 5 }],
     });
 
-    fireEvent.press(screen.getByTestId('clear-all-sync-button'));
+    fireEvent.press(screen.getByTestId("clear-all-sync-button"));
     expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
       lyricsSyncPoints: [],
     });
-    expect(screen.queryByTestId('lyrics-sync-badge')).toBeNull();
+    expect(screen.queryByTestId("lyrics-sync-badge")).toBeNull();
   });
 
   // Neither lyrics text nor a line tap ever touches the audio graph, so
   // unlike bpm/key edits (gated via transportIsRunning()), both should work
   // mid-song - same reasoning as markers ("still allows renaming a stem
   // while playing" above).
-  it('does not block lyrics editing or line-tapping while the transport is playing', async () => {
-    renderLoaded({ ...threeStemProject, lyrics: 'Line one\nLine two' });
+  it("does not block lyrics editing or line-tapping while the transport is playing", async () => {
+    renderLoaded({ ...threeStemProject, lyrics: "Line one\nLine two" });
     await waitForMixer();
     toggleLyrics();
     audioEngine.play();
 
-    fireEvent.press(screen.getByTestId('lyrics-line-0'));
-    fireEvent.press(screen.getByTestId('edit-lyrics-button'));
-    fireEvent.changeText(screen.getByTestId('lyrics-input'), 'Edited live');
-    fireEvent.press(screen.getByTestId('save-lyrics-button'));
+    fireEvent.press(screen.getByTestId("lyrics-line-0"));
+    fireEvent.press(screen.getByTestId("edit-lyrics-button"));
+    fireEvent.changeText(screen.getByTestId("lyrics-input"), "Edited live");
+    fireEvent.press(screen.getByTestId("save-lyrics-button"));
 
     expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
       lyricsSyncPoints: [{ lineIndex: 0, timeSec: expect.any(Number) }],
     });
     expect(patchManifestMock).toHaveBeenCalledWith(threeStemProject.sourceDir, {
-      lyrics: 'Edited live',
+      lyrics: "Edited live",
       lyricsSyncPoints: [],
     });
-    expect(audioEngine.getTransportState()).toBe('playing');
+    expect(audioEngine.getTransportState()).toBe("playing");
     audioEngine.stop();
   });
 
-  it('toggles all-caps and persists it globally, not on the project', async () => {
-    renderLoaded({ ...threeStemProject, lyrics: 'Line one' });
+  it("toggles all-caps and persists it globally, not on the project", async () => {
+    renderLoaded({ ...threeStemProject, lyrics: "Line one" });
     await waitForMixer();
     toggleLyrics();
 
-    fireEvent.press(screen.getByTestId('lyrics-allcaps-toggle'));
+    fireEvent.press(screen.getByTestId("lyrics-allcaps-toggle"));
 
     // A settings write, never a project manifest write.
     expect(patchManifestMock).not.toHaveBeenCalled();
   });
 });
 
-describe('ProjectScreen - editing in place', () => {
+describe("ProjectScreen - editing in place", () => {
   function renderEditable() {
-    mockParams = { projectId: 'my-song' };
+    mockParams = { projectId: "my-song" };
     const store = createStore();
     store.dispatch(projectAdded(filesystemProject));
     return renderWithStore(<ProjectScreen />, store);
@@ -685,7 +759,7 @@ describe('ProjectScreen - editing in place', () => {
 
   // Edit lives behind the mixer drawer now, not in the main header, so a
   // stray tap during a set can't land on it - it takes opening the mixer first.
-  it('keeps Edit out of the header and reachable only through the mixer once loaded', async () => {
+  it("keeps Edit out of the header and reachable only through the mixer once loaded", async () => {
     (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
       manifest: filesystemProject,
       resolveFile: () => 0,
@@ -693,82 +767,84 @@ describe('ProjectScreen - editing in place', () => {
 
     renderEditable();
     await waitForMixer();
-    expect(screen.queryByTestId('edit-button')).toBeNull();
+    expect(screen.queryByTestId("edit-button")).toBeNull();
 
     openMixer();
-    expect(screen.getByTestId('edit-button')).toBeTruthy();
+    expect(screen.getByTestId("edit-button")).toBeTruthy();
   });
 
   // A failed load (e.g. a corrupted stem) is exactly when the user needs to
   // get into the editor to fix it, so Edit can't be trapped behind a mixer
   // drawer that has nothing to show - it has to surface directly.
-  it('offers Edit directly, without a mixer, when the project fails to load', async () => {
+  it("offers Edit directly, without a mixer, when the project fails to load", async () => {
     renderEditable(); // the default mocked getProjectSourceForEntry fails for this fake sourceDir
-    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
 
     expect(screen.getByText(filesystemProject.title)).toBeTruthy();
-    expect(screen.queryByTestId('mixer-menu-button')).toBeNull();
+    expect(screen.queryByTestId("mixer-menu-button")).toBeNull();
   });
 
   // Entering Edit used to always stop audio first - it no longer does, so a
   // song keeps playing while its stems are being tidied up mid-set.
-  it('swaps in the form without stopping playback when Edit is pressed', async () => {
+  it("swaps in the form without stopping playback when Edit is pressed", async () => {
     renderEditable();
-    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
-    const stopSpy = jest.spyOn(audioEngine, 'stop');
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
+    const stopSpy = jest.spyOn(audioEngine, "stop");
 
-    fireEvent.press(screen.getByTestId('edit-button'));
+    fireEvent.press(screen.getByTestId("edit-button"));
 
     expect(stopSpy).not.toHaveBeenCalled();
-    expect(screen.getByTestId('title-input')).toBeTruthy();
-    expect(screen.getByTestId('save-button')).toBeTruthy();
+    expect(screen.getByTestId("title-input")).toBeTruthy();
+    expect(screen.getByTestId("save-button")).toBeTruthy();
   });
 
-  it('saves edited metadata and returns to the mixer', async () => {
+  it("saves edited metadata and returns to the mixer", async () => {
     (updateProjectMetadata as jest.Mock).mockResolvedValue({});
     const { store } = renderEditable();
-    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
 
-    fireEvent.press(screen.getByTestId('edit-button'));
-    fireEvent.changeText(screen.getByTestId('title-input'), 'Renamed');
-    fireEvent.press(screen.getByTestId('save-button'));
+    fireEvent.press(screen.getByTestId("edit-button"));
+    fireEvent.changeText(screen.getByTestId("title-input"), "Renamed");
+    fireEvent.press(screen.getByTestId("save-button"));
 
     await waitFor(() =>
       expect(updateProjectMetadata).toHaveBeenCalledWith(
         filesystemProject.sourceDir,
-        expect.objectContaining({ title: 'Renamed', bpm: 100 })
-      )
+        expect.objectContaining({ title: "Renamed", bpm: 100 }),
+      ),
     );
     await waitFor(() =>
-      expect(store.getState().projects.entities['my-song']?.title).toBe('Renamed')
+      expect(store.getState().projects.entities["my-song"]?.title).toBe(
+        "Renamed",
+      ),
     );
-    await waitFor(() => expect(screen.queryByTestId('title-input')).toBeNull());
+    await waitFor(() => expect(screen.queryByTestId("title-input")).toBeNull());
   });
 
-  it('clearing the tempo saves an undefined bpm, removing the click', async () => {
+  it("clearing the tempo saves an undefined bpm, removing the click", async () => {
     (updateProjectMetadata as jest.Mock).mockResolvedValue({});
     renderEditable();
-    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
 
-    fireEvent.press(screen.getByTestId('edit-button'));
-    fireEvent.changeText(screen.getByTestId('bpm-input'), '');
-    fireEvent.press(screen.getByTestId('save-button'));
+    fireEvent.press(screen.getByTestId("edit-button"));
+    fireEvent.changeText(screen.getByTestId("bpm-input"), "");
+    fireEvent.press(screen.getByTestId("save-button"));
 
     await waitFor(() =>
       expect(updateProjectMetadata).toHaveBeenCalledWith(
         filesystemProject.sourceDir,
-        expect.objectContaining({ bpm: undefined })
-      )
+        expect.objectContaining({ bpm: undefined }),
+      ),
     );
   });
 
   // A cloud-picked file can take many seconds to copy, convert and decode.
   // Without this the screen just sat there blank, so the phase label is the
   // whole point of the feature - assert the user actually sees it.
-  it('shows what the import is doing while it runs', async () => {
+  it("shows what the import is doing while it runs", async () => {
     pickerMock.mockResolvedValue({
       canceled: false,
-      assets: [asset('gtr.wav', 'file:///tmp/gtr.wav')],
+      assets: [asset("gtr.wav", "file:///tmp/gtr.wav")],
     });
 
     let finishImport: () => void = () => {};
@@ -776,147 +852,172 @@ describe('ProjectScreen - editing in place', () => {
       finishImport = resolve;
     });
     (addStemsToProject as jest.Mock).mockImplementation(
-      async (_dir: string, _files: unknown, _ctx: unknown, onProgress?: (u: unknown) => void) => {
-        onProgress?.({ phase: 'copying', name: 'gtr.wav' });
+      async (
+        _dir: string,
+        _files: unknown,
+        _ctx: unknown,
+        onProgress?: (u: unknown) => void,
+      ) => {
+        onProgress?.({ phase: "copying", name: "gtr.wav" });
         await importDone;
         return { ...filesystemProject, tracks: filesystemProject.tracks };
-      }
+      },
     );
 
     renderEditable();
-    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('edit-button'));
-    fireEvent.press(screen.getByTestId('pick-files-button'));
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
+    fireEvent.press(screen.getByTestId("edit-button"));
+    fireEvent.press(screen.getByTestId("pick-files-button"));
 
-    await waitFor(() => expect(screen.getByTestId('import-status')).toBeTruthy());
-    expect(screen.getByText('Copying gtr.wav…')).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getByTestId("import-status")).toBeTruthy(),
+    );
+    expect(screen.getByText("Copying gtr.wav…")).toBeTruthy();
 
     finishImport();
-    await waitFor(() => expect(screen.queryByText('Copying gtr.wav…')).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByText("Copying gtr.wav…")).toBeNull(),
+    );
   });
 
-  it('adds stems through to the project folder', async () => {
+  it("adds stems through to the project folder", async () => {
     (addStemsToProject as jest.Mock).mockResolvedValue({
       ...filesystemProject,
       tracks: [
         ...filesystemProject.tracks,
-        { id: 'gtr', name: 'Gtr', file: 'gtr.wav', gain: 1, bus: 'main' as const },
+        {
+          id: "gtr",
+          name: "Gtr",
+          file: "gtr.wav",
+          gain: 1,
+          bus: "main" as const,
+        },
       ],
     });
     pickerMock.mockResolvedValue({
       canceled: false,
-      assets: [asset('gtr.wav', 'file:///tmp/gtr.wav')],
+      assets: [asset("gtr.wav", "file:///tmp/gtr.wav")],
     });
 
     const { store } = renderEditable();
-    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('edit-button'));
-    fireEvent.press(screen.getByTestId('pick-files-button'));
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
+    fireEvent.press(screen.getByTestId("edit-button"));
+    fireEvent.press(screen.getByTestId("pick-files-button"));
 
     await waitFor(() => expect(addStemsToProject).toHaveBeenCalled());
     await waitFor(() =>
-      expect(store.getState().projects.entities['my-song']?.tracks).toHaveLength(3)
+      expect(
+        store.getState().projects.entities["my-song"]?.tracks,
+      ).toHaveLength(3),
     );
   });
 
-  it('removes a stem through to the project folder', async () => {
+  it("removes a stem through to the project folder", async () => {
     (removeStemFromProject as jest.Mock).mockResolvedValue({
       ...filesystemProject,
-      tracks: filesystemProject.tracks.filter((t) => t.id !== 'bass'),
+      tracks: filesystemProject.tracks.filter((t) => t.id !== "bass"),
     });
 
     const { store } = renderEditable();
-    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('edit-button'));
-    fireEvent.press(screen.getByTestId('remove-stem-bass'));
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
+    fireEvent.press(screen.getByTestId("edit-button"));
+    fireEvent.press(screen.getByTestId("remove-stem-bass"));
 
     await waitFor(() =>
-      expect(removeStemFromProject).toHaveBeenCalledWith(filesystemProject.sourceDir, 'bass')
+      expect(removeStemFromProject).toHaveBeenCalledWith(
+        filesystemProject.sourceDir,
+        "bass",
+      ),
     );
     await waitFor(() =>
-      expect(store.getState().projects.entities['my-song']?.tracks).toHaveLength(1)
+      expect(
+        store.getState().projects.entities["my-song"]?.tracks,
+      ).toHaveLength(1),
     );
   });
 
-  it('renames a stem through to the project folder on blur, not on every keystroke', async () => {
+  it("renames a stem through to the project folder on blur, not on every keystroke", async () => {
     (renameStemInProject as jest.Mock).mockResolvedValue({
       ...filesystemProject,
       tracks: filesystemProject.tracks.map((t) =>
-        t.id === 'bass' ? { ...t, name: 'Low End' } : t
+        t.id === "bass" ? { ...t, name: "Low End" } : t,
       ),
     });
 
     const { store } = renderEditable();
-    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('edit-button'));
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
+    fireEvent.press(screen.getByTestId("edit-button"));
 
-    const bassNameInput = screen.getByTestId('rename-stem-bass');
-    fireEvent.changeText(bassNameInput, 'Low End');
+    const bassNameInput = screen.getByTestId("rename-stem-bass");
+    fireEvent.changeText(bassNameInput, "Low End");
     expect(renameStemInProject).not.toHaveBeenCalled();
 
     // A single-line TextInput's default blurOnSubmit already blurs it on
     // submit, so only `onBlur` is wired - see StemNameField.
-    fireEvent(bassNameInput, 'blur');
+    fireEvent(bassNameInput, "blur");
 
     await waitFor(() =>
       expect(renameStemInProject).toHaveBeenCalledWith(
         filesystemProject.sourceDir,
-        'bass',
-        'Low End'
-      )
+        "bass",
+        "Low End",
+      ),
     );
     expect(renameStemInProject).toHaveBeenCalledTimes(1);
     await waitFor(() =>
       expect(
         store
           .getState()
-          .projects.entities['my-song']?.tracks.find((t) => t.id === 'bass')?.name
-      ).toBe('Low End')
+          .projects.entities["my-song"]?.tracks.find((t) => t.id === "bass")
+          ?.name,
+      ).toBe("Low End"),
     );
   });
 
-  it('ignores an empty rename instead of blanking the stem name', async () => {
+  it("ignores an empty rename instead of blanking the stem name", async () => {
     renderEditable();
-    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('edit-button'));
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
+    fireEvent.press(screen.getByTestId("edit-button"));
 
-    const bassNameInput = screen.getByTestId('rename-stem-bass');
-    fireEvent.changeText(bassNameInput, '   ');
-    fireEvent(bassNameInput, 'blur');
+    const bassNameInput = screen.getByTestId("rename-stem-bass");
+    fireEvent.changeText(bassNameInput, "   ");
+    fireEvent(bassNameInput, "blur");
 
     expect(renameStemInProject).not.toHaveBeenCalled();
-    expect(bassNameInput.props.value).toBe('Bass');
+    expect(bassNameInput.props.value).toBe("Bass");
   });
 
   // The field shows the new name immediately (so typing feels responsive),
   // but that's only a guess until the write actually persists - a failed
   // write must not leave the input drifted from what's really on disk.
-  it('reverts the displayed name if the rename write fails', async () => {
-    (renameStemInProject as jest.Mock).mockRejectedValue(new Error('disk full'));
+  it("reverts the displayed name if the rename write fails", async () => {
+    (renameStemInProject as jest.Mock).mockRejectedValue(
+      new Error("disk full"),
+    );
 
     renderEditable();
-    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('edit-button'));
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
+    fireEvent.press(screen.getByTestId("edit-button"));
 
-    const bassNameInput = screen.getByTestId('rename-stem-bass');
-    fireEvent.changeText(bassNameInput, 'Low End');
-    fireEvent(bassNameInput, 'blur');
+    const bassNameInput = screen.getByTestId("rename-stem-bass");
+    fireEvent.changeText(bassNameInput, "Low End");
+    fireEvent(bassNameInput, "blur");
 
     await waitFor(() => expect(renameStemInProject).toHaveBeenCalled());
-    await waitFor(() => expect(bassNameInput.props.value).toBe('Bass'));
-    expect(screen.getByText('disk full')).toBeTruthy();
+    await waitFor(() => expect(bassNameInput.props.value).toBe("Bass"));
+    expect(screen.getByText("disk full")).toBeTruthy();
   });
 });
 
-describe('ProjectScreen - a brand-new (stemless) project', () => {
+describe("ProjectScreen - a brand-new (stemless) project", () => {
   const draft = {
-    id: 'untitled-abc',
-    title: 'Untitled',
-    key: '',
+    id: "untitled-abc",
+    title: "Untitled",
+    key: "",
     tracks: [],
     sections: [],
-    origin: 'filesystem' as const,
-    sourceDir: 'file:///mock/document/projects/untitled-abc',
+    origin: "filesystem" as const,
+    sourceDir: "file:///mock/document/projects/untitled-abc",
   };
 
   function renderDraft() {
@@ -928,53 +1029,53 @@ describe('ProjectScreen - a brand-new (stemless) project', () => {
 
   // "Creating a project" is just opening one that has no stems yet - there is
   // no separate new-project screen to land on.
-  it('opens straight into the editor, not the mixer', () => {
+  it("opens straight into the editor, not the mixer", () => {
     renderDraft();
 
-    expect(screen.getByTestId('title-input')).toBeTruthy();
-    expect(screen.getByTestId('save-button')).toBeTruthy();
-    expect(screen.queryByTestId('mixer-menu-button')).toBeNull();
+    expect(screen.getByTestId("title-input")).toBeTruthy();
+    expect(screen.getByTestId("save-button")).toBeTruthy();
+    expect(screen.queryByTestId("mixer-menu-button")).toBeNull();
   });
 
-  it('saves metadata on a stemless project without needing stems first', async () => {
+  it("saves metadata on a stemless project without needing stems first", async () => {
     (updateProjectMetadata as jest.Mock).mockResolvedValue({});
     renderDraft();
 
-    fireEvent.changeText(screen.getByTestId('title-input'), 'My New Song');
-    fireEvent.press(screen.getByTestId('save-button'));
+    fireEvent.changeText(screen.getByTestId("title-input"), "My New Song");
+    fireEvent.press(screen.getByTestId("save-button"));
 
     await waitFor(() =>
       expect(updateProjectMetadata).toHaveBeenCalledWith(
         draft.sourceDir,
-        expect.objectContaining({ title: 'My New Song', bpm: undefined })
-      )
+        expect.objectContaining({ title: "My New Song", bpm: undefined }),
+      ),
     );
   });
 
   // Otherwise every abandoned "+ New" would leave an empty project behind,
   // and there is no delete-project UI to clean it up with.
-  it('discards the empty draft when backing out', async () => {
+  it("discards the empty draft when backing out", async () => {
     const { store } = renderDraft();
 
-    fireEvent.press(screen.getByTestId('back-button'));
+    fireEvent.press(screen.getByTestId("back-button"));
 
     await waitFor(() =>
-      expect(deleteProjectDirectory).toHaveBeenCalledWith(draft.sourceDir)
+      expect(deleteProjectDirectory).toHaveBeenCalledWith(draft.sourceDir),
     );
     expect(store.getState().projects.entities[draft.id]).toBeUndefined();
     expect(mockBack).toHaveBeenCalled();
   });
 
-  it('keeps a project that already has stems when backing out', async () => {
-    mockParams = { projectId: 'my-song' };
+  it("keeps a project that already has stems when backing out", async () => {
+    mockParams = { projectId: "my-song" };
     const store = createStore();
     store.dispatch(projectAdded(filesystemProject));
     renderWithStore(<ProjectScreen />, store);
 
-    fireEvent.press(screen.getByTestId('back-button'));
+    fireEvent.press(screen.getByTestId("back-button"));
 
     expect(deleteProjectDirectory).not.toHaveBeenCalled();
-    expect(store.getState().projects.entities['my-song']).toBeTruthy();
+    expect(store.getState().projects.entities["my-song"]).toBeTruthy();
   });
 });
 
@@ -982,21 +1083,21 @@ describe('ProjectScreen - a brand-new (stemless) project', () => {
 // edit path ends in a reload() that calls it - so an edit mid-song cuts the
 // song off and tears the graph down. On stage that is the worst possible
 // failure, so nothing that rebuilds is reachable while the transport runs.
-describe('ProjectScreen - locked while playing', () => {
+describe("ProjectScreen - locked while playing", () => {
   /** A project that both loads (so there's a mixer) and is editable (so Edit exists). */
   function renderEditing() {
     (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
       manifest: filesystemProject,
       resolveFile: () => 0,
     });
-    mockParams = { projectId: 'my-song' };
+    mockParams = { projectId: "my-song" };
     const store = createStore();
     store.dispatch(projectAdded(filesystemProject));
     store.dispatch(
       tracksInitializedForProject({
         projectId: filesystemProject.id,
         tracks: filesystemProject.tracks,
-      })
+      }),
     );
     return renderWithStore(<ProjectScreen />, store);
   }
@@ -1005,188 +1106,192 @@ describe('ProjectScreen - locked while playing', () => {
     audioEngine.stop();
   });
 
-  it('offers no Edit button while the transport is running', async () => {
+  it("offers no Edit button while the transport is running", async () => {
     renderEditing();
     await waitForMixer();
     audioEngine.play();
 
     openMixer();
 
-    expect(screen.queryByTestId('edit-button')).toBeNull();
-    expect(screen.getByTestId('edit-locked-reason')).toBeTruthy();
+    expect(screen.queryByTestId("edit-button")).toBeNull();
+    expect(screen.getByTestId("edit-locked-reason")).toBeTruthy();
   });
 
-  it('offers Edit when the transport is stopped', async () => {
+  it("offers Edit when the transport is stopped", async () => {
     renderEditing();
     await waitForMixer();
 
     openMixer();
 
-    expect(screen.getByTestId('edit-button')).toBeTruthy();
-    expect(screen.queryByTestId('edit-locked-reason')).toBeNull();
+    expect(screen.getByTestId("edit-button")).toBeTruthy();
+    expect(screen.queryByTestId("edit-locked-reason")).toBeNull();
   });
 
   // The buttons are hidden, but a stale tap or a race must not get through
   // either - these are guarded at the handler, which is what actually calls
   // reload().
-  it('refuses to import, remove or save while playing, even if invoked directly', async () => {
+  it("refuses to import, remove or save while playing, even if invoked directly", async () => {
     renderEditing();
     await waitForMixer();
     openMixer();
-    fireEvent.press(screen.getByTestId('edit-button'));
+    fireEvent.press(screen.getByTestId("edit-button"));
 
     audioEngine.play();
     pickerMock.mockResolvedValue({
       canceled: false,
-      assets: [asset('gtr.wav', 'file:///tmp/gtr.wav')],
+      assets: [asset("gtr.wav", "file:///tmp/gtr.wav")],
     });
 
-    fireEvent.press(screen.getByTestId('pick-files-button'));
-    fireEvent.press(screen.getByTestId('remove-stem-bass'));
-    fireEvent.press(screen.getByTestId('save-button'));
+    fireEvent.press(screen.getByTestId("pick-files-button"));
+    fireEvent.press(screen.getByTestId("remove-stem-bass"));
+    fireEvent.press(screen.getByTestId("save-button"));
 
     await waitFor(() =>
-      expect(screen.getByText(/Stop playback first/)).toBeTruthy()
+      expect(screen.getByText(/Stop playback first/)).toBeTruthy(),
     );
     expect(addStemsToProject).not.toHaveBeenCalled();
     expect(removeStemFromProject).not.toHaveBeenCalled();
     expect(updateProjectMetadata).not.toHaveBeenCalled();
     // The whole point: the song kept playing.
-    expect(audioEngine.getTransportState()).toBe('playing');
+    expect(audioEngine.getTransportState()).toBe("playing");
   });
 
   // Renaming only rewrites a label and patches the snapshot - it never
   // reloads, so blocking it would be needless restriction mid-set.
-  it('still allows renaming a stem while playing', async () => {
+  it("still allows renaming a stem while playing", async () => {
     (renameStemInProject as jest.Mock).mockResolvedValue(filesystemProject);
     renderEditing();
     await waitForMixer();
     openMixer();
-    fireEvent.press(screen.getByTestId('edit-button'));
+    fireEvent.press(screen.getByTestId("edit-button"));
 
     audioEngine.play();
-    const field = screen.getByTestId('rename-stem-bass');
-    fireEvent.changeText(field, 'Low End');
-    fireEvent(field, 'blur');
+    const field = screen.getByTestId("rename-stem-bass");
+    fireEvent.changeText(field, "Low End");
+    fireEvent(field, "blur");
 
     await waitFor(() => expect(renameStemInProject).toHaveBeenCalled());
-    expect(audioEngine.getTransportState()).toBe('playing');
+    expect(audioEngine.getTransportState()).toBe("playing");
   });
 });
 
-describe('ProjectScreen - deleting', () => {
+describe("ProjectScreen - deleting", () => {
   async function renderEditableInEditMode() {
-    mockParams = { projectId: 'my-song' };
+    mockParams = { projectId: "my-song" };
     const store = createStore();
     store.dispatch(projectAdded(filesystemProject));
     store.dispatch(
       tracksInitializedForProject({
         projectId: filesystemProject.id,
         tracks: filesystemProject.tracks,
-      })
+      }),
     );
     const rendered = renderWithStore(<ProjectScreen />, store);
     // This fake sourceDir has no real manifest.json behind it, so the load
     // always fails - Edit has to stay reachable straight from the error
     // state (see ProjectScreen's error branch), not behind the mixer drawer.
-    await waitFor(() => expect(screen.getByTestId('edit-button')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('edit-button'));
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
+    fireEvent.press(screen.getByTestId("edit-button"));
     return rendered;
   }
 
   /** Drives Alert.alert by invoking the button matching `label`. */
   function answerAlertWith(label: string) {
-    return jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
-      buttons?.find((button) => button.text === label)?.onPress?.();
-    });
+    return jest
+      .spyOn(Alert, "alert")
+      .mockImplementation((_title, _message, buttons) => {
+        buttons?.find((button) => button.text === label)?.onPress?.();
+      });
   }
 
   // Deleting needs a folder to delete. Nothing produces a sourceDir-less
   // entry now that the bundled demo is gone, but the guard is still there and
   // a project the app can't locate must not offer to destroy it.
-  it('is not offered for a project with no source directory', () => {
-    mockParams = { projectId: 'no-dir' };
+  it("is not offered for a project with no source directory", () => {
+    mockParams = { projectId: "no-dir" };
     const store = createStore();
     store.dispatch(
       projectAdded({
-        id: 'no-dir',
-        title: 'No Directory',
-        key: '',
+        id: "no-dir",
+        title: "No Directory",
+        key: "",
         tracks: [],
         sections: [],
-        origin: 'filesystem',
-      })
+        origin: "filesystem",
+      }),
     );
     renderWithStore(<ProjectScreen />, store);
 
     // A stemless project opens straight into the form - the only view that
     // ever offers delete.
-    expect(screen.getByTestId('save-button')).toBeTruthy();
-    expect(screen.queryByTestId('delete-project-button')).toBeNull();
+    expect(screen.getByTestId("save-button")).toBeTruthy();
+    expect(screen.queryByTestId("delete-project-button")).toBeNull();
   });
 
   // Deleting destroys the audio files, so it must never happen on one tap.
-  it('asks before deleting anything', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  it("asks before deleting anything", async () => {
+    const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
     await renderEditableInEditMode();
 
-    fireEvent.press(screen.getByTestId('delete-project-button'));
+    fireEvent.press(screen.getByTestId("delete-project-button"));
 
     expect(alertSpy).toHaveBeenCalled();
     expect(deleteProjectDirectory).not.toHaveBeenCalled();
     expect(mockBack).not.toHaveBeenCalled();
   });
 
-  it('deletes the folder, the entry and its mixer state once confirmed', async () => {
-    answerAlertWith('Delete');
+  it("deletes the folder, the entry and its mixer state once confirmed", async () => {
+    answerAlertWith("Delete");
     const { store } = await renderEditableInEditMode();
 
-    fireEvent.press(screen.getByTestId('delete-project-button'));
+    fireEvent.press(screen.getByTestId("delete-project-button"));
 
-    expect(deleteProjectDirectory).toHaveBeenCalledWith(filesystemProject.sourceDir);
-    expect(store.getState().projects.entities['my-song']).toBeUndefined();
+    expect(deleteProjectDirectory).toHaveBeenCalledWith(
+      filesystemProject.sourceDir,
+    );
+    expect(store.getState().projects.entities["my-song"]).toBeUndefined();
     expect(
-      store.getState().tracks.entities[trackEntityId('my-song', 'bass')]
+      store.getState().tracks.entities[trackEntityId("my-song", "bass")],
     ).toBeUndefined();
     expect(mockBack).toHaveBeenCalled();
   });
 
-  it('leaves everything alone when the confirmation is dismissed', async () => {
-    answerAlertWith('Cancel');
+  it("leaves everything alone when the confirmation is dismissed", async () => {
+    answerAlertWith("Cancel");
     const { store } = await renderEditableInEditMode();
 
-    fireEvent.press(screen.getByTestId('delete-project-button'));
+    fireEvent.press(screen.getByTestId("delete-project-button"));
 
     expect(deleteProjectDirectory).not.toHaveBeenCalled();
-    expect(store.getState().projects.entities['my-song']).toBeTruthy();
+    expect(store.getState().projects.entities["my-song"]).toBeTruthy();
     expect(mockBack).not.toHaveBeenCalled();
   });
 
-  it('keeps the project if deleting the folder fails', async () => {
-    answerAlertWith('Delete');
+  it("keeps the project if deleting the folder fails", async () => {
+    answerAlertWith("Delete");
     (deleteProjectDirectory as jest.Mock).mockImplementationOnce(() => {
-      throw new Error('disk busy');
+      throw new Error("disk busy");
     });
     const { store } = await renderEditableInEditMode();
 
-    fireEvent.press(screen.getByTestId('delete-project-button'));
+    fireEvent.press(screen.getByTestId("delete-project-button"));
 
-    expect(store.getState().projects.entities['my-song']).toBeTruthy();
+    expect(store.getState().projects.entities["my-song"]).toBeTruthy();
     expect(mockBack).not.toHaveBeenCalled();
-    expect(screen.getByText('disk busy')).toBeTruthy();
+    expect(screen.getByText("disk busy")).toBeTruthy();
   });
 
   // Unlike the fake-sourceDir cases above (which never actually load), this
   // one loads for real, so it's the one that exercises nowPlayingStore's
   // closeIfCurrent - deleting the project that's actually loaded/playing
   // must stop it, not leave it playing under a deleted project.
-  it('stops the engine when deleting the project that is currently loaded and playing', async () => {
-    answerAlertWith('Delete');
+  it("stops the engine when deleting the project that is currently loaded and playing", async () => {
+    answerAlertWith("Delete");
     (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
       manifest: filesystemProject,
       resolveFile: () => 0,
     });
-    mockParams = { projectId: 'my-song' };
+    mockParams = { projectId: "my-song" };
     const store = createStore();
     store.dispatch(projectAdded(filesystemProject));
     renderWithStore(<ProjectScreen />, store);
@@ -1195,12 +1300,14 @@ describe('ProjectScreen - deleting', () => {
     // open it first and start playback after - what's under test is that
     // deleting a *playing* project stops the engine, not how Edit was reached.
     openMixer();
-    fireEvent.press(screen.getByTestId('edit-button'));
+    fireEvent.press(screen.getByTestId("edit-button"));
     audioEngine.play();
 
-    fireEvent.press(screen.getByTestId('delete-project-button'));
+    fireEvent.press(screen.getByTestId("delete-project-button"));
 
-    expect(audioEngine.getTransportState()).toBe('stopped');
-    expect(deleteProjectDirectory).toHaveBeenCalledWith(filesystemProject.sourceDir);
+    expect(audioEngine.getTransportState()).toBe("stopped");
+    expect(deleteProjectDirectory).toHaveBeenCalledWith(
+      filesystemProject.sourceDir,
+    );
   });
 });

@@ -5,11 +5,15 @@ import {
   type AudioBufferSourceNode,
   type GainNode,
   type StereoPannerNode,
-} from 'react-native-audio-api';
-import type { Bus } from '@/types/project';
-import type { DecodedProject } from '@/storage/types';
-import { generateClickBuffer } from './clickTrack';
-import type { EngineTransportState, MonitorMode, TrackRuntimeState } from './types';
+} from "react-native-audio-api";
+import type { Bus } from "@/types/project";
+import type { DecodedProject } from "@/storage/types";
+import { generateClickBuffer } from "./clickTrack";
+import type {
+  EngineTransportState,
+  MonitorMode,
+  TrackRuntimeState,
+} from "./types";
 
 /**
  * Lookahead for starting real playback. Also reused for priming (see
@@ -68,7 +72,7 @@ export class AudioEngine {
   private readonly ctx: AudioContext;
   private readonly cueBus: BusNodes;
   private readonly mainBus: BusNodes;
-  private monitorMode: MonitorMode = 'split';
+  private monitorMode: MonitorMode = "split";
   private clickEnabled = true;
 
   private manifestTrackIds: string[] = [];
@@ -81,7 +85,7 @@ export class AudioEngine {
   private clickGain: GainNode | null = null;
   private clickSource: AudioBufferSourceNode | null = null;
 
-  private transportState: EngineTransportState = 'stopped';
+  private transportState: EngineTransportState = "stopped";
   private scheduledAtContextTime = 0;
   private playheadOffsetSec = 0;
   private pausedAtSec = 0;
@@ -96,7 +100,7 @@ export class AudioEngine {
 
   /** Activates the iOS/Android audio session for background playback. Call once at app startup. */
   async prepare(): Promise<void> {
-    AudioManager.setAudioSessionOptions({ iosCategory: 'playback' });
+    AudioManager.setAudioSessionOptions({ iosCategory: "playback" });
     await AudioManager.setAudioSessionActivity(true);
   }
 
@@ -113,7 +117,7 @@ export class AudioEngine {
   }
 
   private applyMonitorMode(): void {
-    const [cuePan, mainPan] = this.monitorMode === 'split' ? [-1, 1] : [0, 0];
+    const [cuePan, mainPan] = this.monitorMode === "split" ? [-1, 1] : [0, 0];
     this.cueBus.panner.pan.value = cuePan;
     this.mainBus.panner.pan.value = mainPan;
   }
@@ -155,7 +159,9 @@ export class AudioEngine {
   }
 
   /** Subscribe to transport state changes (including natural end-of-playback). Returns an unsubscribe function. */
-  onTransportStateChange(listener: (state: EngineTransportState) => void): () => void {
+  onTransportStateChange(
+    listener: (state: EngineTransportState) => void,
+  ): () => void {
     this.transportListeners.add(listener);
     return () => this.transportListeners.delete(listener);
   }
@@ -170,7 +176,10 @@ export class AudioEngine {
    * seeds volume/mute/solo/bus from the store's committed state (falls back
    * to the manifest's defaults for a never-opened project).
    */
-  loadProject(decoded: DecodedProject, initialTrackStates?: Record<string, TrackRuntimeState>): void {
+  loadProject(
+    decoded: DecodedProject,
+    initialTrackStates?: Record<string, TrackRuntimeState>,
+  ): void {
     this.stop();
     this.disposeTracks();
 
@@ -180,7 +189,9 @@ export class AudioEngine {
       const buffer = decoded.trackBuffers[trackManifest.id];
       const gain = this.ctx.createGain();
 
-      const state: TrackRuntimeState = initialTrackStates?.[trackManifest.id] ?? {
+      const state: TrackRuntimeState = initialTrackStates?.[
+        trackManifest.id
+      ] ?? {
         id: trackManifest.id,
         bus: trackManifest.bus,
         volume: trackManifest.gain,
@@ -218,7 +229,7 @@ export class AudioEngine {
     this.playheadOffsetSec = 0;
     this.pausedAtSec = 0;
     this.primeSources();
-    this.setTransportState('stopped');
+    this.setTransportState("stopped");
   }
 
   /**
@@ -307,36 +318,39 @@ export class AudioEngine {
   // --- Transport -----------------------------------------------------------
 
   play(): void {
-    if (this.transportState === 'playing' || this.tracks.size === 0) return;
-    const offset = this.transportState === 'paused' ? this.pausedAtSec : this.playheadOffsetSec;
+    if (this.transportState === "playing" || this.tracks.size === 0) return;
+    const offset =
+      this.transportState === "paused"
+        ? this.pausedAtSec
+        : this.playheadOffsetSec;
     this.scheduleSources(offset);
   }
 
   pause(): void {
-    if (this.transportState !== 'playing') return;
+    if (this.transportState !== "playing") return;
     this.pausedAtSec = this.getPlayhead();
     this.stopSources();
-    this.setTransportState('paused');
+    this.setTransportState("paused");
   }
 
   stop(): void {
     this.stopSources();
     this.playheadOffsetSec = 0;
     this.pausedAtSec = 0;
-    this.setTransportState('stopped');
+    this.setTransportState("stopped");
   }
 
   seek(toSec: number): void {
     if (this.tracks.size === 0) return;
     const clamped = Math.max(0, toSec);
-    const wasPlaying = this.transportState === 'playing';
+    const wasPlaying = this.transportState === "playing";
     this.stopSources();
     if (wasPlaying) {
       this.scheduleSources(clamped);
     } else {
       this.pausedAtSec = clamped;
       this.playheadOffsetSec = clamped;
-      this.setTransportState('paused');
+      this.setTransportState("paused");
     }
   }
 
@@ -346,11 +360,14 @@ export class AudioEngine {
 
   /** Playhead in seconds, driven straight off the context clock (not the store - see AGENTS.md). */
   getPlayhead(): number {
-    if (this.transportState === 'playing') {
-      const elapsedSinceScheduled = Math.max(0, this.ctx.currentTime - this.scheduledAtContextTime);
+    if (this.transportState === "playing") {
+      const elapsedSinceScheduled = Math.max(
+        0,
+        this.ctx.currentTime - this.scheduledAtContextTime,
+      );
       return this.playheadOffsetSec + elapsedSinceScheduled;
     }
-    if (this.transportState === 'paused') return this.pausedAtSec;
+    if (this.transportState === "paused") return this.pausedAtSec;
     return 0;
   }
 
@@ -378,7 +395,7 @@ export class AudioEngine {
 
     this.scheduledAtContextTime = startAt;
     this.playheadOffsetSec = offsetSec;
-    this.setTransportState('playing');
+    this.setTransportState("playing");
   }
 
   /**
@@ -408,12 +425,12 @@ export class AudioEngine {
    * from 'playing' synchronously, before this async native event arrives).
    */
   private handlePlaybackEndedNaturally(): void {
-    if (this.transportState !== 'playing') return;
+    if (this.transportState !== "playing") return;
     for (const node of this.tracks.values()) node.source = null;
     this.clickSource = null;
     this.playheadOffsetSec = 0;
     this.pausedAtSec = 0;
-    this.setTransportState('stopped');
+    this.setTransportState("stopped");
   }
 
   // --- Per-track controls ----------------------------------------------------
@@ -453,8 +470,10 @@ export class AudioEngine {
     const state = this.trackState.get(trackId);
     if (!node || !state) return;
     node.gain.disconnect();
-    if (state.bus === 'main' || state.bus === 'both') node.gain.connect(this.mainBus.gain);
-    if (state.bus === 'cue' || state.bus === 'both') node.gain.connect(this.cueBus.gain);
+    if (state.bus === "main" || state.bus === "both")
+      node.gain.connect(this.mainBus.gain);
+    if (state.bus === "cue" || state.bus === "both")
+      node.gain.connect(this.cueBus.gain);
   }
 
   private applyEffectiveGain(trackId: string): void {
@@ -462,7 +481,9 @@ export class AudioEngine {
     const state = this.trackState.get(trackId);
     if (!node || !state) return;
 
-    const anySoloed = Array.from(this.trackState.values()).some((t) => t.soloed);
+    const anySoloed = Array.from(this.trackState.values()).some(
+      (t) => t.soloed,
+    );
     const effectivelyMuted = state.muted || (anySoloed && !state.soloed);
     const target = effectivelyMuted ? 0 : state.volume;
 

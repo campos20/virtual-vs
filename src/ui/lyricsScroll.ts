@@ -1,4 +1,4 @@
-import type { LyricsSyncPoint } from '@/types/project';
+import type { LyricsSyncPoint } from "@/types/project";
 
 /** Default/min/max/step for the lyrics view's user-adjustable font size - a device/performer preference, not a per-project one, see settingsSlice. */
 export const DEFAULT_LYRICS_FONT_SIZE_PT = 18;
@@ -7,7 +7,10 @@ export const LYRICS_FONT_SIZE_MAX_PT = 30;
 export const LYRICS_FONT_SIZE_STEP_PT = 2;
 
 export function clampLyricsFontSize(pt: number): number {
-  return Math.min(LYRICS_FONT_SIZE_MAX_PT, Math.max(LYRICS_FONT_SIZE_MIN_PT, pt));
+  return Math.min(
+    LYRICS_FONT_SIZE_MAX_PT,
+    Math.max(LYRICS_FONT_SIZE_MIN_PT, pt),
+  );
 }
 
 export interface LyricsScrollAnchor {
@@ -31,7 +34,7 @@ export function buildLyricsScrollAnchors(
   syncPoints: LyricsSyncPoint[],
   lineOffsets: Record<number, number>,
   durationSec: number,
-  maxScrollY: number
+  maxScrollY: number,
 ): LyricsScrollAnchor[] {
   const tapped = syncPoints
     .filter((p) => lineOffsets[p.lineIndex] !== undefined)
@@ -40,9 +43,11 @@ export function buildLyricsScrollAnchors(
       scrollY: Math.max(0, Math.min(maxScrollY, lineOffsets[p.lineIndex])),
     }));
 
-  return [{ timeSec: 0, scrollY: 0 }, ...tapped, { timeSec: durationSec, scrollY: maxScrollY }].sort(
-    (a, b) => a.timeSec - b.timeSec
-  );
+  return [
+    { timeSec: 0, scrollY: 0 },
+    ...tapped,
+    { timeSec: durationSec, scrollY: maxScrollY },
+  ].sort((a, b) => a.timeSec - b.timeSec);
 }
 
 /**
@@ -51,7 +56,10 @@ export function buildLyricsScrollAnchors(
  * (via `buildLyricsScrollAnchors`'s virtual boundary anchors) a plain
  * duration-proportional scroll when there are no taps at all.
  */
-export function computeLyricsScrollY(playheadSec: number, anchors: LyricsScrollAnchor[]): number {
+export function computeLyricsScrollY(
+  playheadSec: number,
+  anchors: LyricsScrollAnchor[],
+): number {
   if (anchors.length === 0) return 0;
   if (playheadSec <= anchors[0].timeSec) return anchors[0].scrollY;
 
@@ -77,7 +85,10 @@ export function computeLyricsScrollY(playheadSec: number, anchors: LyricsScrollA
  * furthest-along tapped line at or before `playheadSec`, or `0` before the
  * first tap. Doubles as immediate visual confirmation that a tap registered.
  */
-export function activeLyricsLineIndex(playheadSec: number, syncPoints: LyricsSyncPoint[]): number {
+export function activeLyricsLineIndex(
+  playheadSec: number,
+  syncPoints: LyricsSyncPoint[],
+): number {
   let active = 0;
   let bestTime = -Infinity;
   for (const point of syncPoints) {

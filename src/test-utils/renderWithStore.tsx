@@ -1,8 +1,8 @@
-import { render } from '@testing-library/react-native';
-import type { ReactElement } from 'react';
-import { Provider } from 'react-redux';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { createStore } from '@/store';
+import { render } from "@testing-library/react-native";
+import type { ReactElement } from "react";
+import { Provider } from "react-redux";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { createStore } from "@/store";
 
 export type TestStore = ReturnType<typeof createStore>;
 
@@ -16,7 +16,10 @@ const TEST_SAFE_AREA_METRICS = {
 };
 
 /** Renders `ui` under the same providers `_layout.tsx` wraps the real app in, against a fresh store. */
-export function renderWithStore(ui: ReactElement, store: TestStore = createStore()) {
+export function renderWithStore(
+  ui: ReactElement,
+  store: TestStore = createStore(),
+) {
   return {
     store,
     ...render(

@@ -1,13 +1,17 @@
-import type { File } from 'expo-file-system';
-import { importBundle, type ImportedBundle } from '@/storage/bundle';
-import { writeSetlist } from '@/storage/setlistLibrary';
-import type { ProgressReporter } from '@/storage/progress';
-import type { SetlistManifest } from '@/types/setlist';
-import { folderKey } from '@/ui/libraryTree';
-import type { AppDispatch, RootState } from './index';
-import { persistLibraryOrder } from './persistFolders';
-import { projectAdded } from './projectsSlice';
-import { setlistAdded, setlistUpdated, setlistsSelectors } from './setlistsSlice';
+import type { File } from "expo-file-system";
+import { importBundle, type ImportedBundle } from "@/storage/bundle";
+import { writeSetlist } from "@/storage/setlistLibrary";
+import type { ProgressReporter } from "@/storage/progress";
+import type { SetlistManifest } from "@/types/setlist";
+import { folderKey } from "@/ui/libraryTree";
+import type { AppDispatch, RootState } from "./index";
+import { persistLibraryOrder } from "./persistFolders";
+import { projectAdded } from "./projectsSlice";
+import {
+  setlistAdded,
+  setlistUpdated,
+  setlistsSelectors,
+} from "./setlistsSlice";
 
 /**
  * Unpacks a `.vvs` bundle and folds it into the library.
@@ -16,12 +20,19 @@ import { setlistAdded, setlistUpdated, setlistsSelectors } from './setlistsSlice
  * is told what landed - so a failed or half-finished import can't leave the
  * Library showing projects whose audio isn't there.
  */
-export function importBundleIntoLibrary(file: File, onProgress?: ProgressReporter) {
-  return async (dispatch: AppDispatch, getState: () => RootState): Promise<ImportedBundle> => {
+export function importBundleIntoLibrary(
+  file: File,
+  onProgress?: ProgressReporter,
+) {
+  return async (
+    dispatch: AppDispatch,
+    getState: () => RootState,
+  ): Promise<ImportedBundle> => {
     const result = await importBundle(file, onProgress);
 
     for (const project of result.projects) dispatch(projectAdded(project));
-    for (const folder of result.folders) mergeFolder(dispatch, getState, folder);
+    for (const folder of result.folders)
+      mergeFolder(dispatch, getState, folder);
 
     return result;
   };
@@ -38,9 +49,12 @@ export function importBundleIntoLibrary(file: File, onProgress?: ProgressReporte
 function mergeFolder(
   dispatch: AppDispatch,
   getState: () => RootState,
-  incoming: SetlistManifest
+  incoming: SetlistManifest,
 ): void {
-  const existing = setlistsSelectors.selectById(getState().setlists, incoming.id);
+  const existing = setlistsSelectors.selectById(
+    getState().setlists,
+    incoming.id,
+  );
 
   if (!existing) {
     try {
@@ -50,11 +64,19 @@ function mergeFolder(
       return;
     }
     dispatch(setlistAdded(incoming));
-    dispatch(persistLibraryOrder([folderKey(incoming.id), ...getState().settings.libraryOrder]));
+    dispatch(
+      persistLibraryOrder([
+        folderKey(incoming.id),
+        ...getState().settings.libraryOrder,
+      ]),
+    );
     return;
   }
 
-  const songs = [...existing.songs, ...incoming.songs.filter((id) => !existing.songs.includes(id))];
+  const songs = [
+    ...existing.songs,
+    ...incoming.songs.filter((id) => !existing.songs.includes(id)),
+  ];
   if (songs.length === existing.songs.length) return;
 
   const merged: SetlistManifest = { ...existing, songs };

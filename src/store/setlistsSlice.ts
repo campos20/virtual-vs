@@ -1,5 +1,9 @@
-import { createEntityAdapter, createSlice, type PayloadAction } from '@reduxjs/toolkit';
-import type { SetlistManifest } from '@/types/setlist';
+import {
+  createEntityAdapter,
+  createSlice,
+  type PayloadAction,
+} from "@reduxjs/toolkit";
+import type { SetlistManifest } from "@/types/setlist";
 
 /**
  * A setlist *is* a Library folder - see types/setlist.ts. The entity adds
@@ -15,7 +19,7 @@ export type SetlistEntity = SetlistManifest;
 const setlistsAdapter = createEntityAdapter<SetlistEntity>();
 
 const setlistsSlice = createSlice({
-  name: 'setlists',
+  name: "setlists",
   // Mirrors projectsSlice: `hydrated` tells "no folders on disk" apart from
   // "haven't read the disk yet", so the Library can wait rather than briefly
   // rendering every song as loose.
@@ -31,9 +35,12 @@ const setlistsSlice = createSlice({
     setlistRemoved: setlistsAdapter.removeOne,
     setlistUpdated(
       state,
-      action: PayloadAction<{ id: string; changes: Partial<SetlistEntity> }>
+      action: PayloadAction<{ id: string; changes: Partial<SetlistEntity> }>,
     ) {
-      setlistsAdapter.updateOne(state, { id: action.payload.id, changes: action.payload.changes });
+      setlistsAdapter.updateOne(state, {
+        id: action.payload.id,
+        changes: action.payload.changes,
+      });
     },
   },
 });

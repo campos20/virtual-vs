@@ -1,8 +1,8 @@
-import { Directory } from 'expo-file-system';
-import type { LibraryProjectEntry } from '@/store/projectsSlice';
-import { readAppSettings } from './appSettings';
-import { ensureProjectsDirectoryExists, projectsDirectory } from './paths';
-import { readProjectManifest } from './projectLoader';
+import { Directory } from "expo-file-system";
+import type { LibraryProjectEntry } from "@/store/projectsSlice";
+import { readAppSettings } from "./appSettings";
+import { ensureProjectsDirectoryExists, projectsDirectory } from "./paths";
+import { readProjectManifest } from "./projectLoader";
 
 /**
  * Rebuilds the project library by reading the projects directory.
@@ -27,14 +27,16 @@ export async function listFilesystemProjects(): Promise<LibraryProjectEntry[]> {
       try {
         const manifest = await readProjectManifest(directory);
         if (!manifest?.id || !Array.isArray(manifest.tracks)) return null;
-        return { ...manifest, origin: 'filesystem', sourceDir: directory.uri };
+        return { ...manifest, origin: "filesystem", sourceDir: directory.uri };
       } catch {
         return null;
       }
-    })
+    }),
   );
 
-  return entries.filter((entry): entry is LibraryProjectEntry => entry !== null);
+  return entries.filter(
+    (entry): entry is LibraryProjectEntry => entry !== null,
+  );
 }
 
 /**
@@ -46,12 +48,14 @@ export async function listFilesystemProjects(): Promise<LibraryProjectEntry[]> {
  */
 export function applyPersistedOrder(
   entries: LibraryProjectEntry[],
-  order: string[] | undefined
+  order: string[] | undefined,
 ): LibraryProjectEntry[] {
   if (!order || order.length === 0) return entries;
 
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
-  const ordered = order.map((id) => byId.get(id)).filter((entry): entry is LibraryProjectEntry => entry !== undefined);
+  const ordered = order
+    .map((id) => byId.get(id))
+    .filter((entry): entry is LibraryProjectEntry => entry !== undefined);
   const orderedIds = new Set(ordered.map((entry) => entry.id));
   const remaining = entries.filter((entry) => !orderedIds.has(entry.id));
 
@@ -60,5 +64,8 @@ export function applyPersistedOrder(
 
 /** Everything found on disk, in the order the Library shows it. */
 export async function loadProjectLibrary(): Promise<LibraryProjectEntry[]> {
-  return applyPersistedOrder(await listFilesystemProjects(), readAppSettings().projectOrder);
+  return applyPersistedOrder(
+    await listFilesystemProjects(),
+    readAppSettings().projectOrder,
+  );
 }

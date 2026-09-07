@@ -1,7 +1,7 @@
-import { Directory, File, FileMode, Paths } from 'expo-file-system';
-import type { LibraryProjectEntry } from '@/store/projectsSlice';
-import type { ProjectManifest } from '@/types/project';
-import type { SetlistManifest } from '@/types/setlist';
+import { Directory, File, FileMode, Paths } from "expo-file-system";
+import type { LibraryProjectEntry } from "@/store/projectsSlice";
+import type { ProjectManifest } from "@/types/project";
+import type { SetlistManifest } from "@/types/setlist";
 import {
   BUNDLE_EXTENSION,
   BUNDLE_PREAMBLE_BYTES,
@@ -14,9 +14,9 @@ import {
   encodeBundleHeader,
   type BundleHeader,
   type BundledProject,
-} from './bundleFormat';
-import { ensureProjectsDirectoryExists, projectDirectory } from './paths';
-import { report, type ProgressReporter } from './progress';
+} from "./bundleFormat";
+import { ensureProjectsDirectoryExists, projectDirectory } from "./paths";
+import { report, type ProgressReporter } from "./progress";
 
 /**
  * Reading and writing `.vvs` bundles - see bundleFormat.ts for the container.
@@ -57,8 +57,8 @@ export function bundleFileName(label: string): string {
     label
       .toLowerCase()
       .trim()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'virtual-vs';
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "virtual-vs";
   return `${slug}.${BUNDLE_EXTENSION}`;
 }
 
@@ -72,7 +72,9 @@ function projectFileNames(manifest: ProjectManifest): string[] {
 
 function requireSourceDir(project: LibraryProjectEntry): Directory {
   if (!project.sourceDir) {
-    throw new BundleFormatError(`"${project.title}" has no folder on this device to export.`);
+    throw new BundleFormatError(
+      `"${project.title}" has no folder on this device to export.`,
+    );
   }
   return new Directory(project.sourceDir);
 }
@@ -82,13 +84,18 @@ function requireSourceDir(project: LibraryProjectEntry): Directory {
  * anything - so the UI can show a size before starting a multi-minute write
  * onto a phone that may not have room for it.
  */
-export function planBundle(contents: BundleContents, appVersion?: string): BundleHeader {
+export function planBundle(
+  contents: BundleContents,
+  appVersion?: string,
+): BundleHeader {
   const projects: BundledProject[] = contents.projects.map((project) => {
     const directory = requireSourceDir(project);
     const files = projectFileNames(project).map((name) => {
       const file = new File(directory, name);
       if (!file.exists) {
-        throw new BundleFormatError(`"${project.title}" is missing its file ${name}.`);
+        throw new BundleFormatError(
+          `"${project.title}" is missing its file ${name}.`,
+        );
       }
       return { name, size: file.size ?? 0 };
     });
@@ -99,7 +106,7 @@ export function planBundle(contents: BundleContents, appVersion?: string): Bundl
   });
 
   return {
-    format: 'virtual-vs-bundle',
+    format: "virtual-vs-bundle",
     version: BUNDLE_VERSION,
     app: appVersion,
     folders: contents.folders,
@@ -120,7 +127,7 @@ async function streamBytes(
   from: { readBytes(length: number): Uint8Array },
   to: { writeBytes(bytes: Uint8Array): void },
   size: number,
-  onChunk?: (copied: number) => void
+  onChunk?: (copied: number) => void,
 ): Promise<void> {
   let copied = 0;
   let sinceYield = 0;
@@ -128,7 +135,9 @@ async function streamBytes(
   while (copied < size) {
     const chunk = from.readBytes(Math.min(CHUNK_BYTES, size - copied));
     if (chunk.length === 0) {
-      throw new BundleFormatError('The file ended sooner than its index said it would.');
+      throw new BundleFormatError(
+        "The file ended sooner than its index said it would.",
+      );
     }
     to.writeBytes(chunk);
     copied += chunk.length;
@@ -154,7 +163,7 @@ export async function writeBundle(
   contents: BundleContents,
   destination: File,
   onProgress?: ProgressReporter,
-  appVersion?: string
+  appVersion?: string,
 ): Promise<File> {
   const header = planBundle(contents, appVersion);
 
@@ -165,7 +174,10 @@ export async function writeBundle(
   try {
     out.writeBytes(encodeBundleHeader(header));
 
-    const total = header.projects.reduce((sum, project) => sum + project.files.length, 0);
+    const total = header.projects.reduce(
+      (sum, project) => sum + project.files.length,
+      0,
+    );
     let done = 0;
 
     for (const [index, project] of header.projects.entries()) {
@@ -174,7 +186,7 @@ export async function writeBundle(
       for (const file of project.files) {
         done += 1;
         await report(onProgress, {
-          phase: 'exporting',
+          phase: "exporting",
           name: file.name,
           current: done,
           total,
@@ -200,7 +212,7 @@ export async function writeBundleToCache(
   contents: BundleContents,
   label: string,
   onProgress?: ProgressReporter,
-  appVersion?: string
+  appVersion?: string,
 ): Promise<File> {
   const destination = new File(Paths.cache, bundleFileName(label));
   return writeBundle(contents, destination, onProgress, appVersion);
@@ -210,10 +222,15 @@ export async function writeBundleToCache(
  * Reads a bundle's index without touching its payload - enough to show what
  * is inside before committing to importing it.
  */
-export function readBundleHeader(file: File): { header: BundleHeader; payloadOffset: number } {
+export function readBundleHeader(file: File): {
+  header: BundleHeader;
+  payloadOffset: number;
+} {
   const handle = file.open(FileMode.ReadOnly);
   try {
-    const { headerLength } = decodeBundlePreamble(handle.readBytes(BUNDLE_PREAMBLE_BYTES));
+    const { headerLength } = decodeBundlePreamble(
+      handle.readBytes(BUNDLE_PREAMBLE_BYTES),
+    );
 
     // decodeBundlePreamble already refuses an absurd length (MAX_HEADER_BYTES),
     // but the file itself is the tighter bound: a header can never run past the
@@ -222,7 +239,9 @@ export function readBundleHeader(file: File): { header: BundleHeader; payloadOff
     // than after.
     const fileSize = file.size ?? 0;
     if (fileSize > 0 && BUNDLE_PREAMBLE_BYTES + headerLength > fileSize) {
-      throw new BundleFormatError("This bundle's index is damaged and can't be read.");
+      throw new BundleFormatError(
+        "This bundle's index is damaged and can't be read.",
+      );
     }
 
     const header = decodeBundleHeader(handle.readBytes(headerLength));
@@ -243,7 +262,7 @@ export function readBundleHeader(file: File): { header: BundleHeader; payloadOff
  * attempt would skip it too.
  */
 function holdsVisibleProject(directory: Directory): boolean {
-  const manifest = new File(directory, 'manifest.json');
+  const manifest = new File(directory, "manifest.json");
   if (!manifest.exists) return false;
   try {
     JSON.parse(manifest.textSync());
@@ -268,7 +287,7 @@ function holdsVisibleProject(directory: Directory): boolean {
  */
 export async function importBundle(
   file: File,
-  onProgress?: ProgressReporter
+  onProgress?: ProgressReporter,
 ): Promise<ImportedBundle> {
   ensureProjectsDirectoryExists();
 
@@ -278,7 +297,7 @@ export async function importBundle(
   // hundreds of stems, and a find() inside the loop makes unpacking quadratic
   // in that count. NUL can't occur in either half, so the key is unambiguous.
   const entriesByFile = new Map(
-    entries.map((entry) => [`${entry.projectId}\u0000${entry.name}`, entry])
+    entries.map((entry) => [`${entry.projectId}\u0000${entry.name}`, entry]),
   );
 
   const imported: LibraryProjectEntry[] = [];
@@ -307,7 +326,7 @@ export async function importBundle(
         const entry = entriesByFile.get(`${id}\u0000${file.name}`)!;
         done += 1;
         await report(onProgress, {
-          phase: 'importing',
+          phase: "importing",
           name: file.name,
           current: done,
           total: entries.length,
@@ -324,8 +343,14 @@ export async function importBundle(
         }
       }
 
-      new File(directory, 'manifest.json').write(JSON.stringify(project.manifest, null, 2));
-      imported.push({ ...project.manifest, origin: 'filesystem', sourceDir: directory.uri });
+      new File(directory, "manifest.json").write(
+        JSON.stringify(project.manifest, null, 2),
+      );
+      imported.push({
+        ...project.manifest,
+        origin: "filesystem",
+        sourceDir: directory.uri,
+      });
     }
   } finally {
     handle.close();

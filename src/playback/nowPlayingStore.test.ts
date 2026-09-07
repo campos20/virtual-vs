@@ -1,10 +1,10 @@
-import { audioEngine } from '@/engine';
-import { decodeProjectAudio, getProjectSourceForEntry } from '@/storage';
-import type { LibraryProjectEntry } from '@/store/projectsSlice';
-import { nowPlayingStore } from './nowPlayingStore';
+import { audioEngine } from "@/engine";
+import { decodeProjectAudio, getProjectSourceForEntry } from "@/storage";
+import type { LibraryProjectEntry } from "@/store/projectsSlice";
+import { nowPlayingStore } from "./nowPlayingStore";
 
-jest.mock('@/storage', () => ({
-  ...jest.requireActual('@/storage'),
+jest.mock("@/storage", () => ({
+  ...jest.requireActual("@/storage"),
   getProjectSourceForEntry: jest.fn(),
   decodeProjectAudio: jest.fn(),
 }));
@@ -12,16 +12,19 @@ jest.mock('@/storage', () => ({
 const getSourceMock = getProjectSourceForEntry as jest.Mock;
 const decodeMock = decodeProjectAudio as jest.Mock;
 
-const ENGINE_OPTIONS = { monitorMode: 'split' as const, clickEnabled: true };
+const ENGINE_OPTIONS = { monitorMode: "split" as const, clickEnabled: true };
 
-function entry(id: string, overrides: Partial<LibraryProjectEntry> = {}): LibraryProjectEntry {
+function entry(
+  id: string,
+  overrides: Partial<LibraryProjectEntry> = {},
+): LibraryProjectEntry {
   return {
     id,
     title: id,
-    key: '',
-    tracks: [{ id: 'a', name: 'A', file: 'a.wav', gain: 1, bus: 'main' }],
+    key: "",
+    tracks: [{ id: "a", name: "A", file: "a.wav", gain: 1, bus: "main" }],
     sections: [],
-    origin: 'filesystem',
+    origin: "filesystem",
     sourceDir: `file:///mock/${id}`,
     ...overrides,
   };
@@ -48,152 +51,169 @@ beforeEach(() => {
   }));
 });
 
-describe('nowPlayingStore', () => {
-  it('decodes and loads a project on first open', async () => {
-    const loadSpy = jest.spyOn(audioEngine, 'loadProject');
+describe("nowPlayingStore", () => {
+  it("decodes and loads a project on first open", async () => {
+    const loadSpy = jest.spyOn(audioEngine, "loadProject");
 
-    const result = await nowPlayingStore.openProject(entry('a'), ENGINE_OPTIONS);
+    const result = await nowPlayingStore.openProject(
+      entry("a"),
+      ENGINE_OPTIONS,
+    );
 
     expect(loadSpy).toHaveBeenCalled();
-    expect(result.manifest.id).toBe('a');
-    expect(nowPlayingStore.getSnapshot().projectId).toBe('a');
+    expect(result.manifest.id).toBe("a");
+    expect(nowPlayingStore.getSnapshot().projectId).toBe("a");
   });
 
-  it('is a no-op that leaves playback untouched when re-opening the same project', async () => {
-    await nowPlayingStore.openProject(entry('a'), ENGINE_OPTIONS);
+  it("is a no-op that leaves playback untouched when re-opening the same project", async () => {
+    await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
     audioEngine.play();
-    const loadSpy = jest.spyOn(audioEngine, 'loadProject');
+    const loadSpy = jest.spyOn(audioEngine, "loadProject");
 
-    await nowPlayingStore.openProject(entry('a'), ENGINE_OPTIONS);
+    await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
 
     expect(loadSpy).not.toHaveBeenCalled();
-    expect(audioEngine.getTransportState()).toBe('playing');
+    expect(audioEngine.getTransportState()).toBe("playing");
     audioEngine.stop();
   });
 
-  it('reload forces a fresh decode even for the already-current project', async () => {
-    await nowPlayingStore.openProject(entry('a'), ENGINE_OPTIONS);
-    const loadSpy = jest.spyOn(audioEngine, 'loadProject');
+  it("reload forces a fresh decode even for the already-current project", async () => {
+    await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+    const loadSpy = jest.spyOn(audioEngine, "loadProject");
 
-    await nowPlayingStore.reload(entry('a'), ENGINE_OPTIONS);
+    await nowPlayingStore.reload(entry("a"), ENGINE_OPTIONS);
 
     expect(loadSpy).toHaveBeenCalled();
   });
 
-  it('does not clobber an already-loaded project when a different project fails to load', async () => {
-    await nowPlayingStore.openProject(entry('a'), ENGINE_OPTIONS);
-    getSourceMock.mockRejectedValueOnce(new Error('missing manifest'));
+  it("does not clobber an already-loaded project when a different project fails to load", async () => {
+    await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+    getSourceMock.mockRejectedValueOnce(new Error("missing manifest"));
 
-    await expect(nowPlayingStore.openProject(entry('b'), ENGINE_OPTIONS)).rejects.toThrow(
-      'missing manifest'
-    );
+    await expect(
+      nowPlayingStore.openProject(entry("b"), ENGINE_OPTIONS),
+    ).rejects.toThrow("missing manifest");
 
-    expect(nowPlayingStore.getSnapshot().projectId).toBe('a');
+    expect(nowPlayingStore.getSnapshot().projectId).toBe("a");
   });
 
-  it('never commits a slow, superseded load over a newer one', async () => {
+  it("never commits a slow, superseded load over a newer one", async () => {
     let resolveB!: () => void;
     decodeMock.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
-          resolveB = () => resolve({ manifest: entry('b'), trackBuffers: {} });
-        })
+          resolveB = () => resolve({ manifest: entry("b"), trackBuffers: {} });
+        }),
     );
-    const openB = nowPlayingStore.openProject(entry('b'), ENGINE_OPTIONS).catch((e) => e);
+    const openB = nowPlayingStore
+      .openProject(entry("b"), ENGINE_OPTIONS)
+      .catch((e) => e);
 
     // A second, later request for a different project completes first.
-    await nowPlayingStore.openProject(entry('c'), ENGINE_OPTIONS);
-    expect(nowPlayingStore.getSnapshot().projectId).toBe('c');
+    await nowPlayingStore.openProject(entry("c"), ENGINE_OPTIONS);
+    expect(nowPlayingStore.getSnapshot().projectId).toBe("c");
 
     resolveB();
     const resultB = await openB;
     expect(resultB).toBeInstanceOf(Error);
-    expect(nowPlayingStore.getSnapshot().projectId).toBe('c');
+    expect(nowPlayingStore.getSnapshot().projectId).toBe("c");
   });
 
-  it('closeIfCurrent stops and clears only when it matches the loaded project', async () => {
-    await nowPlayingStore.openProject(entry('a'), ENGINE_OPTIONS);
+  it("closeIfCurrent stops and clears only when it matches the loaded project", async () => {
+    await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
     audioEngine.play();
-    const stopSpy = jest.spyOn(audioEngine, 'stop');
+    const stopSpy = jest.spyOn(audioEngine, "stop");
 
-    nowPlayingStore.closeIfCurrent('someone-else');
+    nowPlayingStore.closeIfCurrent("someone-else");
     expect(stopSpy).not.toHaveBeenCalled();
-    expect(nowPlayingStore.getSnapshot().projectId).toBe('a');
+    expect(nowPlayingStore.getSnapshot().projectId).toBe("a");
 
-    nowPlayingStore.closeIfCurrent('a');
+    nowPlayingStore.closeIfCurrent("a");
     expect(stopSpy).toHaveBeenCalled();
     expect(nowPlayingStore.getSnapshot().projectId).toBeNull();
   });
 
-  it('renameTrackLocal patches both the manifest and the waveform tracks', async () => {
-    await nowPlayingStore.openProject(entry('a'), ENGINE_OPTIONS);
+  it("renameTrackLocal patches both the manifest and the waveform tracks", async () => {
+    await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
 
-    nowPlayingStore.renameTrackLocal('a', 'Renamed');
+    nowPlayingStore.renameTrackLocal("a", "Renamed");
 
     const snapshot = nowPlayingStore.getSnapshot();
-    expect(snapshot.manifest?.tracks.find((t) => t.id === 'a')?.name).toBe('Renamed');
-    expect(snapshot.waveformTracks.find((t) => t.id === 'a')?.name).toBe('Renamed');
+    expect(snapshot.manifest?.tracks.find((t) => t.id === "a")?.name).toBe(
+      "Renamed",
+    );
+    expect(snapshot.waveformTracks.find((t) => t.id === "a")?.name).toBe(
+      "Renamed",
+    );
   });
 
-  it('renameTrackLocal is a no-op when nothing is loaded', () => {
-    expect(() => nowPlayingStore.renameTrackLocal('a', 'Renamed')).not.toThrow();
+  it("renameTrackLocal is a no-op when nothing is loaded", () => {
+    expect(() =>
+      nowPlayingStore.renameTrackLocal("a", "Renamed"),
+    ).not.toThrow();
     expect(nowPlayingStore.getSnapshot().projectId).toBeNull();
   });
 
-  it('setSectionsLocal patches the manifest with the new marker list', async () => {
-    await nowPlayingStore.openProject(entry('a'), ENGINE_OPTIONS);
+  it("setSectionsLocal patches the manifest with the new marker list", async () => {
+    await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
 
-    nowPlayingStore.setSectionsLocal([{ id: 'chorus', name: 'Chorus', startSec: 30 }]);
+    nowPlayingStore.setSectionsLocal([
+      { id: "chorus", name: "Chorus", startSec: 30 },
+    ]);
 
     const snapshot = nowPlayingStore.getSnapshot();
-    expect(snapshot.manifest?.sections).toEqual([{ id: 'chorus', name: 'Chorus', startSec: 30 }]);
+    expect(snapshot.manifest?.sections).toEqual([
+      { id: "chorus", name: "Chorus", startSec: 30 },
+    ]);
   });
 
-  it('setSectionsLocal is a no-op when nothing is loaded', () => {
+  it("setSectionsLocal is a no-op when nothing is loaded", () => {
     expect(() => nowPlayingStore.setSectionsLocal([])).not.toThrow();
     expect(nowPlayingStore.getSnapshot().projectId).toBeNull();
   });
 
-  it('setLyricsLocal patches the manifest with the new lyrics text and clears sync points', async () => {
-    await nowPlayingStore.openProject(entry('a'), ENGINE_OPTIONS);
+  it("setLyricsLocal patches the manifest with the new lyrics text and clears sync points", async () => {
+    await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
     nowPlayingStore.setLyricsSyncLocal([{ lineIndex: 0, timeSec: 1 }]);
 
-    nowPlayingStore.setLyricsLocal('New lyrics');
+    nowPlayingStore.setLyricsLocal("New lyrics");
 
     const snapshot = nowPlayingStore.getSnapshot();
-    expect(snapshot.manifest?.lyrics).toBe('New lyrics');
+    expect(snapshot.manifest?.lyrics).toBe("New lyrics");
     expect(snapshot.manifest?.lyricsSyncPoints).toEqual([]);
   });
 
-  it('setLyricsLocal is a no-op when nothing is loaded', () => {
-    expect(() => nowPlayingStore.setLyricsLocal('x')).not.toThrow();
+  it("setLyricsLocal is a no-op when nothing is loaded", () => {
+    expect(() => nowPlayingStore.setLyricsLocal("x")).not.toThrow();
     expect(nowPlayingStore.getSnapshot().projectId).toBeNull();
   });
 
-  it('setLyricsSyncLocal patches the manifest with the new sync points', async () => {
-    await nowPlayingStore.openProject(entry('a'), ENGINE_OPTIONS);
+  it("setLyricsSyncLocal patches the manifest with the new sync points", async () => {
+    await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
 
     nowPlayingStore.setLyricsSyncLocal([{ lineIndex: 2, timeSec: 12.5 }]);
 
     const snapshot = nowPlayingStore.getSnapshot();
-    expect(snapshot.manifest?.lyricsSyncPoints).toEqual([{ lineIndex: 2, timeSec: 12.5 }]);
+    expect(snapshot.manifest?.lyricsSyncPoints).toEqual([
+      { lineIndex: 2, timeSec: 12.5 },
+    ]);
   });
 
-  it('setLyricsSyncLocal is a no-op when nothing is loaded', () => {
+  it("setLyricsSyncLocal is a no-op when nothing is loaded", () => {
     expect(() => nowPlayingStore.setLyricsSyncLocal([])).not.toThrow();
     expect(nowPlayingStore.getSnapshot().projectId).toBeNull();
   });
 
-  it('notifies subscribers on commit', async () => {
+  it("notifies subscribers on commit", async () => {
     const listener = jest.fn();
     const unsubscribe = nowPlayingStore.subscribe(listener);
 
-    await nowPlayingStore.openProject(entry('a'), ENGINE_OPTIONS);
+    await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
     expect(listener).toHaveBeenCalled();
 
     unsubscribe();
     listener.mockClear();
-    nowPlayingStore.closeIfCurrent('a');
+    nowPlayingStore.closeIfCurrent("a");
     expect(listener).not.toHaveBeenCalled();
   });
 });

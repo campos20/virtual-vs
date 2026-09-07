@@ -6,13 +6,13 @@
 // matched against incoming MIDI messages from the connected footswitch to
 // trigger `action`.
 export type PedalAction =
-  | 'playPause'
-  | 'stop'
-  | 'nextSection'
-  | 'previousSection'
-  | 'toggleClick'
-  | 'nextSong'
-  | 'previousSong';
+  | "playPause"
+  | "stop"
+  | "nextSection"
+  | "previousSection"
+  | "toggleClick"
+  | "nextSong"
+  | "previousSong";
 
 export interface PedalMapping {
   id: string;

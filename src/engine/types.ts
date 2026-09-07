@@ -1,8 +1,8 @@
-import type { Bus } from '@/types/project';
+import type { Bus } from "@/types/project";
 
-export type MonitorMode = 'split' | 'monitor';
+export type MonitorMode = "split" | "monitor";
 
-export type EngineTransportState = 'stopped' | 'playing' | 'paused';
+export type EngineTransportState = "stopped" | "playing" | "paused";
 
 export interface TrackRuntimeState {
   id: string;

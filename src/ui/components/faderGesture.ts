@@ -13,7 +13,7 @@ export const TAP_SLOP_PX = 6;
 /** Two taps closer together than this are a double-tap. */
 export const DOUBLE_TAP_MS = 300;
 
-export type GestureEnd = 'drag' | 'tap' | 'double-tap';
+export type GestureEnd = "drag" | "tap" | "double-tap";
 
 /**
  * Where the cap lands after the finger moved `dy` from where it grabbed.
@@ -27,7 +27,7 @@ export function valueFromDrag(
   startValue: number,
   dy: number,
   trackHeight: number,
-  maxValue: number
+  maxValue: number,
 ): number {
   if (trackHeight <= 0) return startValue;
   // Dragging up is a negative dy and should raise the level.
@@ -39,8 +39,12 @@ export function valueFromDrag(
  * What a finished touch meant. `lastTapAt` is when the previous tap ended, or
  * 0 if the last gesture was a drag.
  */
-export function classifyGestureEnd(dy: number, now: number, lastTapAt: number): GestureEnd {
-  if (Math.abs(dy) > TAP_SLOP_PX) return 'drag';
-  if (lastTapAt > 0 && now - lastTapAt <= DOUBLE_TAP_MS) return 'double-tap';
-  return 'tap';
+export function classifyGestureEnd(
+  dy: number,
+  now: number,
+  lastTapAt: number,
+): GestureEnd {
+  if (Math.abs(dy) > TAP_SLOP_PX) return "drag";
+  if (lastTapAt > 0 && now - lastTapAt <= DOUBLE_TAP_MS) return "double-tap";
+  return "tap";
 }

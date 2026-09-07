@@ -1,4 +1,4 @@
-import type { AudioBuffer, BaseAudioContext } from 'react-native-audio-api';
+import type { AudioBuffer, BaseAudioContext } from "react-native-audio-api";
 
 const CLICK_DURATION_SEC = 0.015;
 const CLICK_FREQ_HZ = 1800;
@@ -15,7 +15,7 @@ const ACCENT_EVERY_BEATS = 4;
 export function generateClickBuffer(
   context: BaseAudioContext,
   bpm: number,
-  durationSec: number
+  durationSec: number,
 ): AudioBuffer {
   const sampleRate = context.sampleRate;
   const length = Math.max(1, Math.round(durationSec * sampleRate));
@@ -26,7 +26,11 @@ export function generateClickBuffer(
   const clickSamples = Math.round(CLICK_DURATION_SEC * sampleRate);
 
   let beatIndex = 0;
-  for (let startSec = 0; startSec < durationSec; startSec += secPerBeat, beatIndex++) {
+  for (
+    let startSec = 0;
+    startSec < durationSec;
+    startSec += secPerBeat, beatIndex++
+  ) {
     const startSample = Math.round(startSec * sampleRate);
     const accented = beatIndex % ACCENT_EVERY_BEATS === 0;
     const freq = accented ? ACCENT_FREQ_HZ : CLICK_FREQ_HZ;
@@ -35,7 +39,8 @@ export function generateClickBuffer(
     for (let i = 0; i < clickSamples && startSample + i < length; i++) {
       const t = i / sampleRate;
       const envelope = 1 - i / clickSamples;
-      data[startSample + i] += Math.sin(2 * Math.PI * freq * t) * envelope * amplitude;
+      data[startSample + i] +=
+        Math.sin(2 * Math.PI * freq * t) * envelope * amplitude;
     }
   }
 

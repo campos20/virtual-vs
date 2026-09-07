@@ -43,9 +43,7 @@
         {
           "iosBackgroundMode": true,
           "androidForegroundService": true,
-          "androidFSTypes": [
-            "mediaPlayback"
-          ],
+          "androidFSTypes": ["mediaPlayback"],
           "androidPermissions": [
             "android.permission.FOREGROUND_SERVICE",
             "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"

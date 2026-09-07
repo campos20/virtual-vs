@@ -1,6 +1,6 @@
-const { withAppBuildGradle } = require('@expo/config-plugins');
+const { withAppBuildGradle } = require("@expo/config-plugins");
 
-const MARKER = '// virtual-vs release signing';
+const MARKER = "// virtual-vs release signing";
 
 /**
  * Appended to the end of android/app/build.gradle rather than patched into

@@ -1,6 +1,12 @@
-import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
-import { radii, spacing, useThemeColors, type ThemeColors } from '@/ui/theme';
+import { useMemo } from "react";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
+import { radii, spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
 
 interface HeaderButtonProps {
   label: string;
@@ -19,7 +25,12 @@ interface HeaderButtonProps {
  * props on an already-mounted view and leaves the child tree structurally
  * constant.
  */
-export function HeaderButton({ label, onPress, testID, style }: HeaderButtonProps) {
+export function HeaderButton({
+  label,
+  onPress,
+  testID,
+  style,
+}: HeaderButtonProps) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -48,7 +59,7 @@ function createStyles(colors: ThemeColors) {
     text: {
       color: colors.accent,
       fontSize: 14,
-      fontWeight: '700',
+      fontWeight: "700",
     },
     pressed: {
       opacity: 0.7,

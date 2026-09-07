@@ -10,9 +10,19 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "@/i18n";
-import { elevation, radii, spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
+import {
+  elevation,
+  radii,
+  spacing,
+  useThemeColors,
+  type ThemeColors,
+} from "@/ui/theme";
 
-const MONOSPACE_FONT = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" });
+const MONOSPACE_FONT = Platform.select({
+  ios: "Menlo",
+  android: "monospace",
+  default: "monospace",
+});
 
 interface LyricsDrawerProps {
   visible: boolean;
@@ -32,7 +42,12 @@ interface LyricsDrawerProps {
  * edit to a stray tap outside the sheet is a real cost the marker case never
  * has, so only Close/Save dismiss this drawer.
  */
-export function LyricsDrawer({ visible, onClose, lyrics, onSave }: LyricsDrawerProps) {
+export function LyricsDrawer({
+  visible,
+  onClose,
+  lyrics,
+  onSave,
+}: LyricsDrawerProps) {
   const { t } = useTranslation();
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -54,7 +69,12 @@ export function LyricsDrawer({ visible, onClose, lyrics, onSave }: LyricsDrawerP
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
       <SafeAreaView edges={["bottom"]} style={styles.sheet}>
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle}>{t.lyrics.heading}</Text>
@@ -62,7 +82,10 @@ export function LyricsDrawer({ visible, onClose, lyrics, onSave }: LyricsDrawerP
             onPress={onClose}
             hitSlop={8}
             testID="close-lyrics-button"
-            style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.closeButton,
+              pressed && styles.pressed,
+            ]}
           >
             <Text style={styles.closeButtonText}>{t.common.close}</Text>
           </Pressable>
@@ -82,7 +105,10 @@ export function LyricsDrawer({ visible, onClose, lyrics, onSave }: LyricsDrawerP
 
         <Pressable
           onPress={handleSave}
-          style={({ pressed }) => [styles.saveButton, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.saveButton,
+            pressed && styles.pressed,
+          ]}
           testID="save-lyrics-button"
         >
           <Text style={styles.saveButtonText}>{t.common.save}</Text>
@@ -94,70 +120,70 @@ export function LyricsDrawer({ visible, onClose, lyrics, onSave }: LyricsDrawerP
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  sheet: {
-    marginTop: "auto",
-    height: "85%",
-    backgroundColor: colors.panel,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    ...elevation,
-  },
-  sheetHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: spacing.sm,
-  },
-  sheetTitle: {
-    color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  closeButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radii.pill,
-    backgroundColor: colors.borderLight,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-  },
-  closeButtonText: {
-    color: colors.accent,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  input: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontFamily: MONOSPACE_FONT,
-    fontSize: 15,
-    lineHeight: 22,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    padding: spacing.md,
-  },
-  hint: {
-    color: colors.textTertiary,
-    fontSize: 12,
-    marginTop: spacing.sm,
-  },
-  saveButton: {
-    backgroundColor: colors.accent,
-    borderRadius: radii.lg,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: spacing.md,
-  },
-  saveButtonText: {
-    color: "#0a0a0a",
-    fontSize: 16,
-    fontWeight: "700",
-  },
+    sheet: {
+      marginTop: "auto",
+      height: "85%",
+      backgroundColor: colors.panel,
+      borderTopLeftRadius: radii.xl,
+      borderTopRightRadius: radii.xl,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      padding: spacing.lg,
+      ...elevation,
+    },
+    sheetHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: spacing.sm,
+    },
+    sheetTitle: {
+      color: colors.textPrimary,
+      fontSize: 18,
+      fontWeight: "800",
+    },
+    closeButton: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: 6,
+      borderRadius: radii.pill,
+      backgroundColor: colors.borderLight,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderLight,
+    },
+    closeButtonText: {
+      color: colors.accent,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+    input: {
+      flex: 1,
+      color: colors.textPrimary,
+      fontFamily: MONOSPACE_FONT,
+      fontSize: 15,
+      lineHeight: 22,
+      backgroundColor: colors.surface,
+      borderRadius: radii.md,
+      padding: spacing.md,
+    },
+    hint: {
+      color: colors.textTertiary,
+      fontSize: 12,
+      marginTop: spacing.sm,
+    },
+    saveButton: {
+      backgroundColor: colors.accent,
+      borderRadius: radii.lg,
+      paddingVertical: 14,
+      alignItems: "center",
+      marginTop: spacing.md,
+    },
+    saveButtonText: {
+      color: "#0a0a0a",
+      fontSize: 16,
+      fontWeight: "700",
+    },
   });
 }

@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
-import { useThemeColors, type ThemeColors } from '@/ui/theme';
+import { useMemo } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
+import { useThemeColors, type ThemeColors } from "@/ui/theme";
 
 interface MoveColumnProps {
   canMoveUp: boolean;
@@ -43,7 +43,10 @@ export function MoveColumn({
         accessibilityRole="button"
         accessibilityLabel={moveUpAccessibilityLabel}
         testID={testID ? `${testID}-move-up` : undefined}
-        style={({ pressed }) => [styles.button, pressed && canMoveUp && styles.pressed]}
+        style={({ pressed }) => [
+          styles.button,
+          pressed && canMoveUp && styles.pressed,
+        ]}
       >
         <View style={[styles.arrowUp, !canMoveUp && styles.arrowDisabled]} />
       </Pressable>
@@ -54,9 +57,14 @@ export function MoveColumn({
         accessibilityRole="button"
         accessibilityLabel={moveDownAccessibilityLabel}
         testID={testID ? `${testID}-move-down` : undefined}
-        style={({ pressed }) => [styles.button, pressed && canMoveDown && styles.pressed]}
+        style={({ pressed }) => [
+          styles.button,
+          pressed && canMoveDown && styles.pressed,
+        ]}
       >
-        <View style={[styles.arrowDown, !canMoveDown && styles.arrowDisabled]} />
+        <View
+          style={[styles.arrowDown, !canMoveDown && styles.arrowDisabled]}
+        />
       </Pressable>
     </View>
   );
@@ -64,42 +72,42 @@ export function MoveColumn({
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  column: {
-    justifyContent: 'center',
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: colors.border,
-  },
-  button: {
-    width: 40,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  arrowUp: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 5,
-    borderRightWidth: 5,
-    borderBottomWidth: 7,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderBottomColor: colors.textSecondary,
-  },
-  arrowDown: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 5,
-    borderRightWidth: 5,
-    borderTopWidth: 7,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: colors.textSecondary,
-  },
-  arrowDisabled: {
-    opacity: 0.25,
-  },
+    column: {
+      justifyContent: "center",
+      borderLeftWidth: StyleSheet.hairlineWidth,
+      borderLeftColor: colors.border,
+    },
+    button: {
+      width: 40,
+      height: 32,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+    arrowUp: {
+      width: 0,
+      height: 0,
+      borderLeftWidth: 5,
+      borderRightWidth: 5,
+      borderBottomWidth: 7,
+      borderLeftColor: "transparent",
+      borderRightColor: "transparent",
+      borderBottomColor: colors.textSecondary,
+    },
+    arrowDown: {
+      width: 0,
+      height: 0,
+      borderLeftWidth: 5,
+      borderRightWidth: 5,
+      borderTopWidth: 7,
+      borderLeftColor: "transparent",
+      borderRightColor: "transparent",
+      borderTopColor: colors.textSecondary,
+    },
+    arrowDisabled: {
+      opacity: 0.25,
+    },
   });
 }

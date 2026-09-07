@@ -1,13 +1,13 @@
-import { Directory, File } from 'expo-file-system';
-import type { DocumentPickerAsset } from 'expo-document-picker';
-import type { LibraryProjectEntry } from '@/store/projectsSlice';
-import type { ProjectManifest, TrackManifest } from '@/types/project';
-import { mixChannelsToStereo } from './downmix';
-import { report, type ProgressReporter } from './progress';
-import { projectDirectory } from './paths';
-import { readProjectManifest } from './projectLoader';
-import type { BaseAudioContext } from './types';
-import { encodeStereoWav, readWavChannelCount } from './wav';
+import { Directory, File } from "expo-file-system";
+import type { DocumentPickerAsset } from "expo-document-picker";
+import type { LibraryProjectEntry } from "@/store/projectsSlice";
+import type { ProjectManifest, TrackManifest } from "@/types/project";
+import { mixChannelsToStereo } from "./downmix";
+import { report, type ProgressReporter } from "./progress";
+import { projectDirectory } from "./paths";
+import { readProjectManifest } from "./projectLoader";
+import type { BaseAudioContext } from "./types";
+import { encodeStereoWav, readWavChannelCount } from "./wav";
 
 // Full zip project import/export (a pre-packaged manifest.json + stems,
 // picked and extracted as one archive) is still out of scope for phase 1 -
@@ -24,13 +24,13 @@ function slugify(value: string): string {
   const slug = value
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return slug || 'untitled';
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || "untitled";
 }
 
 function stripExtension(fileName: string): string {
-  const dot = fileName.lastIndexOf('.');
+  const dot = fileName.lastIndexOf(".");
   return dot > 0 ? fileName.slice(0, dot) : fileName;
 }
 
@@ -47,7 +47,7 @@ function dedupe(candidate: string, used: Set<string>): string {
 }
 
 /** Title a freshly created draft carries until the user names it. */
-export const DRAFT_PROJECT_TITLE = 'Untitled';
+export const DRAFT_PROJECT_TITLE = "Untitled";
 
 /** Names already taken inside a project folder, so added stems never collide with existing ones. */
 function existingNames(manifest: ProjectManifest): {
@@ -74,18 +74,19 @@ async function foldStemToStereoInPlace(
   context: BaseAudioContext,
   file: File,
   onProgress?: ProgressReporter,
-  name?: string
+  name?: string,
 ): Promise<void> {
   const channels = readWavChannelCount(file);
   if (channels === null || channels <= 2) return;
 
   // Folding and re-encoding are synchronous and take seconds on a long
   // multi-channel file, so say what's happening and let it paint first.
-  await report(onProgress, { phase: 'converting', name });
+  await report(onProgress, { phase: "converting", name });
 
   const decoded = await context.decodeAudioData(file.uri);
-  const sources = Array.from({ length: decoded.numberOfChannels }, (_, channel) =>
-    decoded.getChannelData(channel)
+  const sources = Array.from(
+    { length: decoded.numberOfChannels },
+    (_, channel) => decoded.getChannelData(channel),
   );
   const { left, right } = mixChannelsToStereo(sources, decoded.length);
   file.write(encodeStereoWav(left, right, decoded.sampleRate));
@@ -98,7 +99,7 @@ async function copyStems(
   usedFileNames: Set<string>,
   usedTrackIds: Set<string>,
   context?: BaseAudioContext,
-  onProgress?: ProgressReporter
+  onProgress?: ProgressReporter,
 ): Promise<TrackManifest[]> {
   const tracks: TrackManifest[] = [];
   let index = 0;
@@ -109,7 +110,7 @@ async function copyStems(
     // Copying is where a file picked from a cloud provider is actually
     // pulled down, so it can be the longest wait of the whole import.
     await report(onProgress, {
-      phase: 'copying',
+      phase: "copying",
       name: asset.name,
       current: index,
       total: files.length,
@@ -117,7 +118,12 @@ async function copyStems(
     await new File(asset.uri).copy(destination);
     if (context) {
       try {
-        await foldStemToStereoInPlace(context, destination, onProgress, asset.name);
+        await foldStemToStereoInPlace(
+          context,
+          destination,
+          onProgress,
+          asset.name,
+        );
       } catch (error) {
         // Keep the original file: it still plays, just slower to load.
         console.warn(`Could not fold ${fileName} to stereo on import`, error);
@@ -128,7 +134,7 @@ async function copyStems(
       name: stripExtension(asset.name),
       file: fileName,
       gain: 1,
-      bus: 'main',
+      bus: "main",
     });
   }
   return tracks;
@@ -150,14 +156,14 @@ export async function createDraftProject(): Promise<LibraryProjectEntry> {
   const manifest: ProjectManifest = {
     id,
     title: DRAFT_PROJECT_TITLE,
-    key: '',
+    key: "",
     tracks: [],
     sections: [],
   };
 
-  new File(directory, 'manifest.json').write(JSON.stringify(manifest, null, 2));
+  new File(directory, "manifest.json").write(JSON.stringify(manifest, null, 2));
 
-  return { ...manifest, origin: 'filesystem', sourceDir: directory.uri };
+  return { ...manifest, origin: "filesystem", sourceDir: directory.uri };
 }
 
 /**
@@ -180,16 +186,26 @@ export async function addStemsToProject(
   files: DocumentPickerAsset[],
   /** When given, multi-channel stems are folded to stereo on the way in. */
   context?: BaseAudioContext,
-  onProgress?: ProgressReporter
+  onProgress?: ProgressReporter,
 ): Promise<ProjectManifest> {
   const directory = new Directory(sourceDir);
   const manifest = await readProjectManifest(directory);
   const used = existingNames(manifest);
 
-  const added = await copyStems(directory, files, used.files, used.trackIds, context, onProgress);
-  const updated: ProjectManifest = { ...manifest, tracks: [...manifest.tracks, ...added] };
+  const added = await copyStems(
+    directory,
+    files,
+    used.files,
+    used.trackIds,
+    context,
+    onProgress,
+  );
+  const updated: ProjectManifest = {
+    ...manifest,
+    tracks: [...manifest.tracks, ...added],
+  };
 
-  new File(directory, 'manifest.json').write(JSON.stringify(updated, null, 2));
+  new File(directory, "manifest.json").write(JSON.stringify(updated, null, 2));
   return updated;
 }
 
@@ -200,7 +216,7 @@ export async function addStemsToProject(
  */
 export async function removeStemFromProject(
   sourceDir: string,
-  trackId: string
+  trackId: string,
 ): Promise<ProjectManifest> {
   const directory = new Directory(sourceDir);
   const manifest = await readProjectManifest(directory);
@@ -212,7 +228,7 @@ export async function removeStemFromProject(
     ...manifest,
     tracks: manifest.tracks.filter((t) => t.id !== trackId),
   };
-  new File(directory, 'manifest.json').write(JSON.stringify(updated, null, 2));
+  new File(directory, "manifest.json").write(JSON.stringify(updated, null, 2));
 
   // Manifest first, file second: a stale file with no manifest entry is
   // harmless, whereas a manifest pointing at a deleted file fails to load.
@@ -231,7 +247,7 @@ export async function removeStemFromProject(
 export async function renameStemInProject(
   sourceDir: string,
   trackId: string,
-  name: string
+  name: string,
 ): Promise<ProjectManifest> {
   const directory = new Directory(sourceDir);
   const manifest = await readProjectManifest(directory);
@@ -240,7 +256,7 @@ export async function renameStemInProject(
     ...manifest,
     tracks: manifest.tracks.map((t) => (t.id === trackId ? { ...t, name } : t)),
   };
-  new File(directory, 'manifest.json').write(JSON.stringify(updated, null, 2));
+  new File(directory, "manifest.json").write(JSON.stringify(updated, null, 2));
   return updated;
 }
 
@@ -254,12 +270,12 @@ export async function renameStemInProject(
  */
 export async function patchProjectManifest(
   sourceDir: string,
-  changes: Partial<ProjectManifest>
+  changes: Partial<ProjectManifest>,
 ): Promise<ProjectManifest> {
   const directory = new Directory(sourceDir);
   const manifest = await readProjectManifest(directory);
   const updated: ProjectManifest = { ...manifest, ...changes };
-  new File(directory, 'manifest.json').write(JSON.stringify(updated, null, 2));
+  new File(directory, "manifest.json").write(JSON.stringify(updated, null, 2));
   return updated;
 }
 
@@ -279,7 +295,7 @@ export interface ProjectMetadataEdits {
  */
 export async function updateProjectMetadata(
   sourceDir: string,
-  edits: ProjectMetadataEdits
+  edits: ProjectMetadataEdits,
 ): Promise<ProjectManifest> {
   const directory = new Directory(sourceDir);
   const manifest = await readProjectManifest(directory);
@@ -287,6 +303,6 @@ export async function updateProjectMetadata(
   // Clearing the tempo field has to actually drop it, otherwise the spread
   // would leave the project's previous bpm (and its click) in place.
   if (edits.bpm === undefined) delete updated.bpm;
-  new File(directory, 'manifest.json').write(JSON.stringify(updated, null, 2));
+  new File(directory, "manifest.json").write(JSON.stringify(updated, null, 2));
   return updated;
 }

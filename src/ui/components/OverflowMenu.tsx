@@ -1,6 +1,19 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
-import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { elevation, radii, spacing, useThemeColors, type ThemeColors } from '@/ui/theme';
+import { useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Dimensions,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import {
+  elevation,
+  radii,
+  spacing,
+  useThemeColors,
+  type ThemeColors,
+} from "@/ui/theme";
 
 export interface OverflowMenuItem {
   key: string;
@@ -22,7 +35,7 @@ interface OverflowMenuProps {
   /** The trigger's visual content - press feedback (dimming) is applied around it automatically. */
   children: ReactNode;
   /** Which edge the dropdown hangs from - 'end' (right) suits a trailing icon, 'start' (left) suits a full-width row. */
-  align?: 'start' | 'end';
+  align?: "start" | "end";
   /** Read by screen readers for the trigger; this app never gives it its own visible label. */
   accessibilityLabel: string;
   testID?: string;
@@ -50,22 +63,36 @@ interface OverflowMenuProps {
  * which never fires layout/measurement callbacks - the reason this isn't
  * simply "measure, then open").
  */
-export function OverflowMenu({ items, children, align = 'end', accessibilityLabel, testID }: OverflowMenuProps) {
+export function OverflowMenu({
+  items,
+  children,
+  align = "end",
+  accessibilityLabel,
+  testID,
+}: OverflowMenuProps) {
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const triggerRef = useRef<View>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [anchor, setAnchor] = useState<Anchor>(() =>
-    align === 'end' ? { top: 80, right: spacing.lg } : { top: 80, left: spacing.lg }
+    align === "end"
+      ? { top: 80, right: spacing.lg }
+      : { top: 80, left: spacing.lg },
   );
 
   function open() {
     setIsOpen(true);
     triggerRef.current?.measureInWindow((x, y, width, height) => {
       setAnchor(
-        align === 'end'
-          ? { top: y + height + 6, right: Math.max(spacing.sm, Dimensions.get('window').width - (x + width)) }
-          : { top: y + height + 6, left: x }
+        align === "end"
+          ? {
+              top: y + height + 6,
+              right: Math.max(
+                spacing.sm,
+                Dimensions.get("window").width - (x + width),
+              ),
+            }
+          : { top: y + height + 6, left: x },
       );
     });
   }
@@ -93,7 +120,12 @@ export function OverflowMenu({ items, children, align = 'end', accessibilityLabe
         {children}
       </Pressable>
 
-      <Modal visible={isOpen} transparent animationType="fade" onRequestClose={close}>
+      <Modal
+        visible={isOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={close}
+      >
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={close}
@@ -113,7 +145,11 @@ export function OverflowMenu({ items, children, align = 'end', accessibilityLabe
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={[styles.itemText, item.active && styles.itemTextActive]}>{item.label}</Text>
+              <Text
+                style={[styles.itemText, item.active && styles.itemTextActive]}
+              >
+                {item.label}
+              </Text>
             </Pressable>
           ))}
         </View>
@@ -138,59 +174,59 @@ export function KebabIcon() {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  pressed: {
-    opacity: 0.6,
-  },
-  kebab: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
-    backgroundColor: colors.borderLight,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-  },
-  kebabDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.textSecondary,
-  },
-  menu: {
-    position: 'absolute',
-    minWidth: 180,
-    maxWidth: 300,
-    borderRadius: radii.lg,
-    backgroundColor: colors.panelRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    overflow: 'hidden',
-    ...elevation,
-  },
-  item: {
-    paddingVertical: 14,
-    paddingHorizontal: spacing.lg,
-  },
-  itemDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  itemText: {
-    color: colors.textPrimary,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  itemActive: {
-    // Hardcoded to the accent's own rgba form rather than derived per-theme
-    // - a deliberate, bounded cosmetic cut, not an oversight (see the theme
-    // migration notes for AboutScreen's identical linkRow tint).
-    backgroundColor: 'rgba(32,138,239,0.12)',
-  },
-  itemTextActive: {
-    color: colors.accent,
-    fontWeight: '700',
-  },
+    pressed: {
+      opacity: 0.6,
+    },
+    kebab: {
+      width: 36,
+      height: 36,
+      borderRadius: radii.pill,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 3,
+      backgroundColor: colors.borderLight,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderLight,
+    },
+    kebabDot: {
+      width: 4,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.textSecondary,
+    },
+    menu: {
+      position: "absolute",
+      minWidth: 180,
+      maxWidth: 300,
+      borderRadius: radii.lg,
+      backgroundColor: colors.panelRaised,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      overflow: "hidden",
+      ...elevation,
+    },
+    item: {
+      paddingVertical: 14,
+      paddingHorizontal: spacing.lg,
+    },
+    itemDivider: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    itemText: {
+      color: colors.textPrimary,
+      fontSize: 15,
+      fontWeight: "600",
+    },
+    itemActive: {
+      // Hardcoded to the accent's own rgba form rather than derived per-theme
+      // - a deliberate, bounded cosmetic cut, not an oversight (see the theme
+      // migration notes for AboutScreen's identical linkRow tint).
+      backgroundColor: "rgba(32,138,239,0.12)",
+    },
+    itemTextActive: {
+      color: colors.accent,
+      fontWeight: "700",
+    },
   });
 }

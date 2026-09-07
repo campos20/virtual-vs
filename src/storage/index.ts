@@ -1,4 +1,4 @@
-export { listFilesystemProjects, loadProjectLibrary } from './projectLibrary';
+export { listFilesystemProjects, loadProjectLibrary } from "./projectLibrary";
 export {
   addStemsToProject,
   createDraftProject,
@@ -9,13 +9,13 @@ export {
   updateProjectMetadata,
   DRAFT_PROJECT_TITLE,
   type ProjectMetadataEdits,
-} from './importProject';
+} from "./importProject";
 export {
   createFilesystemProjectSource,
   decodeProjectAudio,
   getProjectSourceForEntry,
   readProjectManifest,
-} from './projectLoader';
+} from "./projectLoader";
 export {
   bundleFileName,
   importBundle,
@@ -26,16 +26,20 @@ export {
   writeBundleToCache,
   type BundleContents,
   type ImportedBundle,
-} from './bundle';
-export { BUNDLE_EXTENSION, BundleFormatError, type BundleHeader } from './bundleFormat';
-export { shareBundle } from './share';
+} from "./bundle";
+export {
+  BUNDLE_EXTENSION,
+  BundleFormatError,
+  type BundleHeader,
+} from "./bundleFormat";
+export { shareBundle } from "./share";
 export {
   createSetlist,
   deleteSetlist,
   listSetlists,
   writeSetlist,
   DRAFT_FOLDER_NAME,
-} from './setlistLibrary';
+} from "./setlistLibrary";
 export {
   ensureProjectsDirectoryExists,
   ensureSetlistsDirectoryExists,
@@ -43,5 +47,5 @@ export {
   projectsDirectory,
   setlistFile,
   setlistsDirectory,
-} from './paths';
-export type { AudioFileRef, DecodedProject, ProjectSource } from './types';
+} from "./paths";
+export type { AudioFileRef, DecodedProject, ProjectSource } from "./types";
