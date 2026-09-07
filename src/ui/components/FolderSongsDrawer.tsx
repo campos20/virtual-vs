@@ -90,7 +90,8 @@ export function FolderSongsDrawer({
                 key={song.id}
                 onPress={() => handlePress(song.id)}
                 testID={`folder-songs-row-${song.id}`}
-                accessibilityLabel={isCurrent ? t.nowPlaying.heading : undefined}
+                accessibilityLabel={song.title}
+                accessibilityState={{ selected: isCurrent }}
                 style={({ pressed }) => [
                   styles.row,
                   isCurrent && styles.rowCurrent,

@@ -48,6 +48,15 @@ beforeEach(() => {
   nowPlayingStore.resetForTests();
 });
 
+// Several tests spy on Alert.alert (answerAlertWith and others) without
+// their own cleanup - jest.spyOn on an already-spied method reuses the same
+// mock rather than creating a fresh one, so a leftover implementation/call
+// history would otherwise bleed into whichever test runs next. Same
+// isolation convention as nowPlayingStore.test.ts and ProjectScreen.test.tsx.
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
 /**
  * The Library no longer seeds itself - ProjectLibraryGate reads the library
  * off disk at app start and dispatches it - so these tests hand it an
