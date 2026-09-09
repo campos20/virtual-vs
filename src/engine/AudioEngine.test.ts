@@ -140,6 +140,26 @@ describe("AudioEngine keeps every stem sample-locked", () => {
     expect(stops[0]).toBeGreaterThan(engine.context.currentTime);
   });
 
+  it("never schedules a stop before the matching start when stop() follows play() immediately", () => {
+    // Regression test: scheduleSources() books starts LOOKAHEAD_SEC (300ms)
+    // out, so a stop arriving well inside that window used to compute a
+    // stopAt earlier than the source's own startAt - a stop for a node that
+    // hasn't started yet, which surfaced live as audio that kept playing
+    // through a stop until the app was killed.
+    const engine = new AudioEngine();
+    engine.loadProject(
+      decoded(engine, manifest({ bpm: 120, tracks: THREE_STEM_TRACKS })),
+    );
+    const { starts, stops } = recordScheduling(engine);
+
+    engine.play();
+    engine.stop();
+
+    expectSampleLocked(starts, 4);
+    expectSampleLocked(stops, 4);
+    expect(stops[0]!).toBeGreaterThanOrEqual(starts[0]!);
+  });
+
   it("primes every stem and the click once at load, before any real play()", () => {
     const engine = new AudioEngine();
     const { starts, stops } = recordScheduling(engine); // wraps createBufferSource before loadProject primes

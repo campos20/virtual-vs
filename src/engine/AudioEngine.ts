@@ -408,9 +408,22 @@ export class AudioEngine {
    * it's still ahead of the clock for every call in the loop, not only the
    * first - a `when` already in the past falls back to that same "ASAP"
    * behavior this exists to avoid. See AGENTS.md "Stems stay sample-locked".
+   *
+   * Also clamped to never precede `scheduledAtContextTime` (the `startAt`
+   * every currently-scheduled source was given). `scheduleSources()` books
+   * starts `LOOKAHEAD_SEC` (300ms) out, so play() followed by a quick
+   * stop()/pause() - well within that window - would otherwise compute a
+   * `stopAt` earlier than the source's own start time: a stop scheduled
+   * before the matching start, on a node that hasn't actually started yet.
+   * Observed as audio that keeps playing through a stop and only quits when
+   * the app is killed - presumably the native layer drops a stop whose time
+   * precedes the node's own start rather than canceling it.
    */
   private stopSources(): void {
-    const stopAt = this.ctx.currentTime + STOP_LOOKAHEAD_SEC;
+    const stopAt = Math.max(
+      this.ctx.currentTime + STOP_LOOKAHEAD_SEC,
+      this.scheduledAtContextTime,
+    );
     for (const node of this.tracks.values()) {
       node.source?.stop(stopAt);
       node.source = null;
