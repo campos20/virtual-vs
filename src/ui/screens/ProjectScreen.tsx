@@ -328,11 +328,21 @@ export function ProjectScreen() {
    * project - must not erase a folder context set moments earlier. A
    * genuinely folder-less project already starts with `folderId: null` from
    * `nowPlayingStore.loadFresh()`.
+   *
+   * Gated on `nowPlaying.projectId` (not just `entry?.id`/`folderId`): the
+   * load effect above is async, so on a fresh open this effect's first run
+   * would otherwise race ahead of `nowPlayingStore.openProject()` actually
+   * committing - `setFolderContext()` would no-op against the *previous*
+   * project, and since none of this effect's deps change once the load
+   * later resolves, it would never get a second chance to run. Re-running
+   * it once `nowPlaying.projectId` itself catches up to `entry.id` closes
+   * that race.
    */
   useEffect(() => {
     if (!entry || !folderId) return;
+    if (nowPlaying.projectId !== entry.id) return;
     nowPlayingStore.setFolderContext(entry.id, folderId);
-  }, [entry?.id, folderId]);
+  }, [entry?.id, folderId, nowPlaying.projectId]);
 
   /** Forces a fresh reload of the current project (its content actually changed) and re-seeds the store's mixer state from the result. */
   const reloadAndSeed = useCallback(async () => {

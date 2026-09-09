@@ -418,6 +418,18 @@ export class AudioEngine {
    * Observed as audio that keeps playing through a stop and only quits when
    * the app is killed - presumably the native layer drops a stop whose time
    * precedes the node's own start rather than canceling it.
+   *
+   * That same clamp means `stopAt` can now land up to `LOOKAHEAD_SEC` out
+   * instead of the usual ~10ms, which opens a second race: the longest
+   * track's `onEnded` (see `scheduleSources()`) fires whenever its source
+   * actually stops, including a manual `.stop()`, not just a natural end.
+   * If `play()` is called again before that delayed stop reaches the audio
+   * thread, `handlePlaybackEndedNaturally`'s `transportState === "playing"`
+   * guard can no longer tell that apart from a real end-of-playback - by
+   * the time the stale event fires, the transport genuinely is "playing"
+   * again, just from the *new* sources. Clearing `onEnded` here, before the
+   * node the handler was attached to ever schedules its (possibly delayed)
+   * stop, means that stale event has nothing left to call back into.
    */
   private stopSources(): void {
     const stopAt = Math.max(
@@ -425,6 +437,7 @@ export class AudioEngine {
       this.scheduledAtContextTime,
     );
     for (const node of this.tracks.values()) {
+      if (node.source) node.source.onEnded = null;
       node.source?.stop(stopAt);
       node.source = null;
     }
