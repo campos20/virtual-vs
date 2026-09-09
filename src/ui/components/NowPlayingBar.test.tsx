@@ -105,6 +105,30 @@ describe("NowPlayingBar", () => {
     });
   });
 
+  // Regression test: opening a song from inside a folder, navigating away,
+  // then tapping the mini-player used to drop the folder context entirely
+  // (goToSong() only ever sent `projectId`), so the Player's "songs in this
+  // folder" list silently disappeared even though the song was still filed
+  // in that folder.
+  it("carries the song's folder along when tapped after it was opened from one", async () => {
+    renderWithStore(<NowPlayingBar />);
+    await nowPlayingStore.openProject(entry, {
+      monitorMode: "split",
+      clickEnabled: true,
+    });
+    nowPlayingStore.setFolderContext("my-song", "folder-1");
+    await waitFor(() =>
+      expect(screen.getByTestId("now-playing-bar")).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByTestId("now-playing-bar"));
+
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: "/project/[projectId]",
+      params: { projectId: "my-song", folderId: "folder-1" },
+    });
+  });
+
   it("play/pause drives the real audio engine transport without navigating", async () => {
     renderWithStore(<NowPlayingBar />);
     await nowPlayingStore.openProject(entry, {

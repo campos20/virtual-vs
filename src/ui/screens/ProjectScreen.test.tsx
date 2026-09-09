@@ -462,6 +462,21 @@ describe("ProjectScreen - quick switch between songs in a folder", () => {
     });
   });
 
+  // Regression test: the folder-remembering effect used to run synchronously
+  // on mount, racing ahead of nowPlayingStore.openProject()'s async decode.
+  // On a genuinely fresh load (this project wasn't already current), that
+  // race lost every time - setFolderContext() no-op'd against the previous
+  // project, and since none of the effect's deps change once the load later
+  // resolves, the folder was never recorded at all, breaking NowPlayingBar's
+  // ability to carry it forward later.
+  it("remembers the folder on nowPlayingStore even for a fresh (not already-current) load", async () => {
+    const songs = [song("a", "Song A"), song("b", "Song B")];
+    renderInFolder("a", songs);
+    await waitForMixer();
+
+    expect(nowPlayingStore.getSnapshot().folderId).toBe("sunday");
+  });
+
   // The old song's own teardown otherwise only happens once the next one
   // finishes decoding - real, sometimes multi-second work - which would
   // leave it audibly playing in the meantime. Switching must cut it

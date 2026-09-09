@@ -408,10 +408,36 @@ export class AudioEngine {
    * it's still ahead of the clock for every call in the loop, not only the
    * first - a `when` already in the past falls back to that same "ASAP"
    * behavior this exists to avoid. See AGENTS.md "Stems stay sample-locked".
+   *
+   * Also clamped to never precede `scheduledAtContextTime` (the `startAt`
+   * every currently-scheduled source was given). `scheduleSources()` books
+   * starts `LOOKAHEAD_SEC` (300ms) out, so play() followed by a quick
+   * stop()/pause() - well within that window - would otherwise compute a
+   * `stopAt` earlier than the source's own start time: a stop scheduled
+   * before the matching start, on a node that hasn't actually started yet.
+   * Observed as audio that keeps playing through a stop and only quits when
+   * the app is killed - presumably the native layer drops a stop whose time
+   * precedes the node's own start rather than canceling it.
+   *
+   * That same clamp means `stopAt` can now land up to `LOOKAHEAD_SEC` out
+   * instead of the usual ~10ms, which opens a second race: the longest
+   * track's `onEnded` (see `scheduleSources()`) fires whenever its source
+   * actually stops, including a manual `.stop()`, not just a natural end.
+   * If `play()` is called again before that delayed stop reaches the audio
+   * thread, `handlePlaybackEndedNaturally`'s `transportState === "playing"`
+   * guard can no longer tell that apart from a real end-of-playback - by
+   * the time the stale event fires, the transport genuinely is "playing"
+   * again, just from the *new* sources. Clearing `onEnded` here, before the
+   * node the handler was attached to ever schedules its (possibly delayed)
+   * stop, means that stale event has nothing left to call back into.
    */
   private stopSources(): void {
-    const stopAt = this.ctx.currentTime + STOP_LOOKAHEAD_SEC;
+    const stopAt = Math.max(
+      this.ctx.currentTime + STOP_LOOKAHEAD_SEC,
+      this.scheduledAtContextTime,
+    );
     for (const node of this.tracks.values()) {
+      if (node.source) node.source.onEnded = null;
       node.source?.stop(stopAt);
       node.source = null;
     }

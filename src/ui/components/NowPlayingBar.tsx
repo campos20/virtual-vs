@@ -26,7 +26,7 @@ import { TransportBar } from "./TransportBar";
  * there's actually something to show.
  */
 export function NowPlayingBar() {
-  const { projectId, manifest, durationSec } = useNowPlaying();
+  const { projectId, manifest, durationSec, folderId } = useNowPlaying();
 
   if (!projectId || !manifest) return null;
 
@@ -35,6 +35,7 @@ export function NowPlayingBar() {
       projectId={projectId}
       manifest={manifest}
       durationSec={durationSec}
+      folderId={folderId}
     />
   );
 }
@@ -43,6 +44,7 @@ interface NowPlayingBarContentProps {
   projectId: string;
   manifest: ProjectManifest;
   durationSec: number;
+  folderId: string | null;
 }
 
 /**
@@ -58,6 +60,7 @@ function NowPlayingBarContent({
   projectId,
   manifest,
   durationSec,
+  folderId,
 }: NowPlayingBarContentProps) {
   const router = useRouter();
   const { t } = useTranslation();
@@ -66,8 +69,15 @@ function NowPlayingBarContent({
   const { seconds: playheadSec } = usePlayhead();
   const transportState = useTransportState();
 
+  // Carries the remembered folder along - see `nowPlayingStore.folderId` -
+  // so jumping back into the Player from here still shows the "songs in
+  // this folder" list instead of silently losing it, matching how
+  // `ProjectScreen.handleSwitchToSong` forwards the same param.
   function goToSong() {
-    router.push({ pathname: "/project/[projectId]", params: { projectId } });
+    router.push({
+      pathname: "/project/[projectId]",
+      params: folderId ? { projectId, folderId } : { projectId },
+    });
   }
 
   return (

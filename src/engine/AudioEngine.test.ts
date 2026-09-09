@@ -140,6 +140,63 @@ describe("AudioEngine keeps every stem sample-locked", () => {
     expect(stops[0]).toBeGreaterThan(engine.context.currentTime);
   });
 
+  it("never schedules a stop before the matching start when stop() follows play() immediately", () => {
+    // Regression test: scheduleSources() books starts LOOKAHEAD_SEC (300ms)
+    // out, so a stop arriving well inside that window used to compute a
+    // stopAt earlier than the source's own startAt - a stop for a node that
+    // hasn't started yet, which surfaced live as audio that kept playing
+    // through a stop until the app was killed.
+    const engine = new AudioEngine();
+    engine.loadProject(
+      decoded(engine, manifest({ bpm: 120, tracks: THREE_STEM_TRACKS })),
+    );
+    const { starts, stops } = recordScheduling(engine);
+
+    engine.play();
+    engine.stop();
+
+    expectSampleLocked(starts, 4);
+    expectSampleLocked(stops, 4);
+    expect(stops[0]!).toBeGreaterThanOrEqual(starts[0]!);
+  });
+
+  it("clears the longest track's onEnded handler on stop, so a stop delayed by the clamp above can't later fire it", () => {
+    // Regression test for a second-order race the previous test's fix
+    // opens up: stopAt can now land up to LOOKAHEAD_SEC (300ms) out instead
+    // of ~10ms, so a play() shortly after a stop() could see the *old*
+    // source's onEnded - which fires on any stop, not just a natural end -
+    // reach the audio thread while transportState is legitimately
+    // "playing" again (from the new sources), fooling
+    // handlePlaybackEndedNaturally's guard into resetting the transport
+    // and nulling the new sources out from under active playback.
+    const engine = new AudioEngine();
+    engine.loadProject(
+      decoded(engine, manifest({ tracks: THREE_STEM_TRACKS })),
+    );
+    const createBufferSource = engine.context.createBufferSource.bind(
+      engine.context,
+    );
+    const sources: ReturnType<typeof createBufferSource>[] = [];
+    jest.spyOn(engine.context, "createBufferSource").mockImplementation(() => {
+      const node = createBufferSource();
+      jest.spyOn(node, "start").mockImplementation(() => {});
+      jest.spyOn(node, "stop").mockImplementation(() => {});
+      sources.push(node);
+      return node;
+    });
+
+    engine.play();
+    // THREE_STEM_TRACKS' first entry ("a") is the longest (tied durations,
+    // first strictly-greater wins) - the only source that ever gets an
+    // onEnded handler at all (see scheduleSources()).
+    const longestTrackSource = sources[0]!;
+    expect(longestTrackSource.onEnded).toBeInstanceOf(Function);
+
+    engine.stop();
+
+    expect(longestTrackSource.onEnded).toBeNull();
+  });
+
   it("primes every stem and the click once at load, before any real play()", () => {
     const engine = new AudioEngine();
     const { starts, stops } = recordScheduling(engine); // wraps createBufferSource before loadProject primes

@@ -20,6 +20,15 @@ export interface NowPlayingSnapshot {
   manifest: ProjectManifest | null;
   durationSec: number;
   waveformTracks: StemWaveform[];
+  /**
+   * The folder this project was last opened from, if any - set by
+   * `setFolderContext()` and forwarded by `NowPlayingBar`'s `goToSong()`,
+   * so jumping back into the Player from the mini-player after navigating
+   * away still shows the "songs in this folder" list instead of silently
+   * losing it. Reset to `null` whenever a *different* project loads, since
+   * a fresh project has no folder context until told otherwise.
+   */
+  folderId: string | null;
 }
 
 interface EngineOptions {
@@ -37,6 +46,7 @@ const EMPTY_SNAPSHOT: NowPlayingSnapshot = {
   manifest: null,
   durationSec: 0,
   waveformTracks: [],
+  folderId: null,
 };
 
 /**
@@ -166,8 +176,26 @@ class NowPlayingStore {
       manifest: source.manifest,
       durationSec,
       waveformTracks,
+      // A freshly-loaded project starts with no remembered folder context -
+      // set explicitly afterwards by `setFolderContext()` if it was opened
+      // from one.
+      folderId: null,
     });
     return { manifest: source.manifest, durationSec };
+  }
+
+  /**
+   * Records which folder (if any) the currently-loaded project was opened
+   * from, so `NowPlayingBar`'s `goToSong()` can carry that folder context
+   * forward when jumping back into the Player after the user has navigated
+   * away and the folder is no longer on the route. A no-op if `projectId`
+   * isn't the project currently loaded (a stale caller, e.g. from a load
+   * that's since been superseded).
+   */
+  setFolderContext(projectId: string, folderId: string): void {
+    if (this.snapshot.projectId !== projectId) return;
+    if (this.snapshot.folderId === folderId) return;
+    this.commit({ ...this.snapshot, folderId });
   }
 
   /**
