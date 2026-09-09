@@ -86,6 +86,31 @@ describe("nowPlayingStore", () => {
     expect(loadSpy).toHaveBeenCalled();
   });
 
+  it("setFolderContext records which folder the current project was opened from", async () => {
+    await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+
+    nowPlayingStore.setFolderContext("a", "folder-1");
+
+    expect(nowPlayingStore.getSnapshot().folderId).toBe("folder-1");
+  });
+
+  it("setFolderContext is a no-op when the given project isn't the one currently loaded", async () => {
+    await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+
+    nowPlayingStore.setFolderContext("some-other-project", "folder-1");
+
+    expect(nowPlayingStore.getSnapshot().folderId).toBeNull();
+  });
+
+  it("clears the remembered folder when a different project loads", async () => {
+    await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+    nowPlayingStore.setFolderContext("a", "folder-1");
+
+    await nowPlayingStore.openProject(entry("b"), ENGINE_OPTIONS);
+
+    expect(nowPlayingStore.getSnapshot().folderId).toBeNull();
+  });
+
   it("does not clobber an already-loaded project when a different project fails to load", async () => {
     await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
     getSourceMock.mockRejectedValueOnce(new Error("missing manifest"));

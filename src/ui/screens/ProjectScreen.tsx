@@ -319,6 +319,21 @@ export function ProjectScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- monitorMode/clickEnabled intentionally only applied on (re)load
   }, [entry?.id, dispatch]);
 
+  /**
+   * Remembers this project's folder on `nowPlayingStore` whenever the route
+   * actually names one, so `NowPlayingBar`'s `goToSong()` can carry it
+   * forward later. Deliberately one-directional (only ever writes a real
+   * `folderId`, never clears it back to `null`): a route opened *without* a
+   * `folderId` - e.g. the mini-player's own jump back into this same
+   * project - must not erase a folder context set moments earlier. A
+   * genuinely folder-less project already starts with `folderId: null` from
+   * `nowPlayingStore.loadFresh()`.
+   */
+  useEffect(() => {
+    if (!entry || !folderId) return;
+    nowPlayingStore.setFolderContext(entry.id, folderId);
+  }, [entry?.id, folderId]);
+
   /** Forces a fresh reload of the current project (its content actually changed) and re-seeds the store's mixer state from the result. */
   const reloadAndSeed = useCallback(async () => {
     if (!entry) return;
