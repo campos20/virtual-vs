@@ -5,7 +5,10 @@ import { View } from "react-native";
 import { Provider } from "react-redux";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { audioEngine } from "@/engine";
-import { DesktopStatusBanner } from "@/platform/desktop";
+import {
+  DesktopKeyboardShortcuts,
+  DesktopStatusBanner,
+} from "@/platform/desktop";
 import { store } from "@/store";
 import { ProjectLibraryGate } from "@/ui/ProjectLibraryGate";
 import { NowPlayingBar } from "@/ui/components/NowPlayingBar";
@@ -61,6 +64,7 @@ function ThemedApp() {
             playback (and this bar) survives every screen transition - see
             the "now playing" plan. */}
         <NowPlayingBar />
+        <DesktopKeyboardShortcuts />
       </View>
     </>
   );

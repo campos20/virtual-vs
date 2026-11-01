@@ -70,6 +70,41 @@ rate and returns a handle: duration plus a waveform envelope, never the
 samples themselves. `AudioEngine.loadProject()` then installs all the handles
 at once.
 
+## Keyboard shortcuts
+
+The keys follow common DAW conventions (Logic, Pro Tools, Reaper,
+MainStage). The same list is in the app: press **?** anywhere, or look under
+**Settings → Keyboard shortcuts**.
+
+| Key                  | What it does                                    |
+| -------------------- | ----------------------------------------------- |
+| Space                | Play / pause                                    |
+| Return (Enter)       | Stop and return to the start                    |
+| Home                 | Go to the start (keeps playing)                 |
+| ← or `,`             | Back one bar (5 s without a tempo)              |
+| → or `.`             | Forward one bar (5 s without a tempo)           |
+| Shift + ← / →        | Back / forward four bars                        |
+| Option (Alt) + ← / → | Previous / next marker                          |
+| 1 – 9                | Jump to marker 1–9                              |
+| ↑ / ↓                | Previous / next song (song screen, not playing) |
+| X                    | Show / hide the mixer (song screen)             |
+| L                    | Switch between tracks and lyrics (song screen)  |
+| K                    | Click on / off (song screen)                    |
+| ?                    | Show the list of shortcuts                      |
+
+- Transport and marker keys work wherever a song is loaded, Library included.
+  The others need the song screen.
+- A bar step snaps to the click's bar lines (4/4 from the start of the song).
+- Keys do nothing while you're typing in a text field, and anything held with
+  Cmd/Ctrl is left to the system.
+- A held key fires once, so holding an arrow can't fire a burst of seeks.
+- Each key goes through the same handler as its button, with the same guards:
+  previous/next song stays locked while playing, and every jump reschedules
+  the whole song together, so the stems stay in sync.
+
+The keys and the list both come from one table in
+`desktop/web/ui/shortcuts.ts`, so they can't drift apart.
+
 ## Stage safety
 
 - **Stems are sample-locked by construction.** One audio callback mixes every

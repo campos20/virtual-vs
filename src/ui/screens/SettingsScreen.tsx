@@ -3,7 +3,10 @@ import { useRouter } from "expo-router";
 import { StyleSheet, Text, View, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { type Locale, useTranslation } from "@/i18n";
-import { DesktopAudioSettings } from "@/platform/desktop";
+import {
+  DesktopAudioSettings,
+  DesktopShortcutsSettings,
+} from "@/platform/desktop";
 import {
   persistLanguageOverride,
   persistThemeOverride,
@@ -139,6 +142,7 @@ export function SettingsScreen() {
         </View>
 
         <DesktopAudioSettings />
+        <DesktopShortcutsSettings />
       </ScrollView>
     </SafeAreaView>
   );

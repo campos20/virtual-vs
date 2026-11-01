@@ -4,6 +4,7 @@ import { usePlayhead } from "@/hooks/usePlayhead";
 import { useTransportState } from "@/hooks/useTransportState";
 import { useTranslation } from "@/i18n";
 import { nowPlayingStore } from "@/playback/nowPlayingStore";
+import { useSongScreenShortcuts } from "@/platform/desktop";
 import {
   addStemsToProject,
   deleteProjectDirectory,
@@ -784,6 +785,32 @@ export function ProjectScreen() {
   }));
   const headerTitle =
     (isCurrent ? nowPlaying.manifest?.title : undefined) ?? entry?.title ?? "";
+
+  // Desktop keyboard shortcuts (a no-op on the phone). Each key only does
+  // what its button could do right now: nothing while editing, loading or
+  // showing an error, no click toggle without a tempo, and previous/next
+  // through handleStepSong, so they stay locked while playing.
+  const songReady =
+    isCurrent && !!nowPlaying.manifest && !editing && !loading && !error;
+  useSongScreenShortcuts({
+    toggleMixer: () => {
+      if (songReady) setMixerOpen((open) => !open);
+    },
+    toggleLyrics: () => {
+      if (songReady) handleSetLyricsView(!showLyrics);
+    },
+    toggleClick: () => {
+      if (songReady && nowPlaying.manifest?.bpm !== undefined) {
+        handleClickEnabledChange(!clickEnabled);
+      }
+    },
+    previousSong: () => {
+      if (songReady) handleStepSong(previousSongId);
+    },
+    nextSong: () => {
+      if (songReady) handleStepSong(nextSongId);
+    },
+  });
 
   function renderHeader() {
     // Collapsed while viewing lyrics, to give the auto-scrolling text as

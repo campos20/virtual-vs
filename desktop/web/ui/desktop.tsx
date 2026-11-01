@@ -9,6 +9,7 @@
 import { invoke } from "../tauri";
 import { engineStatus } from "../engine/status";
 import { AudioSettings } from "./AudioSettings";
+import { KeyboardShortcuts, ShortcutsSettings } from "./KeyboardShortcuts";
 import { StatusBanner } from "./StatusBanner";
 
 function forward(level: string, message: string): void {
@@ -52,3 +53,13 @@ export function DesktopStatusBanner() {
 export function DesktopAudioSettings() {
   return <AudioSettings />;
 }
+
+export function DesktopKeyboardShortcuts() {
+  return <KeyboardShortcuts />;
+}
+
+export function DesktopShortcutsSettings() {
+  return <ShortcutsSettings />;
+}
+
+export { useSongScreenShortcuts } from "./KeyboardShortcuts";

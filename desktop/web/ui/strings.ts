@@ -56,6 +56,34 @@ const en = {
   newInterface: (name: string, channels: number) =>
     `Audio interface connected: ${name} (${channels} outputs)`,
   useIt: "Use it",
+  shortcutsHeading: "KEYBOARD SHORTCUTS",
+  shortcutsHint: "Press ? anywhere in the app to show this list.",
+  shortcutsTitle: "Keyboard shortcuts",
+  or: "or",
+  shortcutGroups: {
+    transport: "Transport",
+    markers: "Markers",
+    song: "Song screen",
+    help: "Help",
+  },
+  shortcuts: {
+    playPause: "Play / pause",
+    stop: "Stop and return to the start",
+    toStart: "Go to the start (keeps playing)",
+    barBack: "Back one bar (5 s without a tempo)",
+    barForward: "Forward one bar (5 s without a tempo)",
+    fourBarsBack: "Back four bars",
+    fourBarsForward: "Forward four bars",
+    previousMarker: "Previous marker",
+    nextMarker: "Next marker",
+    marker: "Jump to marker 1–9",
+    previousSong: "Previous song (while not playing)",
+    nextSong: "Next song (while not playing)",
+    toggleMixer: "Show / hide the mixer",
+    toggleLyrics: "Switch between tracks and lyrics",
+    toggleClick: "Click on / off",
+    help: "Show this list",
+  },
 };
 
 type DesktopStrings = typeof en;
@@ -111,6 +139,34 @@ const ptBR: DesktopStrings = {
   newInterface: (name, channels) =>
     `Interface de áudio conectada: ${name} (${channels} saídas)`,
   useIt: "Usar",
+  shortcutsHeading: "ATALHOS DE TECLADO",
+  shortcutsHint: "Pressione ? em qualquer tela para ver esta lista.",
+  shortcutsTitle: "Atalhos de teclado",
+  or: "ou",
+  shortcutGroups: {
+    transport: "Transporte",
+    markers: "Marcadores",
+    song: "Tela da música",
+    help: "Ajuda",
+  },
+  shortcuts: {
+    playPause: "Tocar / pausar",
+    stop: "Parar e voltar ao início",
+    toStart: "Ir para o início (continua tocando)",
+    barBack: "Voltar um compasso (5 s sem tempo definido)",
+    barForward: "Avançar um compasso (5 s sem tempo definido)",
+    fourBarsBack: "Voltar quatro compassos",
+    fourBarsForward: "Avançar quatro compassos",
+    previousMarker: "Marcador anterior",
+    nextMarker: "Próximo marcador",
+    marker: "Ir para o marcador 1–9",
+    previousSong: "Música anterior (fora da reprodução)",
+    nextSong: "Próxima música (fora da reprodução)",
+    toggleMixer: "Mostrar / ocultar o mixer",
+    toggleLyrics: "Alternar entre faixas e letra",
+    toggleClick: "Click liga / desliga",
+    help: "Mostrar esta lista",
+  },
 };
 
 const dictionaries: Record<Locale, DesktopStrings> = { en, "pt-BR": ptBR };

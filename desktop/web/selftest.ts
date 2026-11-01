@@ -258,6 +258,54 @@ export async function runSelfTest(): Promise<void> {
     check("UI saw the end", audioEngine.getTransportState() === "stopped");
     unsubscribe();
 
+    // --- Keyboard shortcuts (the real window listener) -----------------------
+    const press = (key: string) => {
+      for (const type of ["keydown", "keyup"]) {
+        window.dispatchEvent(
+          new KeyboardEvent(type, { key, bubbles: true, cancelable: true }),
+        );
+      }
+    };
+    press(" ");
+    await wait(600);
+    check("Space plays", engineStatus.getLatest()?.transport === "playing");
+    press(" ");
+    await wait(300);
+    check("Space pauses", engineStatus.getLatest()?.transport === "paused");
+    press("2"); // the second marker, at 4s
+    await wait(300);
+    status = engineStatus.getLatest();
+    check(
+      "2 jumps to marker 2",
+      Math.abs((status?.positionSec ?? -1) - 4) < 0.05,
+      `at ${status?.positionSec.toFixed(3)}s`,
+    );
+    press("ArrowLeft"); // one bar at 120 bpm = 2s
+    await wait(300);
+    status = engineStatus.getLatest();
+    check(
+      "← steps back a bar",
+      Math.abs((status?.positionSec ?? -1) - 2) < 0.05,
+      `at ${status?.positionSec.toFixed(3)}s`,
+    );
+    press("Enter");
+    await wait(300);
+    status = engineStatus.getLatest();
+    check(
+      "Return stops",
+      status?.transport === "stopped" && status.positionSec === 0,
+    );
+    const field = document.createElement("input");
+    document.body.appendChild(field);
+    field.focus();
+    press(" ");
+    await wait(400);
+    check(
+      "Space while typing leaves the transport alone",
+      engineStatus.getLatest()?.transport === "stopped",
+    );
+    field.remove();
+
     // --- Routing --------------------------------------------------------------
     const routed = await api.setTrackRouting(
       manifest.tracks[0].id,
