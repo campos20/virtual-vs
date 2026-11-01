@@ -4,7 +4,7 @@
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
-const { open: openDialog } = window.__TAURI__.dialog;
+const { open: openDialog, ask, message } = window.__TAURI__.dialog;
 
 // Same palette as the mobile app's src/ui/trackColors.ts.
 const TRACK_COLORS = [
@@ -17,6 +17,7 @@ const TRACK_COLORS = [
   "#34D399",
   "#FB923C",
 ];
+const CLICK_COLOR = "#9b9b9d";
 const FADER_MAX = 1.5;
 const STATUS_POLL_MS = 50;
 
@@ -29,6 +30,9 @@ const state = {
   status: null,
   devices: [],
   seeking: false,
+  /** Row key -> "mono" | "stereo", for rows whose mode was switched by hand. */
+  rowModes: {},
+  pendingDevice: null,
 };
 
 // --- helpers -----------------------------------------------------------------
@@ -40,6 +44,7 @@ function el(tag, props = {}, children = []) {
     else if (key === "text") node.textContent = value;
     else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
     else if (key === "dataset") Object.assign(node.dataset, value);
+    else if (key === "style") node.style.cssText = value;
     else node[key] = value;
   }
   for (const child of children) if (child) node.append(child);
@@ -63,75 +68,42 @@ function outputChannels() {
   return state.settings?.output?.channels ?? 2;
 }
 
-function targetToValue(targets) {
-  if (!targets || targets.length === 0) return "off";
-  const t = targets[0];
-  return t.kind === "mono" ? `m:${t.channel}` : `s:${t.left}:${t.right}`;
-}
-
-function valueToTargets(value) {
-  if (value === "off") return [];
-  const [kind, a, b] = value.split(":");
-  return kind === "m"
-    ? [{ kind: "mono", channel: Number(a) }]
-    : [{ kind: "stereo", left: Number(a), right: Number(b) }];
+function outputLabel(channel) {
+  const name = state.settings?.outputNames?.[channel];
+  return name ? `${channel + 1} ${name}` : `Out ${channel + 1}`;
 }
 
 function describeTargets(targets) {
   if (!targets || targets.length === 0) return "Off";
-  return targets
-    .map((t) =>
-      t.kind === "mono"
-        ? `Out ${t.channel + 1}`
-        : `Out ${t.left + 1}-${t.right + 1}`,
-    )
-    .join(" + ");
+  const outputs = targets.map((t) =>
+    t.kind === "mono" ? `${t.channel + 1}` : `${t.left + 1}-${t.right + 1}`,
+  );
+  return `Out ${outputs.join(", ")}`;
 }
 
-/** Options for every mono output and every adjacent stereo pair on the device. */
-function fillOutputOptions(select, extraFirst) {
-  select.replaceChildren();
-  if (extraFirst)
-    select.append(
-      el("option", { value: extraFirst.value, text: extraFirst.label }),
-    );
-  select.append(el("option", { value: "off", text: "Off" }));
-  const channels = outputChannels();
-  const mono = el("optgroup", { label: "Mono" });
-  for (let c = 0; c < channels; c++) {
-    mono.append(el("option", { value: `m:${c}`, text: `Out ${c + 1}` }));
-  }
-  select.append(mono);
-  if (channels >= 2) {
-    const stereo = el("optgroup", { label: "Stereo" });
-    for (let c = 0; c + 1 < channels; c += 2) {
-      stereo.append(
-        el("option", {
-          value: `s:${c}:${c + 1}`,
-          text: `Out ${c + 1}-${c + 2}`,
-        }),
-      );
-    }
-    select.append(stereo);
-  }
+function targetFits(t, channels) {
+  return t.kind === "mono"
+    ? t.channel < channels
+    : t.left < channels && t.right < channels;
 }
 
-function setSelectValue(select, value) {
-  // A saved route can point at a channel the current device doesn't have;
-  // show it rather than silently displaying something else.
-  if (![...select.options].some((o) => o.value === value)) {
-    select.append(
-      el("option", { value, text: `${value} (not on this device)` }),
-    );
-  }
-  select.value = value;
+function sameTarget(a, b) {
+  if (a.kind !== b.kind) return false;
+  return a.kind === "mono"
+    ? a.channel === b.channel
+    : a.left === b.left && a.right === b.right;
+}
+
+async function showError(error) {
+  if (error === "superseded") return;
+  await message(String(error), { title: "Virtual VS", kind: "error" });
 }
 
 async function call(command, args) {
   try {
     return await invoke(command, args);
   } catch (error) {
-    if (error !== "superseded") alert(String(error));
+    await showError(error);
     throw error;
   }
 }
@@ -154,37 +126,17 @@ function renderLibrary() {
         ]
           .filter(Boolean)
           .join(" · ");
-    const actions = el("div", { className: "row-actions" }, [
+    const action = (text, title, disabled, run) =>
       el("button", {
         className: "icon-button small",
-        title: "Move up",
-        text: "▲",
-        disabled: index === 0,
+        text,
+        title,
+        disabled,
         onclick: (e) => {
           e.stopPropagation();
-          moveLibraryEntry(entry.dir, index - 1);
+          run();
         },
-      }),
-      el("button", {
-        className: "icon-button small",
-        title: "Move down",
-        text: "▼",
-        disabled: index === state.library.length - 1,
-        onclick: (e) => {
-          e.stopPropagation();
-          moveLibraryEntry(entry.dir, index + 1);
-        },
-      }),
-      el("button", {
-        className: "icon-button small",
-        title: "Remove from library (files are kept)",
-        text: "✕",
-        onclick: (e) => {
-          e.stopPropagation();
-          removeLibraryEntry(entry.dir);
-        },
-      }),
-    ]);
+      });
     list.append(
       el(
         "li",
@@ -201,7 +153,17 @@ function renderLibrary() {
             }),
             el("div", { className: "sub", text: sub }),
           ]),
-          actions,
+          el("div", { className: "row-actions" }, [
+            action("▲", "Move up", index === 0, () =>
+              moveLibraryEntry(entry.dir, index - 1),
+            ),
+            action("▼", "Move down", index === state.library.length - 1, () =>
+              moveLibraryEntry(entry.dir, index + 1),
+            ),
+            action("✕", "Remove from library (files are kept)", false, () =>
+              removeLibraryEntry(entry.dir),
+            ),
+          ]),
         ],
       ),
     );
@@ -243,19 +205,28 @@ async function loadProject(dir) {
     state.project &&
     state.project.dir !== dir
   ) {
-    if (!confirm("A song is playing. Stop it and load the new one?")) return;
+    const ok = await ask("A song is playing. Stop it and load the new one?", {
+      title: "Load song",
+      kind: "warning",
+    });
+    if (!ok) return;
   }
   $("loading-text").textContent = "Loading…";
   $("loading").hidden = false;
   try {
-    state.project = await call("load_project", { dir });
-    renderProject();
+    setProject(await call("load_project", { dir }));
     renderLibrary();
   } catch {
     // Reported by call().
   } finally {
     $("loading").hidden = true;
   }
+}
+
+function setProject(project) {
+  state.project = project;
+  renderProject();
+  if (!$("routing").hidden) renderRouting();
 }
 
 function renderProject() {
@@ -323,6 +294,20 @@ function highlightCurrentMarker(positionSec) {
   for (const button of $("markers").children) {
     button.classList.toggle("current", button === current);
   }
+}
+
+function routeButton(route, rowKey) {
+  const channels = outputChannels();
+  const missing = route.targets.some((t) => !targetFits(t, channels));
+  const pinned = route.source === "song" ? " · this song" : "";
+  return el("button", {
+    className: `route-button${missing ? " missing" : ""}`,
+    text: describeTargets(route.targets) + pinned,
+    title: missing
+      ? "Routed to an output this device doesn't have"
+      : "Open routing",
+    onclick: () => openRouting(rowKey),
+  });
 }
 
 function renderMixer() {
@@ -399,46 +384,262 @@ function renderMixer() {
       },
     });
 
-    const route = el("select", {
-      title: "Output for this track on this computer",
-    });
-    const busTargets = track.bus === "both" ? [] : state.settings?.[track.bus];
-    // Kept short - strips are narrow. The bus name is shown above the fader.
-    const busLabel =
-      track.bus === "both"
-        ? "Bus · cue+main"
-        : `Bus · ${describeTargets(busTargets)}`;
-    fillOutputOptions(route, { value: "bus", label: busLabel });
-    setSelectValue(
-      route,
-      track.routingOverride ? targetToValue(track.routingOverride) : "bus",
-    );
-    route.addEventListener("change", async () => {
-      const targets =
-        route.value === "bus" ? null : valueToTargets(route.value);
-      await call("set_track_routing", {
-        projectId: p.id,
-        trackId: track.id,
-        targets,
-      });
-      track.routingOverride = targets;
-    });
-
     mixer.append(
       el("div", { className: "strip" }, [
         el("div", {
           className: "color",
-          style: `background:${TRACK_COLORS[index % 8]}`,
+          style: `background:${TRACK_COLORS[index % TRACK_COLORS.length]}`,
         }),
         el("div", { className: "name", text: track.name, title: track.name }),
         el("div", { className: "bus", text: track.bus }),
         db,
         fader,
         el("div", { className: "buttons" }, [mute, solo]),
-        route,
+        routeButton(track.route, `track:${track.id}`),
       ]),
     );
   });
+}
+
+// --- routing matrix ----------------------------------------------------------
+
+/** Every routable voice of the loaded song: its tracks, then the click. */
+function routingRows() {
+  const p = state.project;
+  if (!p) return [];
+  const rows = p.tracks.map((track, index) => ({
+    key: `track:${track.id}`,
+    name: track.name,
+    color: TRACK_COLORS[index % TRACK_COLORS.length],
+    route: track.route,
+    isClick: false,
+    trackId: track.id,
+  }));
+  if (p.hasClick) {
+    rows.push({
+      key: "click",
+      name: "Click",
+      color: CLICK_COLOR,
+      route: p.clickRoute,
+      isClick: true,
+    });
+  }
+  return rows;
+}
+
+function rowMode(row) {
+  return (
+    state.rowModes[row.key] ??
+    (row.route.targets[0]?.kind === "stereo" ? "stereo" : "mono")
+  );
+}
+
+/** Saves a row's route. Tracks keep their current scope; the click is global. */
+async function saveRoute(row, targets, scope) {
+  if (row.isClick) {
+    const project = await call("set_click_routing", { targets });
+    if (project) setProject(project);
+    return;
+  }
+  const effectiveScope =
+    scope ?? (row.route.source === "song" ? "thisSong" : "allSongs");
+  setProject(
+    await call("set_track_routing", {
+      trackId: row.trackId,
+      scope: effectiveScope,
+      targets,
+    }),
+  );
+}
+
+function toggleCell(row, channel) {
+  const channels = outputChannels();
+  const targets = [...row.route.targets];
+  let target;
+  if (rowMode(row) === "stereo") {
+    const left = channel - (channel % 2);
+    if (left + 1 >= channels) return; // no pair for a trailing odd output
+    target = { kind: "stereo", left, right: left + 1 };
+  } else {
+    target = { kind: "mono", channel };
+  }
+  const existing = targets.findIndex((t) => sameTarget(t, target));
+  if (existing >= 0) targets.splice(existing, 1);
+  else targets.push(target);
+  return saveRoute(row, targets);
+}
+
+function switchMode(row, mode) {
+  state.rowModes[row.key] = mode;
+  const converted = [];
+  for (const t of row.route.targets) {
+    const next =
+      mode === "stereo"
+        ? t.kind === "mono"
+          ? {
+              kind: "stereo",
+              left: t.channel - (t.channel % 2),
+              right: t.channel - (t.channel % 2) + 1,
+            }
+          : t
+        : t.kind === "stereo"
+          ? { kind: "mono", channel: t.left }
+          : t;
+    if (!converted.some((c) => sameTarget(c, next))) converted.push(next);
+  }
+  return saveRoute(row, converted);
+}
+
+function cellLabel(row, channel) {
+  for (const t of row.route.targets) {
+    if (t.kind === "mono" && t.channel === channel) return "●";
+    if (t.kind === "stereo" && t.left === channel) return "L";
+    if (t.kind === "stereo" && t.right === channel) return "R";
+  }
+  return "";
+}
+
+function renderRouting(highlightKey) {
+  const s = state.settings;
+  const channels = outputChannels();
+  $("routing-device").textContent = s?.output
+    ? `${s.output.name} — ${channels} output${channels === 1 ? "" : "s"}`
+    : "No audio output open";
+  $("routing-monitor-note").hidden = s?.monitorMode !== "monitor";
+
+  const table = $("matrix");
+  table.replaceChildren();
+  const rows = routingRows();
+  if (rows.length === 0) {
+    table.append(
+      el("tr", {}, [
+        el("td", {
+          className: "track-cell",
+          text: "Load a song to route its tracks.",
+        }),
+      ]),
+    );
+    $("routing-problems").replaceChildren();
+    return;
+  }
+
+  const head = el("tr", {}, [
+    el("th", { className: "track-cell", text: "Track" }),
+  ]);
+  for (let c = 0; c < channels; c++) {
+    const name = s?.outputNames?.[c] ?? "";
+    head.append(
+      el("th", { className: "out-head", title: name || `Output ${c + 1}` }, [
+        el("span", { className: "num", text: String(c + 1) }),
+        el("span", { className: "label", text: name || " " }),
+      ]),
+    );
+  }
+  table.append(el("thead", {}, [head]));
+
+  const body = el("tbody");
+  const problems = [];
+  for (const row of rows) {
+    const mode = rowMode(row);
+    const source = row.route.source;
+    const controls = el("div", { className: "row-controls" }, [
+      el("button", {
+        className: `mini${mode === "mono" ? " on" : ""}`,
+        text: "Mono",
+        onclick: () => mode !== "mono" && switchMode(row, "mono"),
+      }),
+      el("button", {
+        className: `mini${mode === "stereo" ? " on" : ""}`,
+        text: "Stereo",
+        disabled: channels < 2,
+        onclick: () => mode !== "stereo" && switchMode(row, "stereo"),
+      }),
+      row.isClick
+        ? null
+        : el("button", {
+            className: `mini${source === "song" ? " pinned" : ""}`,
+            text: source === "song" ? "This song only" : "All songs",
+            title:
+              source === "song"
+                ? "Pinned to this song. Click to use it for every song with this track name."
+                : "Applies to every song with a track named like this. Click to pin to this song only.",
+            onclick: () =>
+              saveRoute(
+                row,
+                row.route.targets,
+                source === "song" ? "allSongs" : "thisSong",
+              ),
+          }),
+      el("button", {
+        className: "mini",
+        text: "Reset",
+        title: row.isClick
+          ? "Back to output 1"
+          : "Back to the phone layout (cue → 1, main → 2)",
+        disabled: source === "default",
+        onclick: () => {
+          delete state.rowModes[row.key];
+          saveRoute(row, null, "allSongs");
+        },
+      }),
+    ]);
+
+    const tr = el(
+      "tr",
+      { className: row.key === highlightKey ? "highlight" : "" },
+      [
+        el("td", { className: "track-cell" }, [
+          el("div", { className: "track-line" }, [
+            el("span", { className: "dot", style: `background:${row.color}` }),
+            el("span", { className: "track-name", text: row.name }),
+            el("span", {
+              className: "muted small",
+              text: source === "default" ? "default" : "",
+            }),
+          ]),
+          controls,
+        ]),
+      ],
+    );
+    for (let c = 0; c < channels; c++) {
+      const label = cellLabel(row, c);
+      tr.append(
+        el("td", { className: "cell" }, [
+          el("button", {
+            className: label ? "on" : "",
+            text: label,
+            title: `${row.name} → ${outputLabel(c)}`,
+            onclick: () => toggleCell(row, c),
+          }),
+        ]),
+      );
+    }
+    body.append(tr);
+
+    const missing = row.route.targets.filter((t) => !targetFits(t, channels));
+    if (missing.length > 0) {
+      problems.push(
+        `${row.name} → ${describeTargets(missing)}: this device has only ${channels} outputs, so that part is silent.`,
+      );
+    }
+    if (row.route.targets.length === 0) {
+      problems.push(`${row.name} is routed nowhere (silent).`);
+    }
+  }
+  table.append(body);
+
+  $("routing-problems").replaceChildren(
+    ...problems.map((text) => el("li", { text })),
+  );
+  if (highlightKey) {
+    table.querySelector("tr.highlight")?.scrollIntoView({ block: "nearest" });
+  }
+}
+
+async function openRouting(highlightKey) {
+  state.settings = await invoke("get_settings");
+  renderRouting(highlightKey);
+  $("routing").hidden = false;
 }
 
 // --- transport & status -------------------------------------------------------
@@ -461,10 +662,21 @@ function renderStatus(status) {
   }
   highlightCurrentMarker(status.positionSec);
 
-  const banner = $("device-error");
-  banner.hidden = !status.deviceError;
-  banner.textContent = status.deviceError
-    ? `Audio problem: ${status.deviceError} — open “Audio & routing” to pick a device.`
+  $("device-chip").textContent = status.output
+    ? `${status.output.name} · ${status.output.channels} out`
+    : "";
+
+  const error = $("device-error");
+  error.hidden = !status.deviceError;
+  error.textContent = status.deviceError
+    ? `Audio problem: ${status.deviceError}. It reconnects on its own when the device is back; or pick one in “Audio device”.`
+    : "";
+
+  const warning = $("routing-warning");
+  const warned = status.routingWarnings ?? [];
+  warning.hidden = warned.length === 0 || !!status.deviceError;
+  warning.textContent = warned.length
+    ? `Silent on this device (routed to outputs it doesn't have): ${warned.join(", ")}. Open Routing to fix.`
     : "";
 }
 
@@ -476,7 +688,7 @@ async function pollStatus() {
   }
 }
 
-// --- settings ----------------------------------------------------------------
+// --- audio device ------------------------------------------------------------
 
 async function openSettings() {
   state.devices = await invoke("list_devices");
@@ -495,11 +707,19 @@ function renderSettings() {
     deviceSelect.append(
       el("option", {
         value: d.id,
-        text: `${d.name} — ${d.maxChannels} out @ ${d.defaultSampleRate} Hz`,
+        text: `${d.name} — ${d.maxChannels} outputs @ ${d.defaultSampleRate} Hz`,
       }),
     );
   }
-  setSelectValue(deviceSelect, s.deviceId ?? "");
+  if (
+    s.deviceId &&
+    ![...deviceSelect.options].some((o) => o.value === s.deviceId)
+  ) {
+    deviceSelect.append(
+      el("option", { value: s.deviceId, text: "Saved device (not connected)" }),
+    );
+  }
+  deviceSelect.value = s.deviceId ?? "";
   $("buffer-select").value = s.bufferFrames ? String(s.bufferFrames) : "";
   $("device-info").textContent = s.output
     ? `Open: ${s.output.name}, ${s.output.channels} outputs at ${s.output.sampleRate} Hz` +
@@ -509,41 +729,62 @@ function renderSettings() {
   for (const button of document.querySelectorAll(".segmented button")) {
     button.classList.toggle("on", button.dataset.mode === s.monitorMode);
   }
-  for (const select of document.querySelectorAll("select[data-bus]")) {
-    const bus = select.dataset.bus;
-    const isDefault = s.routing[bus] == null;
-    const defaultLabel =
-      bus === "click"
-        ? "Default (same as cue)"
-        : `Default (${describeTargets(s[bus])})`;
-    fillOutputOptions(select, { value: "default", label: defaultLabel });
-    setSelectValue(
-      select,
-      isDefault ? "default" : targetToValue(s.routing[bus]),
+
+  const names = $("output-names");
+  names.replaceChildren();
+  (s.outputNames ?? []).forEach((name, channel) => {
+    const input = el("input", {
+      type: "text",
+      value: name,
+      placeholder: "Unnamed",
+      maxLength: 40,
+    });
+    input.addEventListener("change", async () => {
+      state.settings = await call("set_output_name", {
+        channel,
+        name: input.value,
+      });
+    });
+    names.append(
+      el("label", {}, [el("span", { text: `Out ${channel + 1}` }), input]),
     );
-  }
+  });
 }
 
-async function applyDevice() {
-  if (
-    state.status?.transport === "playing" &&
-    !confirm("Switching devices stops playback. Continue?")
-  ) {
-    renderSettings();
-    return;
+async function switchDevice(deviceId, bufferFrames) {
+  if (state.status?.transport === "playing") {
+    const ok = await ask(
+      "Switching the audio device stops playback. Continue?",
+      {
+        title: "Audio device",
+        kind: "warning",
+      },
+    );
+    if (!ok) return false;
   }
-  const deviceId = $("device-select").value || null;
-  const bufferValue = $("buffer-select").value;
   try {
-    state.settings = await call("select_device", {
-      deviceId,
-      bufferFrames: bufferValue ? Number(bufferValue) : null,
-    });
+    state.settings = await call("select_device", { deviceId, bufferFrames });
   } catch {
     state.settings = await invoke("get_settings");
   }
+  return true;
+}
+
+async function applyDeviceFromSettings() {
+  const bufferValue = $("buffer-select").value;
+  await switchDevice(
+    $("device-select").value || null,
+    bufferValue ? Number(bufferValue) : null,
+  );
+  state.devices = await invoke("list_devices");
   renderSettings();
-  renderMixer();
+}
+
+function showDeviceToast(device) {
+  state.pendingDevice = device;
+  $("device-toast-text").textContent =
+    `Audio interface connected: ${device.name} (${device.maxChannels} outputs)`;
+  $("device-toast").hidden = false;
 }
 
 // --- wiring ------------------------------------------------------------------
@@ -570,34 +811,37 @@ function wire() {
     state.seeking = false;
   });
 
-  $("open-settings").addEventListener("click", openSettings);
-  $("close-settings").addEventListener(
+  $("open-routing").addEventListener("click", () => openRouting());
+  $("close-routing").addEventListener(
     "click",
-    () => ($("settings").hidden = true),
+    () => ($("routing").hidden = true),
   );
-  $("device-select").addEventListener("change", applyDevice);
-  $("buffer-select").addEventListener("change", applyDevice);
+  $("open-settings").addEventListener("click", openSettings);
+  $("close-settings").addEventListener("click", () => {
+    $("settings").hidden = true;
+    renderMixer(); // output names may have changed
+  });
+  $("device-select").addEventListener("change", applyDeviceFromSettings);
+  $("buffer-select").addEventListener("change", applyDeviceFromSettings);
   for (const button of document.querySelectorAll(".segmented button")) {
     button.addEventListener("click", async () => {
       state.settings = await call("set_monitor_mode", {
         mode: button.dataset.mode,
       });
       renderSettings();
-      renderMixer();
     });
   }
-  for (const select of document.querySelectorAll("select[data-bus]")) {
-    select.addEventListener("change", async () => {
-      const targets =
-        select.value === "default" ? null : valueToTargets(select.value);
-      state.settings = await call("set_bus_routing", {
-        bus: select.dataset.bus,
-        targets,
-      });
-      renderSettings();
-      renderMixer();
-    });
-  }
+
+  $("device-toast-dismiss").addEventListener("click", () => {
+    $("device-toast").hidden = true;
+  });
+  $("device-toast-use").addEventListener("click", async () => {
+    const device = state.pendingDevice;
+    $("device-toast").hidden = true;
+    if (!device) return;
+    await switchDevice(device.id, state.settings?.bufferFrames ?? null);
+    renderMixer();
+  });
 
   document.addEventListener("keydown", (event) => {
     // Sliders don't use Space, so it still toggles playback after touching a
@@ -608,11 +852,15 @@ function wire() {
       target.tagName === "SELECT" ||
       target.tagName === "TEXTAREA" ||
       (target.tagName === "INPUT" && target.type !== "range");
-    if (event.code === "Space" && !typing && $("settings").hidden) {
+    const modalOpen = !$("settings").hidden || !$("routing").hidden;
+    if (event.code === "Space" && !typing && !modalOpen) {
       event.preventDefault();
       togglePlay();
     }
-    if (event.code === "Escape") $("settings").hidden = true;
+    if (event.code === "Escape") {
+      $("settings").hidden = true;
+      $("routing").hidden = true;
+    }
   });
 
   listen("load-progress", ({ payload }) => {
@@ -621,6 +869,37 @@ function wire() {
       $("loading-text").textContent =
         `Decoding ${payload.current}/${payload.total}${name}`;
     }
+  });
+
+  // The engine switched or reconnected a device (possibly on its own).
+  listen("device-changed", async ({ payload }) => {
+    state.settings = payload;
+    // The interface that was just offered got reconnected automatically.
+    if (state.pendingDevice?.id === payload.output?.id) {
+      $("device-toast").hidden = true;
+    }
+    const project = await invoke("get_project");
+    if (project) setProject(project);
+    if (!$("settings").hidden) {
+      state.devices = await invoke("list_devices");
+      renderSettings();
+    }
+    if (!$("routing").hidden) renderRouting();
+  });
+
+  listen("project-reloaded", ({ payload }) => setProject(payload));
+
+  listen("devices-changed", ({ payload }) => {
+    state.devices = payload.devices;
+    if (!$("settings").hidden) renderSettings();
+    const current = state.settings?.output?.id;
+    const added = payload.devices.filter(
+      (d) => payload.added.includes(d.id) && d.id !== current,
+    );
+    // Offer the interface with the most outputs - that's the one meant for
+    // the stage, not a pair of headphones that just connected.
+    added.sort((a, b) => b.maxChannels - a.maxChannels);
+    if (added.length > 0) showDeviceToast(added[0]);
   });
 }
 

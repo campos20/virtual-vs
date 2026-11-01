@@ -62,21 +62,45 @@ h3 {
 }
 
 .banner {
-  background: var(--danger);
+  flex: none;
   color: #fff;
   font-weight: 600;
   padding: 10px 16px;
   text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+
+.banner[hidden] {
+  display: none;
+}
+
+.banner.error {
+  background: var(--danger);
+}
+
+.banner.warning {
+  background: var(--warning);
+  color: #000;
+}
+
+.banner.info {
+  background: var(--accent);
+}
+
+/* Banners stack on top; the app takes whatever height is left. */
+body {
+  display: flex;
+  flex-direction: column;
 }
 
 .app {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: 280px 1fr;
-  height: 100%;
-}
-
-body:has(.banner:not([hidden])) .app {
-  height: calc(100% - 40px);
 }
 
 /* --- Library ------------------------------------------------------------- */
@@ -395,17 +419,29 @@ body:has(.banner:not([hidden])) .app {
   color: #000;
 }
 
-.strip select,
-.field select {
+.field select,
+.field input {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 4px 6px;
 }
 
-.strip select {
+.route-button {
   width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
   font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.route-button.missing {
+  border-color: var(--warning);
+  color: var(--warning);
 }
 
 .strip .bus {
@@ -506,4 +542,215 @@ body:has(.banner:not([hidden])) .app {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* --- Header ------------------------------------------------------------- */
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.device-chip {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-right: 4px;
+}
+
+/* --- Routing matrix ------------------------------------------------------ */
+
+.modal-body.wide {
+  width: min(1100px, 96vw);
+}
+
+.note {
+  background: var(--panel-raised);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--warning);
+}
+
+.note[hidden] {
+  display: none;
+}
+
+.matrix-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.matrix {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.matrix th,
+.matrix td {
+  border-bottom: 1px solid var(--border);
+  padding: 0;
+}
+
+.matrix thead th {
+  background: var(--panel-raised);
+  position: sticky;
+  top: 0;
+  font-weight: 600;
+}
+
+.matrix .track-cell {
+  position: sticky;
+  left: 0;
+  background: var(--panel);
+  padding: 6px 10px;
+  min-width: 300px;
+  text-align: left;
+  border-right: 1px solid var(--border);
+}
+
+.matrix thead .track-cell {
+  background: var(--panel-raised);
+}
+
+.matrix .track-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.matrix .track-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.matrix .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.matrix .row-controls {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.mini {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.mini.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.mini.pinned {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.mini:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.matrix .out-head {
+  min-width: 46px;
+  padding: 6px 4px;
+  text-align: center;
+  border-left: 1px solid var(--border);
+}
+
+.matrix .out-head .num {
+  display: block;
+}
+
+.matrix .out-head .label {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matrix .cell {
+  border-left: 1px solid var(--border);
+  text-align: center;
+}
+
+.matrix .cell button {
+  width: 100%;
+  height: 100%;
+  min-height: 52px;
+  background: transparent;
+  border: none;
+  font-weight: 700;
+}
+
+.matrix .cell button:hover {
+  background: var(--panel-raised);
+}
+
+.matrix .cell button.on {
+  background: var(--accent);
+}
+
+.matrix tr.highlight .track-cell {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.problems {
+  color: var(--warning);
+  padding-left: 18px;
+}
+
+.problems:empty {
+  display: none;
+}
+
+/* --- Output names -------------------------------------------------------- */
+
+.output-names {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px 16px;
+}
+
+.output-names label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.output-names span {
+  width: 52px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.output-names input {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+  color: var(--text-primary);
+  font: inherit;
+  user-select: text;
+  -webkit-user-select: text;
 }

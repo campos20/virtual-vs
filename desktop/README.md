@@ -76,17 +76,42 @@ desktop/
 
 ## Routing
 
-Routing belongs to the computer, not the song, because the same song runs on
-different rigs. It is saved in the app's config directory.
+Every track (and the click) is routed on its own, to any output the interface
+has. A track can go to several outputs at once, as mono outputs (L+R summed at
+-6 dB) or stereo pairs. Routing lives in the **Routing** matrix: rows are
+tracks, columns are outputs.
 
-- **Buses.** Cue and Main each map to one output: a mono channel or a stereo
-  pair. The defaults copy the phone's headphone split: cue on output 1, main on
-  output 2. The click follows cue unless it has its own route.
-- **Per-track overrides.** Any track can be sent to its own output (for
-  example drums to output 5 for the FOH console), per project.
-- **Monitor mode.** Sends everything to outputs 1-2 in stereo, for rehearsing
-  on plain headphones, as on mobile.
-- **Mono outputs** sum L+R at -6 dB.
+- **Routes follow the track name across songs.** Route "Drums" to the FOH
+  channels once and every song with a Drums track uses it. A song can pin its
+  own route for a track ("This song only") when it needs to differ.
+- **Routing belongs to the computer**, not the song (the same song runs on
+  different rigs). It's saved in the app's config directory, along with names
+  for each interface's outputs ("IEM drummer", "FOH bass"), saved per device.
+- **Unrouted tracks follow the phone's layout**: cue on output 1, main on
+  output 2. The click defaults to output 1.
+- **Routes to outputs the current device doesn't have** are skipped, never
+  remapped somewhere else. A yellow banner names the tracks this affects.
+- **Monitor mode** sends everything to outputs 1-2 in stereo, for rehearsing on
+  plain headphones, as on mobile.
+
+### Interfaces
+
+The app opens every output channel the device reports. It rescans devices
+every 2 s:
+
+- **New interface plugged in.** The app offers to switch to it, preferring the
+  one with the most outputs.
+- **Saved interface missing at startup.** The app starts on the system default
+  and switches back on its own when the interface appears, but only while
+  stopped. Switching closes the stream, so it never happens under a playing or
+  paused song.
+- **Interface lost mid-show** (unplugged, driver error, or no callbacks for
+  1.5 s). A red banner shows, and the app reconnects as soon as the interface
+  is back.
+
+On Windows, cpal uses WASAPI, which may expose fewer channels than the
+interface's ASIO driver. ASIO support (cpal's `asio` feature, which needs the
+Steinberg SDK at build time) is on the list below.
 
 ## Status
 
@@ -100,7 +125,8 @@ Done:
 - per-track volume, mute and solo
 - click
 - output device and buffer size selection
-- bus and per-track routing
+- per-track routing matrix, multi-output, with output names
+- interface detection, plus switching and reconnecting
 - monitor mode
 - mix persisted to the manifest
 
@@ -113,5 +139,5 @@ Next:
 - `.vvs` bundle import/export (reuse `src/storage/bundleFormat.ts`)
 - Library folders/setlists, marker editing, lyrics view, waveforms
 - MIDI footswitch (`midir`)
-- Automatic recovery when an unplugged interface comes back
+- ASIO on Windows, for interfaces whose WASAPI driver exposes fewer channels
 - Storing decoded stems as 16-bit to halve memory for very long sets

@@ -2,6 +2,7 @@
 //! the library of project folders. Lives in the OS app-config directory, not
 //! in any project - it describes this rig, not a song.
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -26,6 +27,26 @@ pub struct AppConfig {
     /// Project folders, in Library order.
     #[serde(default)]
     pub library: Vec<String>,
+    /// Device id -> a label per output ("IEM Drummer", "FOH Bass"...), so the
+    /// routing matrix speaks the stage's language. Empty strings mean unnamed.
+    #[serde(default)]
+    pub output_names: HashMap<String, Vec<String>>,
+}
+
+impl AppConfig {
+    pub fn set_output_name(&mut self, device_id: &str, channel: usize, name: String) {
+        let names = self.output_names.entry(device_id.to_string()).or_default();
+        if names.len() <= channel {
+            names.resize(channel + 1, String::new());
+        }
+        names[channel] = name.trim().to_string();
+        while names.last().is_some_and(String::is_empty) {
+            names.pop();
+        }
+        if names.is_empty() {
+            self.output_names.remove(device_id);
+        }
+    }
 }
 
 impl AppConfig {
@@ -80,5 +101,14 @@ mod tests {
         assert!(fallback.library.is_empty());
         assert!(path.with_extension("json.corrupt").exists());
         fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn output_names_are_trimmed_and_cleared() {
+        let mut config = AppConfig::default();
+        config.set_output_name("dev", 2, " FOH Drums ".into());
+        assert_eq!(config.output_names["dev"], vec!["", "", "FOH Drums"]);
+        config.set_output_name("dev", 2, "".into());
+        assert!(config.output_names.is_empty());
     }
 }

@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 
 use crate::project::{Bus, ProjectManifest};
-use crate::routing::{MonitorMode, RouteSet, RoutingConfig};
+use crate::routing::{self, MonitorMode, OutputTarget, RouteSet, RoutingConfig};
 use device::{ActiveOutput, OutputStream};
 use mixer::{Command, Garbage, Mixer, Program, SharedStatus, StemAudio, TransportState, Voice};
 
@@ -136,6 +136,13 @@ pub fn decode_project(
     })
 }
 
+/// A failed device is always worth replacing. A working fallback device is
+/// only swapped for the preferred one while stopped: switching closes the
+/// stream, which would cut a playing (or paused) song.
+fn should_reconnect(failed: bool, on_fallback: bool, idle: bool) -> bool {
+    failed || (on_fallback && idle)
+}
+
 struct Output {
     stream: OutputStream,
     commands: rtrb::Producer<Command>,
@@ -163,6 +170,9 @@ pub struct EngineStatus {
     /// Something is wrong with the audio device; the UI must make this loud.
     pub device_error: Option<String>,
     pub xruns: u64,
+    /// Voices routed (in full or in part) to outputs this device doesn't have
+    /// - silent there, so the UI warns rather than letting it go unnoticed.
+    pub routing_warnings: Vec<String>,
 }
 
 pub struct Engine {
@@ -171,6 +181,11 @@ pub struct Engine {
     monitor_mode: MonitorMode,
     routing: RoutingConfig,
     open_error: Option<String>,
+    /// The device the user chose (`None` = system default). The open device
+    /// can differ when that one isn't connected; see `reconnect_target`.
+    preferred_device: Option<String>,
+    preferred_buffer: Option<u32>,
+    routing_warnings: Vec<String>,
 }
 
 impl Engine {
@@ -181,7 +196,35 @@ impl Engine {
             monitor_mode,
             routing,
             open_error: None,
+            preferred_device: None,
+            preferred_buffer: None,
+            routing_warnings: Vec::new(),
         }
+    }
+
+    pub fn set_preferred_device(&mut self, device_id: Option<String>, buffer_frames: Option<u32>) {
+        self.preferred_device = device_id;
+        self.preferred_buffer = buffer_frames;
+    }
+
+    pub fn preferred_device(&self) -> (Option<String>, Option<u32>) {
+        (self.preferred_device.clone(), self.preferred_buffer)
+    }
+
+    /// The device to (re)open, if the output should change on its own: the
+    /// open device failed, or the preferred one isn't the one running. Never
+    /// proposes switching away from a working device while a song is playing
+    /// or paused - only after a failure or while stopped.
+    pub fn reconnect_target(&mut self) -> Option<(Option<String>, Option<u32>)> {
+        let status = self.status();
+        let failed = status.device_error.is_some();
+        let on_fallback = match (&self.preferred_device, self.output_info()) {
+            (_, None) => true,
+            (Some(preferred), Some(open)) => &open.id != preferred,
+            (None, Some(_)) => false,
+        };
+        let idle = status.transport == Transport::Stopped;
+        should_reconnect(failed, on_fallback, idle).then(|| self.preferred_device())
     }
 
     pub fn output_info(&self) -> Option<&ActiveOutput> {
@@ -268,25 +311,46 @@ impl Engine {
             .collect()
     }
 
-    fn resolve_routes(&self, project: &LoadedProject) -> Vec<RouteSet> {
+    /// Split-mode targets per voice (tracks, then the click), with names.
+    fn voice_targets(&self, project: &LoadedProject) -> Vec<(String, Vec<OutputTarget>)> {
         let channels = self.channels();
-        let mut routes: Vec<RouteSet> = project
+        let mut voices: Vec<(String, Vec<OutputTarget>)> = project
             .tracks
             .iter()
             .map(|t| {
-                self.routing.resolve_track(
-                    self.monitor_mode,
-                    &project.manifest.id,
-                    &t.id,
-                    t.bus,
-                    channels,
-                )
+                let route =
+                    self.routing
+                        .track_route(&project.manifest.id, &t.id, &t.name, t.bus, channels);
+                (t.name.clone(), route.targets)
             })
             .collect();
         if project.click.is_some() {
-            routes.push(self.routing.resolve_click(self.monitor_mode, channels));
+            voices.push(("Click".to_string(), self.routing.click_route().targets));
         }
-        routes
+        voices
+    }
+
+    /// Resolves every voice's routes for the current device and mode, and
+    /// records which voices point at outputs the device doesn't have.
+    fn resolve_routes(&mut self) -> Vec<RouteSet> {
+        let Some(project) = self.project.as_ref() else {
+            return Vec::new();
+        };
+        let channels = self.channels();
+        let voices = self.voice_targets(project);
+        self.routing_warnings = if self.monitor_mode == MonitorMode::Split {
+            voices
+                .iter()
+                .filter(|(_, targets)| targets.iter().any(|t| !t.fits(channels)))
+                .map(|(name, _)| name.clone())
+                .collect()
+        } else {
+            Vec::new()
+        };
+        voices
+            .iter()
+            .map(|(_, targets)| routing::route_set(self.monitor_mode, targets, channels))
+            .collect()
     }
 
     fn click_gain(project: &LoadedProject) -> f32 {
@@ -298,11 +362,11 @@ impl Engine {
     }
 
     fn send_program(&mut self) {
+        let routes = self.resolve_routes();
         let Some(project) = self.project.as_ref() else {
             return;
         };
         let gains = self.effective_gains(project);
-        let routes = self.resolve_routes(project);
         let mut voices: Vec<Voice> = project
             .stems
             .iter()
@@ -368,10 +432,7 @@ impl Engine {
     }
 
     fn push_routes(&mut self) {
-        let Some(project) = self.project.as_ref() else {
-            return;
-        };
-        let routes = self.resolve_routes(project);
+        let routes = self.resolve_routes();
         for (voice, routes) in routes.into_iter().enumerate() {
             self.send(Command::SetRoutes { voice, routes });
         }
@@ -455,6 +516,7 @@ impl Engine {
                         .unwrap_or_else(|| "No audio output open".into()),
                 ),
                 xruns: 0,
+                routing_warnings: self.routing_warnings.clone(),
             };
         };
 
@@ -487,6 +549,22 @@ impl Engine {
             output: Some(output.stream.info.clone()),
             device_error,
             xruns: output.stream.health.xruns.load(Ordering::Relaxed),
+            routing_warnings: self.routing_warnings.clone(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_reconnect;
+
+    #[test]
+    fn never_switches_away_from_a_working_device_mid_song() {
+        // (failed, on_fallback, idle) -> reconnect?
+        assert!(should_reconnect(true, false, false)); // device died while playing
+        assert!(should_reconnect(true, true, true));
+        assert!(should_reconnect(false, true, true)); // interface came back, stopped
+        assert!(!should_reconnect(false, true, false)); // came back mid-song: wait
+        assert!(!should_reconnect(false, false, true)); // already on the right device
     }
 }

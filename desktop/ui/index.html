@@ -7,7 +7,13 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div id="device-error" class="banner" hidden></div>
+    <div id="device-error" class="banner error" hidden></div>
+    <div id="routing-warning" class="banner warning" hidden></div>
+    <div id="device-toast" class="banner info" hidden>
+      <span id="device-toast-text"></span>
+      <button id="device-toast-use" class="pill">Use it</button>
+      <button id="device-toast-dismiss" class="pill">Dismiss</button>
+    </div>
 
     <div class="app">
       <aside class="library">
@@ -34,7 +40,11 @@
             <h2 id="song-title">No song loaded</h2>
             <p id="song-meta" class="muted"></p>
           </div>
-          <button id="open-settings" class="pill">Audio &amp; routing</button>
+          <div class="header-actions">
+            <span id="device-chip" class="device-chip"></span>
+            <button id="open-routing" class="pill">Routing</button>
+            <button id="open-settings" class="pill">Audio device</button>
+          </div>
         </header>
 
         <section class="transport">
@@ -74,10 +84,39 @@
       </main>
     </div>
 
+    <div id="routing" class="modal" hidden>
+      <div class="modal-body wide">
+        <header class="modal-header">
+          <div>
+            <h2>Routing</h2>
+            <p id="routing-device" class="muted small"></p>
+          </div>
+          <button id="close-routing" class="icon-button" title="Close">
+            &times;
+          </button>
+        </header>
+        <p id="routing-monitor-note" class="note" hidden>
+          Monitor mode is on: everything plays on outputs 1&ndash;2 until you
+          switch back to Split in Audio device.
+        </p>
+        <div class="matrix-wrap">
+          <table id="matrix" class="matrix"></table>
+        </div>
+        <ul id="routing-problems" class="problems"></ul>
+        <p class="muted small">
+          Click a cell to send a track to that output; a track can go to several
+          outputs. In stereo mode a click picks the pair (1&ndash;2,
+          3&ndash;4&hellip;). Routes apply to every song with a track of the
+          same name, unless pinned to this song. Unrouted tracks follow the
+          phone layout: cue on output 1, main on output 2.
+        </p>
+      </div>
+    </div>
+
     <div id="settings" class="modal" hidden>
       <div class="modal-body">
         <header class="modal-header">
-          <h2>Audio &amp; routing</h2>
+          <h2>Audio device</h2>
           <button id="close-settings" class="icon-button" title="Close">
             &times;
           </button>
@@ -108,27 +147,16 @@
           </div>
         </div>
         <p class="muted small">
-          Split uses the routing below. Monitor sends everything to outputs
-          1&ndash;2 in stereo, for rehearsing on ordinary headphones.
+          Split uses the routing. Monitor sends everything to outputs 1&ndash;2
+          in stereo, for rehearsing on ordinary headphones.
         </p>
 
-        <h3>Bus outputs</h3>
-        <label class="field"
-          ><span>Cue</span
-          ><select data-bus="cue"></select
-        ></label>
-        <label class="field"
-          ><span>Main</span
-          ><select data-bus="main"></select
-        ></label>
-        <label class="field"
-          ><span>Click</span
-          ><select data-bus="click"></select
-        ></label>
+        <h3>Output names</h3>
         <p class="muted small">
-          Tracks follow their bus unless you pick an output on the track itself.
-          Routing is saved on this computer, not in the song.
+          Label this interface's outputs the way the stage knows them
+          (&ldquo;IEM drummer&rdquo;, &ldquo;FOH bass&rdquo;). Saved per device.
         </p>
+        <div id="output-names" class="output-names"></div>
       </div>
     </div>
 

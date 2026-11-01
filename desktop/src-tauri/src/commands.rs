@@ -6,26 +6,26 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::config::AppConfig;
 use crate::engine::device::{self, ActiveOutput, DeviceInfo};
 use crate::engine::{self, Engine, EngineStatus, LoadedProject, TrackState};
 use crate::project::{self, MixPatch, SectionManifest};
-use crate::routing::{MonitorMode, OutputTarget, RoutingConfig};
+use crate::routing::{MonitorMode, OutputTarget, ResolvedRoute, RouteScope, RoutingConfig};
 
 pub struct AppState {
     pub engine: Mutex<Engine>,
     pub config: Mutex<AppConfig>,
     pub config_path: PathBuf,
-    /// Bumped by every `load_project`; a decode that finishes after a newer
+    /// Bumped by every project load; a decode that finishes after a newer
     /// load started is discarded instead of replacing the newer song.
     pub load_generation: AtomicU64,
 }
 
 /// A panic elsewhere must not leave the engine unusable mid-show; the state
 /// behind a poisoned lock is still consistent for our purposes.
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+pub fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|e| e.into_inner())
 }
 
@@ -38,49 +38,50 @@ impl AppState {
     }
 }
 
-#[derive(Serialize)]
+// --- DTOs --------------------------------------------------------------------
+
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsDto {
     device_id: Option<String>,
     buffer_frames: Option<u32>,
     monitor_mode: MonitorMode,
-    /// Raw config: `None` entries mean "default".
-    routing: RoutingConfig,
-    /// What cue/main/click resolve to on the current device.
-    cue: Vec<OutputTarget>,
-    main: Vec<OutputTarget>,
-    click: Vec<OutputTarget>,
     output: Option<ActiveOutput>,
+    /// One label per output of the open device ("" when unnamed).
+    output_names: Vec<String>,
 }
 
 fn settings_dto(config: &AppConfig, output: Option<ActiveOutput>) -> SettingsDto {
-    let channels = output.as_ref().map_or(2, |o| o.channels as usize);
-    let routing = &config.routing;
+    let output_names = match &output {
+        Some(out) => {
+            let mut names = config
+                .output_names
+                .get(&out.id)
+                .cloned()
+                .unwrap_or_default();
+            names.resize(out.channels as usize, String::new());
+            names
+        }
+        None => Vec::new(),
+    };
     SettingsDto {
         device_id: config.device_id.clone(),
         buffer_frames: config.buffer_frames,
         monitor_mode: config.monitor_mode,
-        cue: routing.cue_targets(),
-        main: routing.main_targets(channels),
-        click: routing
-            .click
-            .clone()
-            .unwrap_or_else(|| routing.cue_targets()),
-        routing: routing.clone(),
         output,
+        output_names,
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackDto {
     #[serde(flatten)]
     state: TrackState,
-    /// This machine's per-track routing, if any (otherwise the bus decides).
-    routing_override: Option<Vec<OutputTarget>>,
+    route: ResolvedRoute,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectDto {
     dir: String,
@@ -93,10 +94,11 @@ pub struct ProjectDto {
     duration_sec: f64,
     has_click: bool,
     click_enabled: bool,
+    click_route: ResolvedRoute,
     tracks: Vec<TrackDto>,
 }
 
-fn project_dto(project: &LoadedProject, routing: &RoutingConfig) -> ProjectDto {
+fn project_dto(project: &LoadedProject, routing: &RoutingConfig, channels: usize) -> ProjectDto {
     let m = &project.manifest;
     ProjectDto {
         dir: project.dir.to_string_lossy().into_owned(),
@@ -109,15 +111,23 @@ fn project_dto(project: &LoadedProject, routing: &RoutingConfig) -> ProjectDto {
         duration_sec: project.duration_sec(),
         has_click: project.has_click(),
         click_enabled: project.click_enabled,
+        click_route: routing.click_route(),
         tracks: project
             .tracks
             .iter()
             .map(|t| TrackDto {
                 state: t.clone(),
-                routing_override: routing.track_override(&m.id, &t.id).cloned(),
+                route: routing.track_route(&m.id, &t.id, &t.name, t.bus, channels),
             })
             .collect(),
     }
+}
+
+fn current_project_dto(state: &AppState) -> Option<ProjectDto> {
+    let routing = lock(&state.config).routing.clone();
+    let engine = lock(&state.engine);
+    let channels = engine.output_info().map_or(2, |o| o.channels as usize);
+    engine.project().map(|p| project_dto(p, &routing, channels))
 }
 
 #[derive(Serialize)]
@@ -165,6 +175,79 @@ struct LoadProgress {
     name: String,
 }
 
+// --- Shared operations (also used by the device watcher in lib.rs) -----------
+
+/// Decodes and installs a project. Blocking - run it off the async runtime.
+pub fn load_project_blocking(app: &AppHandle, dir: &str) -> Result<ProjectDto, String> {
+    let state = app.state::<AppState>();
+    let generation = state.load_generation.fetch_add(1, Ordering::AcqRel) + 1;
+    let path = PathBuf::from(dir);
+    let manifest = project::read_manifest(&path)?;
+    let rate = lock(&state.engine)
+        .sample_rate()
+        .ok_or("No audio output is open")?;
+
+    let decoded = engine::decode_project(&path, manifest, rate, &|current, total, name| {
+        let _ = app.emit(
+            "load-progress",
+            LoadProgress {
+                current,
+                total,
+                name: name.to_string(),
+            },
+        );
+    })?;
+
+    if state.load_generation.load(Ordering::Acquire) != generation {
+        return Err("superseded".to_string());
+    }
+    lock(&state.engine).install_project(decoded)?;
+    current_project_dto(&state).ok_or_else(|| "Project vanished after loading".to_string())
+}
+
+/// Opens a device and, if its sample rate differs from the loaded song's,
+/// re-decodes the song for it. Blocking. Emits `device-changed`, and
+/// `project-reloaded` when the song was re-decoded.
+pub fn open_device_blocking(
+    app: &AppHandle,
+    device_id: Option<String>,
+    buffer_frames: Option<u32>,
+) -> Result<SettingsDto, String> {
+    let state = app.state::<AppState>();
+    let needs_reload = lock(&state.engine).open_device(device_id, buffer_frames)?;
+    if needs_reload {
+        let dir = lock(&state.engine)
+            .project()
+            .map(|p| p.dir.to_string_lossy().into_owned());
+        if let Some(dir) = dir {
+            let project = load_project_blocking(app, &dir)?;
+            let _ = app.emit("project-reloaded", project);
+        }
+    }
+    let output = lock(&state.engine).output_info().cloned();
+    let settings = settings_dto(&lock(&state.config), output);
+    let _ = app.emit("device-changed", settings.clone());
+    Ok(settings)
+}
+
+fn persist_mix(engine: &Engine) -> Result<(), String> {
+    let Some(project) = engine.project() else {
+        return Ok(());
+    };
+    let tracks: Vec<(String, f32, bool, bool)> = project
+        .tracks
+        .iter()
+        .map(|t| (t.id.clone(), t.volume, t.muted, t.soloed))
+        .collect();
+    project::write_mix(
+        &project.dir,
+        &MixPatch {
+            tracks: &tracks,
+            click_enabled: Some(project.click_enabled),
+        },
+    )
+}
+
 // --- Devices & settings ------------------------------------------------------
 
 #[tauri::command]
@@ -185,19 +268,16 @@ pub async fn select_device(
     device_id: Option<String>,
     buffer_frames: Option<u32>,
 ) -> Result<SettingsDto, String> {
-    let needs_reload = lock(&state.engine).open_device(device_id.clone(), buffer_frames)?;
-    let config = state.update_config(|c| {
-        c.device_id = device_id;
+    state.update_config(|c| {
+        c.device_id = device_id.clone();
         c.buffer_frames = buffer_frames;
     })?;
-    if needs_reload {
-        let dir = lock(&state.engine).project().map(|p| p.dir.clone());
-        if let Some(dir) = dir {
-            load_project(app, state.clone(), dir.to_string_lossy().into_owned()).await?;
-        }
-    }
-    let output = lock(&state.engine).output_info().cloned();
-    Ok(settings_dto(&config, output))
+    lock(&state.engine).set_preferred_device(device_id.clone(), buffer_frames);
+    tauri::async_runtime::spawn_blocking(move || {
+        open_device_blocking(&app, device_id, buffer_frames)
+    })
+    .await
+    .map_err(|e| format!("Switching device failed: {e}"))?
 }
 
 #[tauri::command]
@@ -208,37 +288,57 @@ pub fn set_monitor_mode(state: State<AppState>, mode: MonitorMode) -> Result<Set
     Ok(settings_dto(&config, engine.output_info().cloned()))
 }
 
-/// `bus` is `"cue"`, `"main"` or `"click"`; `targets: None` restores the default.
 #[tauri::command]
-pub fn set_bus_routing(
+pub fn set_output_name(
     state: State<AppState>,
-    bus: String,
-    targets: Option<Vec<OutputTarget>>,
+    channel: usize,
+    name: String,
 ) -> Result<SettingsDto, String> {
-    let config = state.update_config(|c| match bus.as_str() {
-        "cue" => c.routing.cue = targets,
-        "main" => c.routing.main = targets,
-        "click" => c.routing.click = targets,
-        _ => {}
-    })?;
-    let mut engine = lock(&state.engine);
-    engine.set_routing(config.routing.clone());
-    Ok(settings_dto(&config, engine.output_info().cloned()))
+    let output = lock(&state.engine).output_info().cloned();
+    let device_id = output.as_ref().ok_or("No audio output is open")?.id.clone();
+    let config = state.update_config(|c| c.set_output_name(&device_id, channel, name))?;
+    Ok(settings_dto(&config, output))
 }
 
+// --- Routing -----------------------------------------------------------------
+
+/// Routes a track of the loaded song. `scope` decides whether the route is
+/// for every song with a track of this name or pinned to this song;
+/// `targets: None` clears it at that scope. Returns the whole project,
+/// since a by-name route can change other tracks too.
 #[tauri::command]
 pub fn set_track_routing(
     state: State<AppState>,
-    project_id: String,
     track_id: String,
+    scope: RouteScope,
     targets: Option<Vec<OutputTarget>>,
-) -> Result<(), String> {
+) -> Result<ProjectDto, String> {
+    let (project_id, track_name) = {
+        let engine = lock(&state.engine);
+        let project = engine.project().ok_or("No song loaded")?;
+        let track = project
+            .tracks
+            .iter()
+            .find(|t| t.id == track_id)
+            .ok_or("Unknown track")?;
+        (project.manifest.id.clone(), track.name.clone())
+    };
     let config = state.update_config(|c| {
         c.routing
-            .set_track_override(&project_id, &track_id, targets)
+            .set_track_route(scope, &project_id, &track_id, &track_name, targets)
     })?;
     lock(&state.engine).set_routing(config.routing);
-    Ok(())
+    current_project_dto(&state).ok_or_else(|| "No song loaded".to_string())
+}
+
+#[tauri::command]
+pub fn set_click_routing(
+    state: State<AppState>,
+    targets: Option<Vec<OutputTarget>>,
+) -> Result<Option<ProjectDto>, String> {
+    let config = state.update_config(|c| c.routing.click = targets)?;
+    lock(&state.engine).set_routing(config.routing);
+    Ok(current_project_dto(&state))
 }
 
 // --- Library -----------------------------------------------------------------
@@ -287,44 +387,15 @@ pub fn library_move(
 // --- Project & transport -----------------------------------------------------
 
 #[tauri::command]
-pub async fn load_project(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    dir: String,
-) -> Result<ProjectDto, String> {
-    let generation = state.load_generation.fetch_add(1, Ordering::AcqRel) + 1;
-    let path = PathBuf::from(&dir);
-    let manifest = project::read_manifest(&path)?;
-    let rate = lock(&state.engine)
-        .sample_rate()
-        .ok_or("No audio output is open")?;
+pub async fn load_project(app: AppHandle, dir: String) -> Result<ProjectDto, String> {
+    tauri::async_runtime::spawn_blocking(move || load_project_blocking(&app, &dir))
+        .await
+        .map_err(|e| format!("Loading failed: {e}"))?
+}
 
-    let progress_app = app.clone();
-    let decoded = tauri::async_runtime::spawn_blocking(move || {
-        engine::decode_project(&path, manifest, rate, &|current, total, name| {
-            let _ = progress_app.emit(
-                "load-progress",
-                LoadProgress {
-                    current,
-                    total,
-                    name: name.to_string(),
-                },
-            );
-        })
-    })
-    .await
-    .map_err(|e| format!("Loading failed: {e}"))??;
-
-    if state.load_generation.load(Ordering::Acquire) != generation {
-        return Err("superseded".to_string());
-    }
-    let routing = lock(&state.config).routing.clone();
-    let mut engine = lock(&state.engine);
-    engine.install_project(decoded)?;
-    Ok(project_dto(
-        engine.project().expect("just installed"),
-        &routing,
-    ))
+#[tauri::command]
+pub fn get_project(state: State<AppState>) -> Option<ProjectDto> {
+    current_project_dto(&state)
 }
 
 #[tauri::command]
@@ -350,25 +421,6 @@ pub fn seek(state: State<AppState>, sec: f64) {
 #[tauri::command]
 pub fn get_status(state: State<AppState>) -> EngineStatus {
     lock(&state.engine).status()
-}
-
-/// Writes the current mix into the project's manifest, like the mobile app.
-fn persist_mix(engine: &Engine) -> Result<(), String> {
-    let Some(project) = engine.project() else {
-        return Ok(());
-    };
-    let tracks: Vec<(String, f32, bool, bool)> = project
-        .tracks
-        .iter()
-        .map(|t| (t.id.clone(), t.volume, t.muted, t.soloed))
-        .collect();
-    project::write_mix(
-        &project.dir,
-        &MixPatch {
-            tracks: &tracks,
-            click_enabled: Some(project.click_enabled),
-        },
-    )
 }
 
 /// Called continuously while a fader moves (`commit: false`) and once on
