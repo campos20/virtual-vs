@@ -43,7 +43,9 @@
         {
           "iosBackgroundMode": true,
           "androidForegroundService": true,
-          "androidFSTypes": ["mediaPlayback"],
+          "androidFSTypes": [
+            "mediaPlayback"
+          ],
           "androidPermissions": [
             "android.permission.FOREGROUND_SERVICE",
             "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
@@ -52,7 +54,9 @@
       ],
       "./plugins/withAndroidSigning",
       "expo-localization",
-      "expo-image"
+      "expo-image",
+      "expo-sharing",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
