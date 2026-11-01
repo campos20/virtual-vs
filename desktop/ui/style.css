@@ -1,0 +1,509 @@
+/* Same palette as the mobile app's dark theme (src/ui/theme.ts). */
+:root {
+  --background: #000000;
+  --panel: #111114;
+  --panel-raised: #18181c;
+  --surface: #1c1c1f;
+  --border: #2c2c2e;
+  --border-light: rgba(255, 255, 255, 0.08);
+  --text-primary: #ffffff;
+  --text-secondary: #9b9b9d;
+  --text-tertiary: #5f5f63;
+  --accent: #208aef;
+  --danger: #ff453a;
+  --warning: #ffd60a;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--background);
+  color: var(--text-primary);
+  font:
+    14px -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+button,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+}
+
+.muted {
+  color: var(--text-secondary);
+}
+
+.small {
+  font-size: 12px;
+}
+
+.banner {
+  background: var(--danger);
+  color: #fff;
+  font-weight: 600;
+  padding: 10px 16px;
+  text-align: center;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  height: 100%;
+}
+
+body:has(.banner:not([hidden])) .app {
+  height: calc(100% - 40px);
+}
+
+/* --- Library ------------------------------------------------------------- */
+
+.library {
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.library-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+}
+
+.library-header h1 {
+  font-size: 18px;
+}
+
+#library-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+#library-empty {
+  padding: 0 16px;
+}
+
+.library-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-sm);
+  padding: 8px 8px 8px 12px;
+  cursor: pointer;
+}
+
+.library-item:hover {
+  background: var(--panel-raised);
+}
+
+.library-item.active {
+  background: var(--surface);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.library-item .info {
+  flex: 1;
+  min-width: 0;
+}
+
+.library-item .title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.library-item .sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.library-item.broken .title {
+  color: var(--danger);
+}
+
+.library-item .row-actions {
+  display: none;
+  gap: 2px;
+}
+
+.library-item:hover .row-actions {
+  display: flex;
+}
+
+.icon-button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  width: 28px;
+  height: 28px;
+  line-height: 1;
+  padding: 0;
+}
+
+.icon-button.small {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+}
+
+/* --- Player -------------------------------------------------------------- */
+
+.player {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px 20px;
+  gap: 16px;
+}
+
+.song-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.song-header h2 {
+  font-size: 24px;
+}
+
+.song-header p {
+  margin: 4px 0 0;
+}
+
+.pill {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px;
+}
+
+.pill.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.transport {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.transport-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.transport-button {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 18px;
+}
+
+.transport-button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  width: 56px;
+  height: 56px;
+  font-size: 22px;
+}
+
+.transport-button:disabled,
+.pill:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.timeline {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.time {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  min-width: 48px;
+  text-align: center;
+}
+
+.seek-wrap {
+  position: relative;
+  flex: 1;
+}
+
+#seek {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+#marker-ticks {
+  position: absolute;
+  inset: -6px 0 auto 0;
+  height: 6px;
+  pointer-events: none;
+}
+
+#marker-ticks span {
+  position: absolute;
+  width: 2px;
+  height: 6px;
+  background: var(--warning);
+}
+
+.markers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.marker {
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warning);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  text-align: left;
+}
+
+.marker.current {
+  background: var(--surface);
+  border-color: var(--warning);
+}
+
+.marker .marker-time {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Mixer --------------------------------------------------------------- */
+
+.mixer {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.strip {
+  flex: 0 0 124px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 10px;
+  overflow: hidden;
+}
+
+.strip .color {
+  align-self: stretch;
+  height: 4px;
+  margin: 0 -8px;
+}
+
+.strip .name {
+  font-weight: 600;
+  text-align: center;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.strip .db {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.strip .fader {
+  flex: 1;
+  min-height: 120px;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  accent-color: var(--accent);
+  width: 28px;
+}
+
+.strip .buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.toggle {
+  width: 34px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-weight: 700;
+}
+
+.toggle.mute.on {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.toggle.solo.on {
+  background: var(--warning);
+  border-color: var(--warning);
+  color: #000;
+}
+
+.strip select,
+.field select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+}
+
+.strip select {
+  width: 100%;
+  font-size: 12px;
+}
+
+.strip .bus {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* --- Modals -------------------------------------------------------------- */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal-body {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  width: min(520px, 92vw);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.modal-body h3 {
+  margin: 20px 0 8px;
+  font-size: 15px;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 0;
+}
+
+.field select {
+  min-width: 240px;
+}
+
+.segmented {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.segmented button {
+  background: var(--surface);
+  border: none;
+  padding: 6px 16px;
+}
+
+.segmented button.on {
+  background: var(--accent);
+}
+
+.loading-body {
+  width: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.loading-body p {
+  margin: 0;
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

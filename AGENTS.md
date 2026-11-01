@@ -181,3 +181,29 @@ Guardrails for touching `AudioEngine.ts`:
 - Run (and extend) `AudioEngine.test.ts`'s "keeps every stem sample-locked"
   suite whenever touching `scheduleSources`/`stopSources`/`play`/`pause`/
   `seek`.
+
+# Desktop app (`desktop/`)
+
+The desktop build is a Tauri 2 app with its audio engine in Rust
+(`desktop/src-tauri/src/engine/`). It reads the same project folders as the
+mobile app. `desktop/src-tauri/src/project.rs` mirrors `src/types/project.ts`,
+so change both together. See `desktop/README.md` for how to run it.
+
+Everything above about stability and sample-locked stems applies there too,
+with Rust equivalents:
+
+- `Mixer::process` (`engine/mixer.rs`) runs on the audio device's thread. It
+  must never allocate, free, lock, log or do I/O. Send state in through
+  `Command` and status out through `SharedStatus` atomics. Anything that needs
+  freeing goes back through the `Garbage` queue.
+- There is one playhead (`Mixer::position`) and every voice reads from it in
+  the same callback. Never give a voice its own start offset or clock, and
+  never add or remove a single voice from a playing `Program`. Replace the
+  whole program with `Command::Load`.
+- Volume, mute, solo and routing changes are only gain ramps or route swaps,
+  so they can never move the playhead.
+- Run `npm test` in `desktop/` (Rust unit tests, including the "sample-locked"
+  mixer tests) after touching the engine. Use
+  `cargo run --example engine_smoke` to check on a real device.
+- Rust crates follow the dependency rule above: well-established crates only,
+  and only what is actually wired up.

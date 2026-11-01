@@ -1,3 +1,7 @@
 # Ignore artifacts:
 build
 coverage
+
+# Desktop app (Rust build output, Tauri-generated files)
+desktop/src-tauri/target
+desktop/src-tauri/gen

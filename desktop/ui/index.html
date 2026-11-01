@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Virtual VS</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="device-error" class="banner" hidden></div>
+
+    <div class="app">
+      <aside class="library">
+        <header class="library-header">
+          <h1>Library</h1>
+          <button
+            id="add-project"
+            class="icon-button"
+            title="Add project folder"
+          >
+            +
+          </button>
+        </header>
+        <ul id="library-list"></ul>
+        <p id="library-empty" class="muted">
+          Add a project folder (one containing a <code>manifest.json</code> and
+          its stems).
+        </p>
+      </aside>
+
+      <main class="player">
+        <header class="song-header">
+          <div>
+            <h2 id="song-title">No song loaded</h2>
+            <p id="song-meta" class="muted"></p>
+          </div>
+          <button id="open-settings" class="pill">Audio &amp; routing</button>
+        </header>
+
+        <section class="transport">
+          <div class="transport-buttons">
+            <button id="stop" class="transport-button" title="Stop">
+              &#9632;
+            </button>
+            <button
+              id="play"
+              class="transport-button primary"
+              title="Play / pause (Space)"
+            >
+              &#9654;
+            </button>
+            <button id="click-toggle" class="pill" hidden>Click</button>
+          </div>
+          <div class="timeline">
+            <span id="time-position" class="time">0:00</span>
+            <div class="seek-wrap">
+              <div id="marker-ticks"></div>
+              <input
+                id="seek"
+                type="range"
+                min="0"
+                max="0"
+                step="0.01"
+                value="0"
+              />
+            </div>
+            <span id="time-duration" class="time">0:00</span>
+          </div>
+        </section>
+
+        <section id="markers" class="markers"></section>
+
+        <section id="mixer" class="mixer"></section>
+      </main>
+    </div>
+
+    <div id="settings" class="modal" hidden>
+      <div class="modal-body">
+        <header class="modal-header">
+          <h2>Audio &amp; routing</h2>
+          <button id="close-settings" class="icon-button" title="Close">
+            &times;
+          </button>
+        </header>
+
+        <label class="field">
+          <span>Output device</span>
+          <select id="device-select"></select>
+        </label>
+        <label class="field">
+          <span>Buffer size</span>
+          <select id="buffer-select">
+            <option value="">Driver default</option>
+            <option value="64">64 frames</option>
+            <option value="128">128 frames</option>
+            <option value="256">256 frames</option>
+            <option value="512">512 frames</option>
+            <option value="1024">1024 frames</option>
+          </select>
+        </label>
+        <p id="device-info" class="muted"></p>
+
+        <div class="field">
+          <span>Monitor mode</span>
+          <div class="segmented">
+            <button data-mode="split">Split</button>
+            <button data-mode="monitor">Monitor</button>
+          </div>
+        </div>
+        <p class="muted small">
+          Split uses the routing below. Monitor sends everything to outputs
+          1&ndash;2 in stereo, for rehearsing on ordinary headphones.
+        </p>
+
+        <h3>Bus outputs</h3>
+        <label class="field"
+          ><span>Cue</span
+          ><select data-bus="cue"></select
+        ></label>
+        <label class="field"
+          ><span>Main</span
+          ><select data-bus="main"></select
+        ></label>
+        <label class="field"
+          ><span>Click</span
+          ><select data-bus="click"></select
+        ></label>
+        <p class="muted small">
+          Tracks follow their bus unless you pick an output on the track itself.
+          Routing is saved on this computer, not in the song.
+        </p>
+      </div>
+    </div>
+
+    <div id="loading" class="modal" hidden>
+      <div class="modal-body loading-body">
+        <div class="spinner"></div>
+        <p id="loading-text">Loading&hellip;</p>
+      </div>
+    </div>
+
+    <script src="main.js"></script>
+  </body>
+</html>

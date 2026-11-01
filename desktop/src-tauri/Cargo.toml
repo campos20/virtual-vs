@@ -1,0 +1,28 @@
+[package]
+name = "virtual-vs-desktop"
+version = "0.1.0"
+description = "Virtual VS for desktop - multitrack backing-track player for live musicians"
+license = "GPL-3.0-or-later"
+edition = "2021"
+
+[lib]
+name = "virtual_vs_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+cpal = "0.18"
+symphonia = { version = "0.6", features = ["all-codecs", "all-formats"] }
+rubato = "5"
+rtrb = "0.4"
+
+[profile.release]
+# A panic in the audio callback must not unwind across the FFI boundary into
+# CoreAudio/WASAPI; abort is the predictable failure mode.
+panic = "abort"
