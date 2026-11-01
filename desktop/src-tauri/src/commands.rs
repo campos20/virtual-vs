@@ -1,26 +1,65 @@
-//! The UI's API. Every command is a thin layer over `Engine`/`AppConfig`;
-//! nothing here touches audio directly.
+//! The webview's API. The UI is the mobile app (rendered with
+//! react-native-web); `desktop/web/engine/AudioEngine.ts` maps the mobile
+//! `AudioEngine` onto these commands, and the desktop-only screens use the
+//! device and routing ones.
+//!
+//! Every command is `async`, so it runs on Tauri's worker pool rather than
+//! the main thread: a panic there fails that one call instead of taking the
+//! app - and whatever is playing - down.
 
-use std::path::{Path, PathBuf};
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::config::AppConfig;
+use crate::engine::decode;
 use crate::engine::device::{self, ActiveOutput, DeviceInfo};
-use crate::engine::{self, Engine, EngineStatus, LoadedProject, TrackState};
-use crate::project::{self, MixPatch, SectionManifest};
-use crate::routing::{MonitorMode, OutputTarget, ResolvedRoute, RouteScope, RoutingConfig};
+use crate::engine::mixer::StemAudio;
+use crate::engine::{Engine, EngineStatus, LoadedProject, ProjectStem, TrackState};
+use crate::project::Bus;
+use crate::routing::{MonitorMode, OutputTarget, ResolvedRoute, RouteScope};
+
+/// Waveform resolution sent with each decoded stem. The UI draws at most a
+/// few thousand bars per song, so this is plenty and stays small (a
+/// 6-minute stem is ~36k floats).
+const PEAKS_PER_SECOND: u32 = 100;
+
+struct CachedStem {
+    path: PathBuf,
+    sample_rate: u32,
+    audio: Arc<StemAudio>,
+}
 
 pub struct AppState {
     pub engine: Mutex<Engine>,
     pub config: Mutex<AppConfig>,
     pub config_path: PathBuf,
-    /// Bumped by every project load; a decode that finishes after a newer
-    /// load started is discarded instead of replacing the newer song.
-    pub load_generation: AtomicU64,
+    /// Stems decoded by `audio_decode`, waiting for `engine_load`.
+    decoded: Mutex<HashMap<u64, CachedStem>>,
+    next_buffer_id: AtomicU64,
+}
+
+impl AppState {
+    pub fn new(engine: Engine, config: AppConfig, config_path: PathBuf) -> Self {
+        AppState {
+            engine: Mutex::new(engine),
+            config: Mutex::new(config),
+            config_path,
+            decoded: Mutex::new(HashMap::new()),
+            next_buffer_id: AtomicU64::new(1),
+        }
+    }
+
+    fn update_config(&self, change: impl FnOnce(&mut AppConfig)) -> Result<AppConfig, String> {
+        let mut config = lock(&self.config);
+        change(&mut config);
+        config.save(&self.config_path)?;
+        Ok(config.clone())
+    }
 }
 
 /// A panic elsewhere must not leave the engine unusable mid-show; the state
@@ -29,13 +68,12 @@ pub fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-impl AppState {
-    fn update_config(&self, change: impl FnOnce(&mut AppConfig)) -> Result<AppConfig, String> {
-        let mut config = lock(&self.config);
-        change(&mut config);
-        config.save(&self.config_path)?;
-        Ok(config.clone())
-    }
+async fn blocking<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(work)
+        .await
+        .map_err(|e| format!("Background task failed: {e}"))?
 }
 
 // --- DTOs --------------------------------------------------------------------
@@ -45,7 +83,6 @@ impl AppState {
 pub struct SettingsDto {
     device_id: Option<String>,
     buffer_frames: Option<u32>,
-    monitor_mode: MonitorMode,
     output: Option<ActiveOutput>,
     /// One label per output of the open device ("" when unnamed).
     output_names: Vec<String>,
@@ -67,198 +104,344 @@ fn settings_dto(config: &AppConfig, output: Option<ActiveOutput>) -> SettingsDto
     SettingsDto {
         device_id: config.device_id.clone(),
         buffer_frames: config.buffer_frames,
-        monitor_mode: config.monitor_mode,
         output,
         output_names,
     }
 }
 
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TrackDto {
-    #[serde(flatten)]
-    state: TrackState,
-    route: ResolvedRoute,
-}
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProjectDto {
-    dir: String,
-    id: String,
-    title: String,
-    bpm: Option<f64>,
-    key: String,
-    sections: Vec<SectionManifest>,
-    lyrics: Option<String>,
-    duration_sec: f64,
-    has_click: bool,
-    click_enabled: bool,
-    click_route: ResolvedRoute,
-    tracks: Vec<TrackDto>,
-}
-
-fn project_dto(project: &LoadedProject, routing: &RoutingConfig, channels: usize) -> ProjectDto {
-    let m = &project.manifest;
-    ProjectDto {
-        dir: project.dir.to_string_lossy().into_owned(),
-        id: m.id.clone(),
-        title: m.title.clone(),
-        bpm: m.bpm,
-        key: m.key.clone(),
-        sections: m.sections.clone(),
-        lyrics: m.lyrics.clone(),
-        duration_sec: project.duration_sec(),
-        has_click: project.has_click(),
-        click_enabled: project.click_enabled,
-        click_route: routing.click_route(),
-        tracks: project
-            .tracks
-            .iter()
-            .map(|t| TrackDto {
-                state: t.clone(),
-                route: routing.track_route(&m.id, &t.id, &t.name, t.bus, channels),
-            })
-            .collect(),
-    }
-}
-
-fn current_project_dto(state: &AppState) -> Option<ProjectDto> {
-    let routing = lock(&state.config).routing.clone();
-    let engine = lock(&state.engine);
-    let channels = engine.output_info().map_or(2, |o| o.channels as usize);
-    engine.project().map(|p| project_dto(p, &routing, channels))
+fn current_settings(state: &AppState) -> SettingsDto {
+    let output = lock(&state.engine).output_info().cloned();
+    settings_dto(&lock(&state.config), output)
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LibraryEntryDto {
-    dir: String,
-    id: Option<String>,
-    title: Option<String>,
-    bpm: Option<f64>,
-    key: Option<String>,
-    track_count: usize,
-    /// Set when the folder is gone or its manifest can't be read - shown in
-    /// the Library rather than silently dropping the song from the list.
-    error: Option<String>,
+pub struct DecodedDto {
+    buffer_id: u64,
+    sample_rate: u32,
+    frames: u64,
+    duration_sec: f64,
+    peaks_per_second: u32,
+    peaks: Vec<f32>,
 }
 
-fn library_entry(dir: &str) -> LibraryEntryDto {
-    match project::read_manifest(Path::new(dir)) {
-        Ok(m) => LibraryEntryDto {
-            dir: dir.to_string(),
-            id: Some(m.id),
-            title: Some(m.title),
-            bpm: m.bpm,
-            key: Some(m.key),
-            track_count: m.tracks.len(),
-            error: None,
-        },
-        Err(e) => LibraryEntryDto {
-            dir: dir.to_string(),
-            id: None,
-            title: None,
-            bpm: None,
-            key: None,
-            track_count: 0,
-            error: Some(e),
-        },
-    }
-}
-
-#[derive(Clone, Serialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct LoadProgress {
-    current: usize,
-    total: usize,
+pub struct LoadTrack {
+    id: String,
     name: String,
+    bus: Bus,
+    buffer_id: u64,
+    volume: f32,
+    muted: bool,
+    soloed: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoadRequest {
+    project_id: String,
+    bpm: Option<f64>,
+    click_enabled: bool,
+    tracks: Vec<LoadTrack>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoadedDto {
+    duration_sec: f64,
+    has_click: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutingTrackDto {
+    id: String,
+    name: String,
+    route: ResolvedRoute,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutingDto {
+    channels: u16,
+    output_names: Vec<String>,
+    project_id: Option<String>,
+    tracks: Vec<RoutingTrackDto>,
+    click: Option<ResolvedRoute>,
+}
+
+fn routing_dto(state: &AppState) -> RoutingDto {
+    let config = lock(&state.config).clone();
+    let engine = lock(&state.engine);
+    let output = engine.output_info().cloned();
+    let channels = output.as_ref().map_or(2, |o| o.channels);
+    let settings = settings_dto(&config, output);
+    let project = engine.project();
+    RoutingDto {
+        channels,
+        output_names: settings.output_names,
+        project_id: project.map(|p| p.project_id.clone()),
+        tracks: project
+            .map(|p| {
+                p.tracks
+                    .iter()
+                    .map(|t| RoutingTrackDto {
+                        id: t.id.clone(),
+                        name: t.name.clone(),
+                        route: config.routing.track_route(
+                            &p.project_id,
+                            &t.id,
+                            &t.name,
+                            t.bus,
+                            channels as usize,
+                        ),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        click: project
+            .filter(|p| p.has_click())
+            .map(|_| config.routing.click_route()),
+    }
 }
 
 // --- Shared operations (also used by the device watcher in lib.rs) -----------
 
-/// Decodes and installs a project. Blocking - run it off the async runtime.
-pub fn load_project_blocking(app: &AppHandle, dir: &str) -> Result<ProjectDto, String> {
-    let state = app.state::<AppState>();
-    let generation = state.load_generation.fetch_add(1, Ordering::AcqRel) + 1;
-    let path = PathBuf::from(dir);
-    let manifest = project::read_manifest(&path)?;
-    let rate = lock(&state.engine)
-        .sample_rate()
-        .ok_or("No audio output is open")?;
-
-    let decoded = engine::decode_project(&path, manifest, rate, &|current, total, name| {
-        let _ = app.emit(
-            "load-progress",
-            LoadProgress {
-                current,
-                total,
-                name: name.to_string(),
-            },
-        );
-    })?;
-
-    if state.load_generation.load(Ordering::Acquire) != generation {
-        return Err("superseded".to_string());
-    }
-    lock(&state.engine).install_project(decoded)?;
-    current_project_dto(&state).ok_or_else(|| "Project vanished after loading".to_string())
-}
-
-/// Opens a device and, if its sample rate differs from the loaded song's,
-/// re-decodes the song for it. Blocking. Emits `device-changed`, and
-/// `project-reloaded` when the song was re-decoded.
+/// Opens a device. If its sample rate differs from the loaded song's, every
+/// stem is re-decoded together at the new rate before the song is installed
+/// again - never a mix of rates, which would drift. Blocking. Emits
+/// `device-changed`.
 pub fn open_device_blocking(
     app: &AppHandle,
     device_id: Option<String>,
     buffer_frames: Option<u32>,
 ) -> Result<SettingsDto, String> {
     let state = app.state::<AppState>();
-    let needs_reload = lock(&state.engine).open_device(device_id, buffer_frames)?;
-    if needs_reload {
-        let dir = lock(&state.engine)
-            .project()
-            .map(|p| p.dir.to_string_lossy().into_owned());
-        if let Some(dir) = dir {
-            let project = load_project_blocking(app, &dir)?;
-            let _ = app.emit("project-reloaded", project);
+    let needs_redecode = lock(&state.engine).open_device(device_id, buffer_frames)?;
+    let mut result = Ok(());
+    if needs_redecode {
+        let project = lock(&state.engine).take_project();
+        let rate = lock(&state.engine).sample_rate();
+        if let (Some(project), Some(rate)) = (project, rate) {
+            result = project
+                .redecoded(rate)
+                .and_then(|p| lock(&state.engine).install_project(p))
+                .map_err(|e| format!("The song could not be prepared for this device: {e}"));
         }
     }
-    let output = lock(&state.engine).output_info().cloned();
-    let settings = settings_dto(&lock(&state.config), output);
+    let settings = current_settings(&state);
     let _ = app.emit("device-changed", settings.clone());
-    Ok(settings)
+    result.map(|_| settings)
 }
 
-fn persist_mix(engine: &Engine) -> Result<(), String> {
-    let Some(project) = engine.project() else {
-        return Ok(());
+// --- Audio -------------------------------------------------------------------
+
+/// Decodes one stem at the device's current rate and keeps it until
+/// `engine_load` installs it. Returns what the UI needs without the audio
+/// itself: duration and a waveform envelope.
+#[tauri::command]
+pub async fn audio_decode(state: State<'_, AppState>, path: String) -> Result<DecodedDto, String> {
+    let rate = lock(&state.engine)
+        .sample_rate()
+        .ok_or("No audio output is open")?;
+    let file = PathBuf::from(&path);
+    let decode_path = file.clone();
+    let audio = blocking(move || decode::decode_stem(&decode_path, rate)).await?;
+    let dto = DecodedDto {
+        buffer_id: state.next_buffer_id.fetch_add(1, Ordering::Relaxed),
+        sample_rate: rate,
+        frames: audio.frames() as u64,
+        duration_sec: audio.frames() as f64 / rate as f64,
+        peaks_per_second: PEAKS_PER_SECOND,
+        peaks: decode::peaks(&audio, rate, PEAKS_PER_SECOND),
     };
-    let tracks: Vec<(String, f32, bool, bool)> = project
+    lock(&state.decoded).insert(
+        dto.buffer_id,
+        CachedStem {
+            path: file,
+            sample_rate: rate,
+            audio: Arc::new(audio),
+        },
+    );
+    Ok(dto)
+}
+
+/// Installs a song from stems decoded by `audio_decode`. Whatever was
+/// playing fades out and the whole song is replaced at once. Stems decoded
+/// at another rate (the device changed mid-load) are decoded again so every
+/// stem shares the device's rate.
+#[tauri::command]
+pub async fn engine_load(
+    state: State<'_, AppState>,
+    request: LoadRequest,
+) -> Result<LoadedDto, String> {
+    let rate = lock(&state.engine)
+        .sample_rate()
+        .ok_or("No audio output is open")?;
+
+    let mut sources = Vec::with_capacity(request.tracks.len());
+    {
+        let mut cache = lock(&state.decoded);
+        for track in &request.tracks {
+            let cached = cache.remove(&track.buffer_id).ok_or_else(|| {
+                format!(
+                    "{}: the decoded audio is gone; load the song again",
+                    track.name
+                )
+            })?;
+            sources.push(cached);
+        }
+        // Anything decoded before this load's stems belongs to a load that
+        // was superseded and will never be installed - free it.
+        if let Some(oldest) = request.tracks.iter().map(|t| t.buffer_id).min() {
+            cache.retain(|id, _| *id > oldest);
+        }
+    }
+
+    let tracks: Vec<TrackState> = request
         .tracks
         .iter()
-        .map(|t| (t.id.clone(), t.volume, t.muted, t.soloed))
+        .map(|t| TrackState {
+            id: t.id.clone(),
+            name: t.name.clone(),
+            bus: t.bus,
+            volume: t.volume,
+            muted: t.muted,
+            soloed: t.soloed,
+        })
         .collect();
-    project::write_mix(
-        &project.dir,
-        &MixPatch {
-            tracks: &tracks,
-            click_enabled: Some(project.click_enabled),
-        },
-    )
+    let project_id = request.project_id.clone();
+    let bpm = request.bpm;
+    let click_enabled = request.click_enabled;
+
+    let project = blocking(move || {
+        let mut stems = Vec::with_capacity(sources.len());
+        for (cached, track) in sources.into_iter().zip(&tracks) {
+            let audio = if cached.sample_rate == rate {
+                cached.audio
+            } else {
+                Arc::new(
+                    decode::decode_stem(&cached.path, rate)
+                        .map_err(|e| format!("{}: {e}", track.name))?,
+                )
+            };
+            stems.push(ProjectStem {
+                path: cached.path,
+                audio,
+            });
+        }
+        LoadedProject::assemble(project_id, bpm, click_enabled, tracks, stems, rate)
+    })
+    .await?;
+
+    let dto = LoadedDto {
+        duration_sec: project.duration_sec(),
+        has_click: project.has_click(),
+    };
+    lock(&state.engine).install_project(project)?;
+    Ok(dto)
 }
 
-// --- Devices & settings ------------------------------------------------------
-
 #[tauri::command]
-pub fn list_devices() -> Vec<DeviceInfo> {
-    device::list_output_devices()
+pub async fn engine_unload(state: State<'_, AppState>) -> Result<(), String> {
+    drop(lock(&state.engine).take_project());
+    Ok(())
 }
 
 #[tauri::command]
-pub fn get_settings(state: State<AppState>) -> SettingsDto {
-    let output = lock(&state.engine).output_info().cloned();
-    settings_dto(&lock(&state.config), output)
+pub async fn play(state: State<'_, AppState>) -> Result<(), String> {
+    lock(&state.engine).play();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn pause(state: State<'_, AppState>) -> Result<(), String> {
+    lock(&state.engine).pause();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stop(state: State<'_, AppState>) -> Result<(), String> {
+    lock(&state.engine).stop();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn seek(state: State<'_, AppState>, sec: f64) -> Result<(), String> {
+    lock(&state.engine).seek(sec);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_status(state: State<'_, AppState>) -> Result<EngineStatus, String> {
+    Ok(lock(&state.engine).status())
+}
+
+#[tauri::command]
+pub async fn set_track_volume(
+    state: State<'_, AppState>,
+    track_id: String,
+    volume: f32,
+) -> Result<(), String> {
+    lock(&state.engine).set_track_volume(&track_id, volume);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_track_muted(
+    state: State<'_, AppState>,
+    track_id: String,
+    muted: bool,
+) -> Result<(), String> {
+    lock(&state.engine).set_track_muted(&track_id, muted);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_track_soloed(
+    state: State<'_, AppState>,
+    track_id: String,
+    soloed: bool,
+) -> Result<(), String> {
+    lock(&state.engine).set_track_soloed(&track_id, soloed);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_track_bus(
+    state: State<'_, AppState>,
+    track_id: String,
+    bus: Bus,
+) -> Result<(), String> {
+    lock(&state.engine).set_track_bus(&track_id, bus);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_click_enabled(state: State<'_, AppState>, enabled: bool) -> Result<(), String> {
+    lock(&state.engine).set_click_enabled(enabled);
+    Ok(())
+}
+
+/// Mirrors the mobile split/monitor switch. The mobile store owns the value
+/// (and re-sends it on every load), so it isn't persisted here.
+#[tauri::command]
+pub async fn set_monitor_mode(state: State<'_, AppState>, mode: MonitorMode) -> Result<(), String> {
+    lock(&state.engine).set_monitor_mode(mode);
+    Ok(())
+}
+
+// --- Devices -----------------------------------------------------------------
+
+#[tauri::command]
+pub async fn list_devices() -> Result<Vec<DeviceInfo>, String> {
+    blocking(|| Ok(device::list_output_devices())).await
+}
+
+#[tauri::command]
+pub async fn get_settings(state: State<'_, AppState>) -> Result<SettingsDto, String> {
+    Ok(current_settings(&state))
 }
 
 #[tauri::command]
@@ -273,24 +456,12 @@ pub async fn select_device(
         c.buffer_frames = buffer_frames;
     })?;
     lock(&state.engine).set_preferred_device(device_id.clone(), buffer_frames);
-    tauri::async_runtime::spawn_blocking(move || {
-        open_device_blocking(&app, device_id, buffer_frames)
-    })
-    .await
-    .map_err(|e| format!("Switching device failed: {e}"))?
+    blocking(move || open_device_blocking(&app, device_id, buffer_frames)).await
 }
 
 #[tauri::command]
-pub fn set_monitor_mode(state: State<AppState>, mode: MonitorMode) -> Result<SettingsDto, String> {
-    let config = state.update_config(|c| c.monitor_mode = mode)?;
-    let mut engine = lock(&state.engine);
-    engine.set_monitor_mode(mode);
-    Ok(settings_dto(&config, engine.output_info().cloned()))
-}
-
-#[tauri::command]
-pub fn set_output_name(
-    state: State<AppState>,
+pub async fn set_output_name(
+    state: State<'_, AppState>,
     channel: usize,
     name: String,
 ) -> Result<SettingsDto, String> {
@@ -302,17 +473,21 @@ pub fn set_output_name(
 
 // --- Routing -----------------------------------------------------------------
 
+#[tauri::command]
+pub async fn get_routing(state: State<'_, AppState>) -> Result<RoutingDto, String> {
+    Ok(routing_dto(&state))
+}
+
 /// Routes a track of the loaded song. `scope` decides whether the route is
 /// for every song with a track of this name or pinned to this song;
-/// `targets: None` clears it at that scope. Returns the whole project,
-/// since a by-name route can change other tracks too.
+/// `targets: None` clears it at that scope.
 #[tauri::command]
-pub fn set_track_routing(
-    state: State<AppState>,
+pub async fn set_track_routing(
+    state: State<'_, AppState>,
     track_id: String,
     scope: RouteScope,
     targets: Option<Vec<OutputTarget>>,
-) -> Result<ProjectDto, String> {
+) -> Result<RoutingDto, String> {
     let (project_id, track_name) = {
         let engine = lock(&state.engine);
         let project = engine.project().ok_or("No song loaded")?;
@@ -321,151 +496,63 @@ pub fn set_track_routing(
             .iter()
             .find(|t| t.id == track_id)
             .ok_or("Unknown track")?;
-        (project.manifest.id.clone(), track.name.clone())
+        (project.project_id.clone(), track.name.clone())
     };
     let config = state.update_config(|c| {
         c.routing
             .set_track_route(scope, &project_id, &track_id, &track_name, targets)
     })?;
     lock(&state.engine).set_routing(config.routing);
-    current_project_dto(&state).ok_or_else(|| "No song loaded".to_string())
+    Ok(routing_dto(&state))
 }
 
 #[tauri::command]
-pub fn set_click_routing(
-    state: State<AppState>,
+pub async fn set_click_routing(
+    state: State<'_, AppState>,
     targets: Option<Vec<OutputTarget>>,
-) -> Result<Option<ProjectDto>, String> {
+) -> Result<RoutingDto, String> {
     let config = state.update_config(|c| c.routing.click = targets)?;
     lock(&state.engine).set_routing(config.routing);
-    Ok(current_project_dto(&state))
+    Ok(routing_dto(&state))
 }
 
-// --- Library -----------------------------------------------------------------
+// --- Diagnostics -------------------------------------------------------------
 
+/// Webview errors and warnings land in the app's log (stderr), so a problem
+/// in the UI layer can be diagnosed after a show.
 #[tauri::command]
-pub fn library_list(state: State<AppState>) -> Vec<LibraryEntryDto> {
-    let dirs = lock(&state.config).library.clone();
-    dirs.iter().map(|d| library_entry(d)).collect()
+pub async fn log_from_webview(level: String, message: String) -> Result<(), String> {
+    eprintln!("[webview {level}] {message}");
+    Ok(())
 }
 
-#[tauri::command]
-pub fn library_add(state: State<AppState>, dir: String) -> Result<Vec<LibraryEntryDto>, String> {
-    // Validate before adding, so a folder without a manifest is rejected
-    // with a clear message instead of sitting in the list as an error.
-    project::read_manifest(Path::new(&dir))?;
-    let config = state.update_config(|c| {
-        if !c.library.contains(&dir) {
-            c.library.push(dir.clone());
-        }
-    })?;
-    Ok(config.library.iter().map(|d| library_entry(d)).collect())
+// --- Self-test -----------------------------------------------------------------
+
+pub fn selftest_requested() -> bool {
+    std::env::var("VVS_SELFTEST").is_ok_and(|v| v == "1")
 }
 
-#[tauri::command]
-pub fn library_remove(state: State<AppState>, dir: String) -> Result<Vec<LibraryEntryDto>, String> {
-    let config = state.update_config(|c| c.library.retain(|d| d != &dir))?;
-    Ok(config.library.iter().map(|d| library_entry(d)).collect())
+/// The throwaway directory a self-test run uses instead of the user's data.
+pub fn selftest_dir() -> PathBuf {
+    std::env::temp_dir().join(format!("vvs-selftest-{}", std::process::id()))
 }
 
 #[tauri::command]
-pub fn library_move(
-    state: State<AppState>,
-    dir: String,
-    to_index: usize,
-) -> Result<Vec<LibraryEntryDto>, String> {
-    let config = state.update_config(|c| {
-        if let Some(from) = c.library.iter().position(|d| d == &dir) {
-            let entry = c.library.remove(from);
-            let to = to_index.min(c.library.len());
-            c.library.insert(to, entry);
-        }
-    })?;
-    Ok(config.library.iter().map(|d| library_entry(d)).collect())
+pub async fn selftest_mode() -> Result<bool, String> {
+    Ok(selftest_requested())
 }
 
-// --- Project & transport -----------------------------------------------------
-
+/// Ends a self-test run: prints the result and exits with 0 (pass) or 1.
 #[tauri::command]
-pub async fn load_project(app: AppHandle, dir: String) -> Result<ProjectDto, String> {
-    tauri::async_runtime::spawn_blocking(move || load_project_blocking(&app, &dir))
-        .await
-        .map_err(|e| format!("Loading failed: {e}"))?
-}
-
-#[tauri::command]
-pub fn get_project(state: State<AppState>) -> Option<ProjectDto> {
-    current_project_dto(&state)
-}
-
-#[tauri::command]
-pub fn play(state: State<AppState>) {
-    lock(&state.engine).play();
-}
-
-#[tauri::command]
-pub fn pause(state: State<AppState>) {
-    lock(&state.engine).pause();
-}
-
-#[tauri::command]
-pub fn stop(state: State<AppState>) {
-    lock(&state.engine).stop();
-}
-
-#[tauri::command]
-pub fn seek(state: State<AppState>, sec: f64) {
-    lock(&state.engine).seek(sec);
-}
-
-#[tauri::command]
-pub fn get_status(state: State<AppState>) -> EngineStatus {
-    lock(&state.engine).status()
-}
-
-/// Called continuously while a fader moves (`commit: false`) and once on
-/// release (`commit: true`), which is when it's written to disk.
-#[tauri::command]
-pub fn set_track_volume(
-    state: State<AppState>,
-    track_id: String,
-    volume: f32,
-    commit: bool,
-) -> Result<(), String> {
-    let mut engine = lock(&state.engine);
-    engine.set_track_volume(&track_id, volume);
-    if commit {
-        persist_mix(&engine)
-    } else {
-        Ok(())
+pub async fn selftest_finish(app: AppHandle, passed: bool, summary: String) -> Result<(), String> {
+    if !selftest_requested() {
+        return Err("Not in self-test mode".to_string());
     }
-}
-
-#[tauri::command]
-pub fn set_track_muted(
-    state: State<AppState>,
-    track_id: String,
-    muted: bool,
-) -> Result<(), String> {
-    let mut engine = lock(&state.engine);
-    engine.set_track_muted(&track_id, muted);
-    persist_mix(&engine)
-}
-
-#[tauri::command]
-pub fn set_track_soloed(
-    state: State<AppState>,
-    track_id: String,
-    soloed: bool,
-) -> Result<(), String> {
-    let mut engine = lock(&state.engine);
-    engine.set_track_soloed(&track_id, soloed);
-    persist_mix(&engine)
-}
-
-#[tauri::command]
-pub fn set_click_enabled(state: State<AppState>, enabled: bool) -> Result<(), String> {
-    let mut engine = lock(&state.engine);
-    engine.set_click_enabled(enabled);
-    persist_mix(&engine)
+    eprintln!(
+        "[selftest] {} - {summary}",
+        if passed { "PASSED" } else { "FAILED" }
+    );
+    let _ = std::fs::remove_dir_all(selftest_dir());
+    app.exit(if passed { 0 } else { 1 });
+    Ok(())
 }

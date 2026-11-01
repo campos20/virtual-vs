@@ -41,6 +41,10 @@ impl StemAudio {
         self.samples.len() / 2
     }
 
+    pub fn interleaved(&self) -> &[f32] {
+        &self.samples
+    }
+
     #[cfg(test)]
     pub fn samples(&self) -> &[f32] {
         &self.samples
@@ -212,6 +216,10 @@ pub struct SharedStatus {
     /// Incremented each time a `Load` takes effect, so the control side knows
     /// which program the published position belongs to.
     loads: AtomicU64,
+    /// Commands taken off the queue so far. Compared with the number sent,
+    /// it tells the UI whether the published state already reflects every
+    /// command it issued (see `Engine::status`).
+    applied: AtomicU64,
 }
 
 impl SharedStatus {
@@ -224,6 +232,9 @@ impl SharedStatus {
     #[cfg(test)]
     pub fn natural_ends(&self) -> u64 {
         self.natural_ends.load(Ordering::Acquire)
+    }
+    pub fn applied(&self) -> u64 {
+        self.applied.load(Ordering::Acquire)
     }
     pub fn callbacks(&self) -> u64 {
         self.callbacks.load(Ordering::Relaxed)
@@ -448,13 +459,26 @@ impl Mixer {
     /// Fills one interleaved output block of `out.len() / channels` frames.
     pub fn process(&mut self, out: &mut [f32]) {
         self.status.callbacks.fetch_add(1, Ordering::Relaxed);
+        let mut applied = 0;
         for _ in 0..MAX_COMMANDS_PER_CALLBACK {
             match self.commands.pop() {
-                Ok(command) => self.apply(command),
+                Ok(command) => {
+                    self.apply(command);
+                    applied += 1;
+                }
                 Err(_) => break,
             }
         }
+        self.render(out);
+        self.publish();
+        // Counted only after the resulting state is published, so "every
+        // command applied" never pairs with a stale transport/position.
+        if applied > 0 {
+            self.status.applied.fetch_add(applied, Ordering::AcqRel);
+        }
+    }
 
+    fn render(&mut self, out: &mut [f32]) {
         out.fill(0.0);
         let channels = self.channels;
         let frames = out.len() / channels;
@@ -464,7 +488,6 @@ impl Mixer {
                 // Nothing loaded to fade - resolve right away.
                 self.finish_fade(then);
             }
-            self.publish();
             return;
         };
 
@@ -508,7 +531,6 @@ impl Mixer {
                 }
             }
         }
-        self.publish();
     }
 }
 
@@ -754,6 +776,22 @@ mod tests {
         h.send(Command::Play);
         let out = h.run(2);
         assert!((out[0] - 1e-3).abs() < 1e-9);
+    }
+
+    #[test]
+    fn applied_count_only_moves_with_published_state() {
+        let mut h = two_stem_harness();
+        h.run(8);
+        assert_eq!(h.status.applied(), 1); // the Load
+        h.send(Command::Play);
+        h.send(Command::SetGain {
+            voice: 0,
+            gain: 0.5,
+        });
+        assert_eq!(h.status.applied(), 1);
+        h.run(8);
+        assert_eq!(h.status.applied(), 3);
+        assert_eq!(h.status.transport(), TransportState::Playing);
     }
 
     #[test]

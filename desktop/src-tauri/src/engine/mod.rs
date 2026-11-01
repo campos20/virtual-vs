@@ -37,11 +37,18 @@ pub struct TrackState {
     pub soloed: bool,
 }
 
+/// One stem of a loaded project: its decoded audio and where it came from,
+/// so the whole project can be re-decoded if the device's rate changes.
+pub struct ProjectStem {
+    pub path: PathBuf,
+    pub audio: Arc<StemAudio>,
+}
+
 pub struct LoadedProject {
-    pub dir: PathBuf,
-    pub manifest: ProjectManifest,
+    pub project_id: String,
+    pub bpm: Option<f64>,
     pub sample_rate: u32,
-    stems: Vec<Arc<StemAudio>>,
+    stems: Vec<ProjectStem>,
     click: Option<Arc<StemAudio>>,
     pub tracks: Vec<TrackState>,
     pub click_enabled: bool,
@@ -49,6 +56,73 @@ pub struct LoadedProject {
 }
 
 impl LoadedProject {
+    /// Builds a project from stems decoded at `sample_rate`, one per track
+    /// in the same order. Every stem must share that one rate - the mixer
+    /// reads all of them from a single playhead, so a stem at another rate
+    /// would play at the wrong speed and drift. Callers re-decode instead.
+    pub fn assemble(
+        project_id: String,
+        bpm: Option<f64>,
+        click_enabled: bool,
+        tracks: Vec<TrackState>,
+        stems: Vec<ProjectStem>,
+        sample_rate: u32,
+    ) -> Result<LoadedProject, String> {
+        if stems.len() != tracks.len() {
+            return Err("Every track needs exactly one decoded stem".to_string());
+        }
+        let length_frames = stems
+            .iter()
+            .map(|s| s.audio.frames() as u64)
+            .max()
+            .unwrap_or(0);
+        // bpm is optional: without a tempo there's nothing to synthesize a
+        // click from, so the project simply has none.
+        let click = bpm.filter(|bpm| *bpm > 0.0).map(|bpm| {
+            Arc::new(click::generate_click(
+                bpm,
+                length_frames as usize,
+                sample_rate,
+            ))
+        });
+        Ok(LoadedProject {
+            project_id,
+            bpm,
+            sample_rate,
+            stems,
+            click,
+            tracks,
+            click_enabled,
+            length_frames,
+        })
+    }
+
+    /// The same project with every stem decoded again at `sample_rate`
+    /// (after switching to a device running at a different rate). The mix
+    /// state carries over unchanged.
+    pub fn redecoded(&self, sample_rate: u32) -> Result<LoadedProject, String> {
+        let sources: Vec<(PathBuf, String)> = self
+            .stems
+            .iter()
+            .zip(&self.tracks)
+            .map(|(stem, track)| (stem.path.clone(), track.name.clone()))
+            .collect();
+        let audio = decode_parallel(&sources, sample_rate, &|_, _, _| {})?;
+        let stems = sources
+            .into_iter()
+            .zip(audio)
+            .map(|((path, _), audio)| ProjectStem { path, audio })
+            .collect();
+        LoadedProject::assemble(
+            self.project_id.clone(),
+            self.bpm,
+            self.click_enabled,
+            self.tracks.clone(),
+            stems,
+            sample_rate,
+        )
+    }
+
     pub fn has_click(&self) -> bool {
         self.click.is_some()
     }
@@ -58,30 +132,26 @@ impl LoadedProject {
     }
 }
 
-/// Decodes every stem of a project at `sample_rate`, in parallel. Runs
-/// without the engine lock held - playback of whatever is loaded keeps going.
-pub fn decode_project(
-    dir: &Path,
-    manifest: ProjectManifest,
+/// Decodes stems in parallel at `sample_rate`. Runs without the engine lock
+/// held, so whatever is loaded keeps playing meanwhile.
+pub fn decode_parallel(
+    sources: &[(PathBuf, String)],
     sample_rate: u32,
     on_progress: &(dyn Fn(usize, usize, &str) + Sync),
-) -> Result<LoadedProject, String> {
-    let total = manifest.tracks.len();
+) -> Result<Vec<Arc<StemAudio>>, String> {
+    let total = sources.len();
     let done = AtomicUsize::new(0);
     on_progress(0, total, "");
-
     let results: Vec<Result<StemAudio, String>> = std::thread::scope(|scope| {
-        let handles: Vec<_> = manifest
-            .tracks
+        let handles: Vec<_> = sources
             .iter()
-            .map(|track| {
-                let path = manifest.track_path(dir, track);
+            .map(|(path, name)| {
                 let done = &done;
                 scope.spawn(move || {
-                    let result = decode::decode_stem(&path, sample_rate)
-                        .map_err(|e| format!("{}: {e}", track.name));
+                    let result =
+                        decode::decode_stem(path, sample_rate).map_err(|e| format!("{name}: {e}"));
                     let current = done.fetch_add(1, Ordering::AcqRel) + 1;
-                    on_progress(current, total, &track.name);
+                    on_progress(current, total, name);
                     result
                 })
             })
@@ -94,23 +164,29 @@ pub fn decode_project(
             })
             .collect()
     });
+    results.into_iter().map(|r| r.map(Arc::new)).collect()
+}
 
-    let stems = results
+/// Decodes a project folder as written by the mobile app. Used by the
+/// `engine_smoke` example; the app itself decodes stem by stem through the
+/// `audio_decode` command.
+pub fn decode_project(
+    dir: &Path,
+    manifest: ProjectManifest,
+    sample_rate: u32,
+    on_progress: &(dyn Fn(usize, usize, &str) + Sync),
+) -> Result<LoadedProject, String> {
+    let sources: Vec<(PathBuf, String)> = manifest
+        .tracks
+        .iter()
+        .map(|t| (manifest.track_path(dir, t), t.name.clone()))
+        .collect();
+    let audio = decode_parallel(&sources, sample_rate, on_progress)?;
+    let stems = sources
         .into_iter()
-        .map(|r| r.map(Arc::new))
-        .collect::<Result<Vec<_>, _>>()?;
-    let length_frames = stems.iter().map(|s| s.frames() as u64).max().unwrap_or(0);
-
-    // bpm is optional: without a tempo there's nothing to synthesize a click
-    // from, so the project simply has none.
-    let click = manifest.bpm.filter(|bpm| *bpm > 0.0).map(|bpm| {
-        Arc::new(click::generate_click(
-            bpm,
-            length_frames as usize,
-            sample_rate,
-        ))
-    });
-
+        .zip(audio)
+        .map(|((path, _), audio)| ProjectStem { path, audio })
+        .collect();
     let tracks = manifest
         .tracks
         .iter()
@@ -123,17 +199,14 @@ pub fn decode_project(
             soloed: t.soloed.unwrap_or(false),
         })
         .collect();
-
-    Ok(LoadedProject {
-        dir: dir.to_path_buf(),
-        click_enabled: manifest.click_enabled.unwrap_or(true),
-        manifest,
-        sample_rate,
-        stems,
-        click,
+    LoadedProject::assemble(
+        manifest.id.clone(),
+        manifest.bpm,
+        manifest.click_enabled.unwrap_or(true),
         tracks,
-        length_frames,
-    })
+        stems,
+        sample_rate,
+    )
 }
 
 /// A failed device is always worth replacing. A working fallback device is
@@ -146,6 +219,8 @@ fn should_reconnect(failed: bool, on_fallback: bool, idle: bool) -> bool {
 struct Output {
     stream: OutputStream,
     commands: rtrb::Producer<Command>,
+    /// Commands successfully queued; see `EngineStatus::pending_commands`.
+    sent: u64,
     garbage: rtrb::Consumer<Garbage>,
     status: Arc<SharedStatus>,
     last_callbacks: u64,
@@ -173,6 +248,13 @@ pub struct EngineStatus {
     /// Voices routed (in full or in part) to outputs this device doesn't have
     /// - silent there, so the UI warns rather than letting it go unnoticed.
     pub routing_warnings: Vec<String>,
+    /// The song the engine has loaded, so the UI can tell when it lost track
+    /// of what is playing (e.g. after the webview reloaded).
+    pub project_id: Option<String>,
+    /// Commands sent but not yet applied by the audio thread. While this is
+    /// non-zero, `transport`/`position_sec` may not reflect the latest
+    /// command yet, and the UI must not treat them as authoritative.
+    pub pending_commands: u64,
 }
 
 pub struct Engine {
@@ -271,6 +353,7 @@ impl Engine {
         self.output = Some(Output {
             stream,
             commands,
+            sent: 0,
             garbage,
             status,
             last_callbacks: 0,
@@ -292,7 +375,9 @@ impl Engine {
             // The queue holds 1024 commands and the audio thread drains it
             // every few ms; a full queue means the stream is dead, which
             // `status()` reports.
-            let _ = output.commands.push(command);
+            if output.commands.push(command).is_ok() {
+                output.sent += 1;
+            }
         }
     }
 
@@ -320,7 +405,7 @@ impl Engine {
             .map(|t| {
                 let route =
                     self.routing
-                        .track_route(&project.manifest.id, &t.id, &t.name, t.bus, channels);
+                        .track_route(&project.project_id, &t.id, &t.name, t.bus, channels);
                 (t.name.clone(), route.targets)
             })
             .collect();
@@ -372,7 +457,7 @@ impl Engine {
             .iter()
             .zip(gains)
             .zip(routes.iter())
-            .map(|((stem, gain), routes)| Voice::new(stem.clone(), gain, *routes))
+            .map(|((stem, gain), routes)| Voice::new(stem.audio.clone(), gain, *routes))
             .collect();
         if let (Some(click), Some(routes)) = (&project.click, routes.last()) {
             voices.push(Voice::new(
@@ -399,6 +484,13 @@ impl Engine {
         self.project = Some(project);
         self.send_program();
         Ok(())
+    }
+
+    /// Removes the loaded project (stopping it), e.g. to re-decode it for a
+    /// device at another sample rate and install it again.
+    pub fn take_project(&mut self) -> Option<LoadedProject> {
+        self.stop();
+        self.project.take()
     }
 
     pub fn play(&mut self) {
@@ -468,6 +560,16 @@ impl Engine {
         }
     }
 
+    /// The bus decides where an unrouted track plays (cue on output 1, main
+    /// on output 2), so changing it re-resolves routes - a route swap, never
+    /// a playhead change.
+    pub fn set_track_bus(&mut self, track_id: &str, bus: Bus) {
+        if let Some(track) = self.track_mut(track_id) {
+            track.bus = bus;
+            self.push_routes();
+        }
+    }
+
     pub fn set_click_enabled(&mut self, enabled: bool) {
         let Some(project) = self.project.as_mut() else {
             return;
@@ -517,6 +619,8 @@ impl Engine {
                 ),
                 xruns: 0,
                 routing_warnings: self.routing_warnings.clone(),
+                project_id: self.project.as_ref().map(|p| p.project_id.clone()),
+                pending_commands: 0,
             };
         };
 
@@ -532,6 +636,12 @@ impl Engine {
             .lock()
             .ok()
             .and_then(|e| e.clone());
+        if output.stream.health.engine_fault.load(Ordering::Acquire) {
+            device_error = Some(
+                "The audio engine hit an internal error and was silenced; reselect the audio device to recover"
+                    .to_string(),
+            );
+        }
         if device_error.is_none() && output.last_callback_seen.elapsed() > STALL_AFTER {
             device_error = Some("The audio device stopped responding".to_string());
         }
@@ -550,6 +660,8 @@ impl Engine {
             device_error,
             xruns: output.stream.health.xruns.load(Ordering::Relaxed),
             routing_warnings: self.routing_warnings.clone(),
+            project_id: self.project.as_ref().map(|p| p.project_id.clone()),
+            pending_commands: output.sent.saturating_sub(output.status.applied()),
         }
     }
 }

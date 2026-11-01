@@ -22,7 +22,7 @@ symphonia = { version = "0.6", features = ["all-codecs", "all-formats"] }
 rubato = "5"
 rtrb = "0.4"
 
-[profile.release]
-# A panic in the audio callback must not unwind across the FFI boundary into
-# CoreAudio/WASAPI; abort is the predictable failure mode.
-panic = "abort"
+# Release builds keep the default `panic = "unwind"` on purpose: the audio
+# callback catches a mixer panic and turns it into silence plus an error
+# banner (see engine/device.rs), and the file protocol turns one into an error
+# response. With `abort`, either would kill the app mid-song instead.

@@ -1,6 +1,7 @@
-//! Per-machine settings: which audio device, how its outputs are routed, and
-//! the library of project folders. Lives in the OS app-config directory, not
-//! in any project - it describes this rig, not a song.
+//! Per-machine settings: which audio device, how its outputs are routed and
+//! what they're called. Lives in the OS app-config directory, not in any
+//! project - it describes this rig, not a song. (The song library, settings
+//! and folders are the mobile app's own files; see `fs.rs`.)
 
 use std::collections::HashMap;
 use std::fs;
@@ -9,7 +10,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::project::write_atomic;
-use crate::routing::{MonitorMode, RoutingConfig};
+use crate::routing::RoutingConfig;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,12 +22,7 @@ pub struct AppConfig {
     #[serde(default)]
     pub buffer_frames: Option<u32>,
     #[serde(default)]
-    pub monitor_mode: MonitorMode,
-    #[serde(default)]
     pub routing: RoutingConfig,
-    /// Project folders, in Library order.
-    #[serde(default)]
-    pub library: Vec<String>,
     /// Device id -> a label per output ("IEM Drummer", "FOH Bass"...), so the
     /// routing matrix speaks the stage's language. Empty strings mean unnamed.
     #[serde(default)]
@@ -88,17 +84,19 @@ mod tests {
     fn round_trips_and_survives_corruption() {
         let dir = std::env::temp_dir().join(format!("vvs-config-{}", std::process::id()));
         let path = config_path(dir.clone());
-        let mut config = AppConfig::default();
-        config.library.push("/songs/a".into());
-        config.buffer_frames = Some(256);
+        let config = AppConfig {
+            device_id: Some("coreaudio:x".into()),
+            buffer_frames: Some(256),
+            ..Default::default()
+        };
         config.save(&path).unwrap();
         let loaded = AppConfig::load(&path);
-        assert_eq!(loaded.library, vec!["/songs/a".to_string()]);
+        assert_eq!(loaded.device_id.as_deref(), Some("coreaudio:x"));
         assert_eq!(loaded.buffer_frames, Some(256));
 
         fs::write(&path, "{ not json").unwrap();
         let fallback = AppConfig::load(&path);
-        assert!(fallback.library.is_empty());
+        assert!(fallback.device_id.is_none());
         assert!(path.with_extension("json.corrupt").exists());
         fs::remove_dir_all(dir).ok();
     }

@@ -25,7 +25,7 @@
       "package": "com.github.campos20.virtualvs"
     },
     "web": {
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [

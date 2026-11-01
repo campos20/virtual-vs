@@ -184,10 +184,27 @@ Guardrails for touching `AudioEngine.ts`:
 
 # Desktop app (`desktop/`)
 
-The desktop build is a Tauri 2 app with its audio engine in Rust
-(`desktop/src-tauri/src/engine/`). It reads the same project folders as the
-mobile app. `desktop/src-tauri/src/project.rs` mirrors `src/types/project.ts`,
-so change both together. See `desktop/README.md` for how to run it.
+The desktop build is this app, rendered with react-native-web inside a Tauri
+2 window. Its audio runs in a Rust engine (`desktop/src-tauri/src/engine/`),
+outside the webview. See `desktop/README.md` for the full picture. What matters
+when working in `src/`:
+
+- `metro.config.js` swaps a few modules **for web bundles only**:
+  `expo-file-system`, `expo-document-picker`, `expo-sharing`,
+  `react-native-audio-api`, plus `src/engine/AudioEngine.ts`,
+  `src/engine/waveform.ts` and `src/platform/desktop.tsx`. Their desktop
+  versions live in `desktop/web/`. Changing the public API of one of the
+  swapped `src/` modules means updating its desktop version too. Code in
+  `src/` that needs decoded samples in JS (`getChannelData`) won't work on
+  desktop.
+- Imports made **from** `desktop/web/` are never redirected (so the desktop
+  waveform module can build on the mobile one). Inside `desktop/web/`, always
+  import the desktop shims by relative path, never `expo-file-system` and the
+  like by package name, or you get the real phone module.
+- `src/platform/desktop.tsx` holds desktop-only UI slots that render nothing
+  on the phone. Put desktop-only UI there, not in shared screens.
+- `desktop/src-tauri/src/project.rs` mirrors `src/types/project.ts`; keep the
+  two in step.
 
 Everything above about stability and sample-locked stems applies there too,
 with Rust equivalents:
@@ -199,11 +216,18 @@ with Rust equivalents:
 - There is one playhead (`Mixer::position`) and every voice reads from it in
   the same callback. Never give a voice its own start offset or clock, and
   never add or remove a single voice from a playing `Program`. Replace the
-  whole program with `Command::Load`.
-- Volume, mute, solo and routing changes are only gain ramps or route swaps,
-  so they can never move the playhead.
-- Run `npm test` in `desktop/` (Rust unit tests, including the "sample-locked"
-  mixer tests) after touching the engine. Use
-  `cargo run --example engine_smoke` to check on a real device.
+  whole program with `Command::Load`. Every stem in a program must be decoded
+  at the device's rate (`LoadedProject::assemble`/`redecoded`).
+- Volume, mute, solo, bus and routing changes are only gain ramps or route
+  swaps, so they can never move the playhead.
+- A mixer panic is caught in the audio callback (silence plus banner) rather
+  than aborting. Keep release builds on `panic = "unwind"` so this works, and
+  keep Tauri commands `async`, so they stay off the main thread.
+- The desktop `AudioEngine` sends commands through one serial queue, and only
+  adopts polled engine state once `pendingCommands === 0`. Don't bypass the
+  queue, and don't treat a poll as authoritative while commands are in flight.
+- After touching the engine or the desktop layer, run `npm test` and
+  `npm run selftest` in `desktop/` (the self-test drives the real app end to
+  end). Use `cargo run --example engine_smoke` to check on a real device.
 - Rust crates follow the dependency rule above: well-established crates only,
   and only what is actually wired up.

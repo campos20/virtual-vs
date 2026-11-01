@@ -5,6 +5,10 @@ const expoConfig = require("eslint-config-expo/flat");
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ["dist/*", "desktop/src-tauri/target/*", "desktop/src-tauri/gen/*"],
+    ignores: [
+      "dist/*",
+      "desktop/src-tauri/target/*",
+      "desktop/src-tauri/gen/*",
+    ],
   },
 ]);

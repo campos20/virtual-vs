@@ -1,11 +1,10 @@
 mod commands;
 pub mod config;
 pub mod engine;
+mod fs;
 pub mod project;
 pub mod routing;
 
-use std::sync::atomic::AtomicU64;
-use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
@@ -15,6 +14,7 @@ use commands::{lock, AppState};
 use config::AppConfig;
 use engine::device::{self, DeviceInfo};
 use engine::Engine;
+use routing::MonitorMode;
 
 const HOUSEKEEPING_TICK: Duration = Duration::from_millis(250);
 /// How often the device list is rescanned. Cheap, but no need to hammer the
@@ -23,6 +23,17 @@ const DEVICE_SCAN_EVERY: u32 = 8; // ticks -> 2 s
 /// After a failed reconnect, wait this long before trying again, so a device
 /// that is present but refusing to open doesn't cause constant reopening.
 const RECONNECT_BACKOFF: Duration = Duration::from_secs(10);
+
+/// Runs before any page script on every load. A window reload must always
+/// land on the Library: reopening e.g. /project/<id> directly would mount
+/// that screen before the library has loaded, and it would treat the
+/// not-yet-known song as new (edit form with blank fields, which Save would
+/// write back). On the phone you only ever arrive there from the Library.
+const BOOT_SCRIPT: &str = r#"
+if (window.location.pathname !== "/") {
+  window.history.replaceState(null, "", "/");
+}
+"#;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -100,12 +111,37 @@ fn housekeeping(app: AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(
+            tauri::plugin::Builder::<tauri::Wry>::new("vvs-boot")
+                .js_init_script(BOOT_SCRIPT.to_string())
+                .build(),
+        )
+        .register_uri_scheme_protocol("vvsfs", |_ctx, request| fs::handle(request))
         .setup(|app| {
-            let config_dir = app.path().app_config_dir()?;
+            // VVS_SELFTEST=1 runs the end-to-end self-test (desktop/web/
+            // selftest.ts) against a throwaway directory - never the user's
+            // library or config.
+            let selftest_dir = commands::selftest_requested().then(commands::selftest_dir);
+            // The mobile app's files (songs, folders, settings) live here,
+            // laid out exactly as on the phone.
+            fs::init(match &selftest_dir {
+                Some(dir) => fs::Roots {
+                    document: dir.join("documents"),
+                    cache: dir.join("cache"),
+                },
+                None => fs::Roots {
+                    document: app.path().app_data_dir()?.join("documents"),
+                    cache: app.path().app_cache_dir()?,
+                },
+            });
+            let config_dir = match &selftest_dir {
+                Some(dir) => dir.join("config"),
+                None => app.path().app_config_dir()?,
+            };
             let config_path = config::config_path(config_dir);
             let config = AppConfig::load(&config_path);
 
-            let mut engine = Engine::new(config.monitor_mode, config.routing.clone());
+            let mut engine = Engine::new(MonitorMode::Split, config.routing.clone());
             engine.set_preferred_device(config.device_id.clone(), config.buffer_frames);
             // A saved interface that isn't plugged in falls back to the system
             // default, so the app always comes up with sound if it can. The
@@ -117,12 +153,7 @@ pub fn run() {
                 let _ = engine.open_device(None, config.buffer_frames);
             }
 
-            app.manage(AppState {
-                engine: Mutex::new(engine),
-                config: Mutex::new(config),
-                config_path,
-                load_generation: AtomicU64::new(0),
-            });
+            app.manage(AppState::new(engine, config, config_path));
 
             let handle = app.handle().clone();
             std::thread::Builder::new()
@@ -131,19 +162,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::list_devices,
-            commands::get_settings,
-            commands::select_device,
-            commands::set_monitor_mode,
-            commands::set_output_name,
-            commands::set_track_routing,
-            commands::set_click_routing,
-            commands::library_list,
-            commands::library_add,
-            commands::library_remove,
-            commands::library_move,
-            commands::load_project,
-            commands::get_project,
+            commands::audio_decode,
+            commands::engine_load,
+            commands::engine_unload,
             commands::play,
             commands::pause,
             commands::stop,
@@ -152,7 +173,19 @@ pub fn run() {
             commands::set_track_volume,
             commands::set_track_muted,
             commands::set_track_soloed,
+            commands::set_track_bus,
             commands::set_click_enabled,
+            commands::set_monitor_mode,
+            commands::list_devices,
+            commands::get_settings,
+            commands::select_device,
+            commands::set_output_name,
+            commands::get_routing,
+            commands::set_track_routing,
+            commands::set_click_routing,
+            commands::log_from_webview,
+            commands::selftest_mode,
+            commands::selftest_finish,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Virtual VS");

@@ -2,7 +2,8 @@
 //! whole life - not every platform's stream type is `Send`, and keeping it
 //! there means the rest of the app only ever holds plain handles.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -142,6 +143,9 @@ fn find_device(id: Option<&str>) -> Result<Device, String> {
 pub struct StreamHealth {
     pub fatal_error: Mutex<Option<String>>,
     pub xruns: AtomicU64,
+    /// Set (from the audio thread, so an atomic, not the mutex) if the mixer
+    /// ever panicked. The stream then plays silence until it's reopened.
+    pub engine_fault: AtomicBool,
 }
 
 /// A running output stream. Dropping it stops the stream.
@@ -172,16 +176,34 @@ where
 {
     let channels = config.channels as usize;
     let mut scratch = vec![0.0f32; SCRATCH_FRAMES * channels];
+    let callback_health = health.clone();
+    let mut faulted = false;
     device
         .build_output_stream(
             config,
             move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-                for chunk in data.chunks_mut(SCRATCH_FRAMES * channels) {
-                    let buffer = &mut scratch[..chunk.len()];
-                    mixer.process(buffer);
-                    for (out, sample) in chunk.iter_mut().zip(buffer.iter()) {
-                        *out = T::from_sample(*sample);
+                if !faulted {
+                    // A bug in the mixer must not unwind into the OS audio
+                    // thread (an abort that takes the whole app down). It's
+                    // contained here: the stream goes silent, the UI shows a
+                    // red banner, and reopening the device starts a fresh
+                    // mixer. Costs nothing on the normal path.
+                    let rendered = catch_unwind(AssertUnwindSafe(|| {
+                        for chunk in data.chunks_mut(SCRATCH_FRAMES * channels) {
+                            let buffer = &mut scratch[..chunk.len()];
+                            mixer.process(buffer);
+                            for (out, sample) in chunk.iter_mut().zip(buffer.iter()) {
+                                *out = T::from_sample(*sample);
+                            }
+                        }
+                    }));
+                    if rendered.is_err() {
+                        faulted = true;
+                        callback_health.engine_fault.store(true, Ordering::Release);
                     }
+                }
+                if faulted {
+                    data.fill(T::from_sample(0.0f32));
                 }
             },
             move |err: cpal::Error| match err.kind() {

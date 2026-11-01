@@ -1,143 +1,152 @@
 # Virtual VS for desktop
 
-The desktop build of Virtual VS: the same multitrack backing-track player, with
-audio in Rust ([cpal](https://crates.io/crates/cpal)) inside a
-[Tauri 2](https://tauri.app) shell, plus an output router so each track can go
-to its own output on a multichannel interface.
+The desktop build of Virtual VS is **the mobile app itself**, with the same
+screens, features and project format, running in a desktop window. It adds the
+one thing a computer can do that a phone can't: sending each stem to any
+output of a multichannel audio interface.
 
-It reads the **same project folders as the mobile app**: a folder with a
-`manifest.json` and its stems. A soundchecked mix (volume, mute, solo, click)
-is written back into the manifest using the same keys, so a song moves between
-phone and computer unchanged.
+- **UI:** the app in `src/`, rendered with react-native-web inside a
+  [Tauri 2](https://tauri.app) window.
+- **Audio:** a Rust engine ([cpal](https://crates.io/crates/cpal)) running on
+  the audio device's own thread, outside the webview. If the UI freezes,
+  errors or reloads, playback carries on.
 
 ## Running
 
-Requires Rust (stable) and Node.
+Requires Rust (stable) and Node. Install the app's dependencies at the repo
+root (`npm install`) and the Tauri CLI here:
 
 ```sh
 cd desktop
 npm install          # Tauri CLI only (dev dependency)
-npm run dev          # run the app
+npm run dev          # Expo dev server + app window, with hot reload
 npm test             # Rust unit tests
-npm run build        # .app / .dmg / installer
+npm run selftest     # end-to-end self-test in the real app (see below)
+npm run build        # release .app / .dmg / installer
 ```
 
-To check the engine on a real interface without the UI:
+`npm run dev` starts the Expo dev server for the web build (`desktop:serve`
+in the root `package.json`). `npm run build` exports it (`desktop:export`,
+into `dist/`) and packages it with the engine.
 
-```sh
-cd desktop/src-tauri
-cargo run --example engine_smoke                         # synthesized song, default output
-cargo run --example engine_smoke -- <project-folder> <device-id>
-```
-
-It lists every output device with its id, then plays, seeks, pauses, resumes
-and stops while printing transport state, xruns and device errors.
-
-## Layout
+## How it fits together
 
 ```
-desktop/
-  ui/                 plain HTML/CSS/JS front end (no build step, no deps)
-  src-tauri/
-    src/engine/
-      mixer.rs        real-time mixer - runs on the audio thread
-      device.rs       output device selection and the cpal stream
-      decode.rs       decode (symphonia) -> fold to stereo -> resample (rubato)
-      click.rs        synthesized metronome (port of engine/clickTrack.ts)
-      mod.rs          control side: mute/solo, routing, transport, status
-    src/routing.rs    output routing model
-    src/project.rs    manifest format shared with the mobile app
-    src/config.rs     per-machine settings
-    src/commands.rs   the UI's API (Tauri commands)
+src/                     the mobile app (unchanged screens, stores, storage)
+src/platform/desktop.tsx desktop-only UI slots - render nothing on the phone
+metro.config.js          for web bundles only, swaps phone-only modules:
+                           expo-file-system      -> desktop/web/shims
+                           expo-document-picker  -> desktop/web/shims
+                           expo-sharing          -> desktop/web/shims
+                           react-native-audio-api-> desktop/web/shims
+                           src/engine/AudioEngine.ts, waveform.ts,
+                           src/platform/desktop.tsx -> desktop/web/...
+desktop/web/             the desktop versions of those modules
+  engine/AudioEngine.ts  same API as mobile; every call -> Rust command
+  shims/                 file system, file picker, "share" (Save as…), audio
+  ui/                    audio-interface settings, routing matrix, banners
+  selftest.ts            end-to-end self-test
+desktop/src-tauri/       the Rust side
+  src/engine/            mixer (audio thread), device, decode, click
+  src/fs.rs              vvsfs:// protocol - synchronous file access
+  src/routing.rs         per-track output routing
+  src/commands.rs        the webview's API
 ```
 
-## How the engine stays safe on stage
+The phone and desktop share every screen. A feature added in `src/` shows up
+on desktop too, unless it touches one of the swapped modules.
+
+**Files.** The mobile storage code expects a partly synchronous file API
+(`file.exists`, `textSync()`). The desktop `expo-file-system` replacement
+makes each call a synchronous request to the `vvsfs://` protocol, which reads
+and writes the disk directly. There's no cache that could drift from what's
+saved, and writes go through a temp file and a rename. Songs, folders and
+settings sit in the app's data directory (on macOS,
+`~/Library/Application Support/com.campos20.virtual-vs.desktop/documents/`),
+laid out exactly as on the phone, so a `.vvs` bundle moves between the two.
+
+**Audio.** `decodeAudioData()` decodes a stem in Rust at the output device's
+rate and returns a handle: duration plus a waveform envelope, never the
+samples themselves. `AudioEngine.loadProject()` then installs all the handles
+at once.
+
+## Stage safety
 
 - **Stems are sample-locked by construction.** One audio callback mixes every
-  stem and the click from a single playhead, so drift between stems is
-  impossible. A project's voices are only ever replaced as a whole. These are
-  the same invariants as the mobile engine (see the repo's `AGENTS.md`).
-- **Nothing on the audio thread can block it.** `Mixer::process` doesn't
-  allocate, lock or do I/O. Commands arrive through a lock-free queue, status
-  goes out through atomics, and a replaced project is sent back to the control
-  thread to be freed there.
-- **No pops.** Pause, stop, seek and resume use a 5 ms fade. Gain changes use
-  the same 15 ms ramp as mobile. The output is clamped to full scale.
-- **Device problems are loud.** Driver errors and a stalled stream (no
-  callbacks for 1.5 s) show a red banner. A saved device that's unplugged at
-  startup falls back to the system default, so the app always comes up with
-  sound if it can.
-- **Loads can't collide.** Decoding runs off the audio thread while the current
-  song keeps playing. If a second song is picked before the first finishes
-  decoding, only the latest one is installed.
-- **Project files are read-only except for the mix.** Only `gain`, `muted`,
-  `soloed` and `clickEnabled` are written, through a JSON patch that keeps
-  unknown fields, and an atomic rename so a crash can't truncate the manifest.
+  stem and the click from a single playhead. A song is only ever swapped in
+  whole. Every stem must be decoded at the device's rate; when the device
+  changes rate, the whole song is decoded again together.
+- **Nothing can block the audio thread.** The mixer doesn't allocate, lock or
+  do I/O. Commands arrive through a lock-free queue, and a replaced song is
+  freed on another thread.
+- **No crashes from a bug.**
+  - A panic in the mixer is caught in the audio callback: the output goes
+    silent, a red banner explains it, and reselecting the device starts a
+    fresh mixer.
+  - Release builds unwind instead of aborting, so that safety net works.
+  - Commands run off the main thread, and the file protocol turns any failure
+    into an error response.
+- **The UI and the engine can't disagree unnoticed.**
+  - Commands reach Rust strictly in order, so a `play()` can't overtake a
+    load.
+  - The UI only adopts polled engine state once the engine reports that every
+    command has been applied, so a stale poll can never fake a pause or the
+    end of a song.
+  - A banner offers Stop if the engine is playing a song the UI doesn't know
+    about (e.g. after a window reload). A reload always returns to the Library.
+- **Device problems are loud.**
+  - A red banner shows on driver errors, on a stalled stream (no callbacks for
+    1.5 s) and when the engine stops answering.
+  - The saved interface reconnects on its own when it comes back, but only
+    while stopped, never under a playing song.
+  - Newly plugged interfaces are offered with a "Use it" button.
+- **No pops.** Pause, stop, seek and resume use a 5 ms fade, and gain changes
+  use the mobile app's 15 ms ramp.
 
 ## Routing
 
-Every track (and the click) is routed on its own, to any output the interface
-has. A track can go to several outputs at once, as mono outputs (L+R summed at
--6 dB) or stereo pairs. Routing lives in the **Routing** matrix: rows are
-tracks, columns are outputs.
+Settings → Audio interface → **Routing** opens a matrix with one row per
+track (plus the click) and one column per output of the interface. A track can
+go to several outputs, as mono outputs (L+R at -6 dB) or stereo pairs.
 
-- **Routes follow the track name across songs.** Route "Drums" to the FOH
-  channels once and every song with a Drums track uses it. A song can pin its
-  own route for a track ("This song only") when it needs to differ.
-- **Routing belongs to the computer**, not the song (the same song runs on
-  different rigs). It's saved in the app's config directory, along with names
-  for each interface's outputs ("IEM drummer", "FOH bass"), saved per device.
+- **Routes follow the track name across songs.** Route "Drums" once and every
+  song with a Drums track uses it. "This song only" pins a route to one song.
+- **Routing belongs to the computer**, not the song. It's stored in the app's
+  config directory, along with output names per interface ("IEM drummer",
+  "FOH bass").
 - **Unrouted tracks follow the phone's layout**: cue on output 1, main on
-  output 2. The click defaults to output 1.
-- **Routes to outputs the current device doesn't have** are skipped, never
-  remapped somewhere else. A yellow banner names the tracks this affects.
-- **Monitor mode** sends everything to outputs 1-2 in stereo, for rehearsing on
-  plain headphones, as on mobile.
+  output 2. The phone's split/monitor switch works too: monitor sends
+  everything to outputs 1-2 in stereo.
+- **Routes to outputs the current device doesn't have** stay silent (never
+  remapped elsewhere), and a yellow banner names the tracks this affects.
 
-### Interfaces
+## Tests
 
-The app opens every output channel the device reports. It rescans devices
-every 2 s:
+- **`npm test`.** Rust unit tests: the mixer (sample lock through
+  play/pause/seek/resume/stop, fades, natural end, routing, the
+  applied-command counter), the file protocol, routing rules, decode and
+  click.
+- **`npm run selftest`.** Builds the app and runs `desktop/web/selftest.ts`
+  inside it, against the real audio output, in a throwaway data directory,
+  with silent stems. It covers:
+  - creating a song and importing stems
+  - markers, lyrics and folders
+  - loading, play, seek, pause, resume, stop and natural end
+  - routing
+  - a `.vvs` export/import round trip
 
-- **New interface plugged in.** The app offers to switch to it, preferring the
-  one with the most outputs.
-- **Saved interface missing at startup.** The app starts on the system default
-  and switches back on its own when the interface appears, but only while
-  stopped. Switching closes the stream, so it never happens under a playing or
-  paused song.
-- **Interface lost mid-show** (unplugged, driver error, or no callbacks for
-  1.5 s). A red banner shows, and the app reconnects as soon as the interface
-  is back.
+  It checks the engine's position and the UI playhead at each step, then
+  exits 0 or 1.
 
-On Windows, cpal uses WASAPI, which may expose fewer channels than the
-interface's ASIO driver. ASIO support (cpal's `asio` feature, which needs the
-Steinberg SDK at build time) is on the list below.
+- **On a real interface, without the UI.**
+  `cargo run --example engine_smoke -- <project-folder> <device-id>` in
+  `src-tauri/`.
 
-## Status
+## Not done yet
 
-This is the first stage: the engine, proven on hardware, plus a working UI.
-
-Done:
-
-- multitrack playback with sample-locked stems
-- library of project folders
-- markers, with a seek bar
-- per-track volume, mute and solo
-- click
-- output device and buffer size selection
-- per-track routing matrix, multi-output, with output names
-- interface detection, plus switching and reconnecting
-- monitor mode
-- mix persisted to the manifest
-
-Next:
-
-- **Shared UI.** Render the mobile app's screens (react-native-web) in Tauri, so
-  layout and features come straight from `src/` instead of the stand-in UI in
-  `ui/`. That needs `.web.ts` versions of `src/engine` (calling these Tauri
-  commands) and of `src/storage` (Tauri fs instead of `expo-file-system`).
-- `.vvs` bundle import/export (reuse `src/storage/bundleFormat.ts`)
-- Library folders/setlists, marker editing, lyrics view, waveforms
-- MIDI footswitch (`midir`)
-- ASIO on Windows, for interfaces whose WASAPI driver exposes fewer channels
-- Storing decoded stems as 16-bit to halve memory for very long sets
+- **Windows and Linux are untested.** On Windows, cpal uses WASAPI, which may
+  expose fewer channels than the interface's ASIO driver. ASIO needs the
+  Steinberg SDK at build time.
+- **Desktop-native UX.** Keyboard shortcuts (space for play/pause), wider
+  layouts for big screens, and a routing button in the mixer drawer.
+- **MIDI footswitch** (`midir`).

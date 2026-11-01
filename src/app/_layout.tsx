@@ -5,6 +5,7 @@ import { View } from "react-native";
 import { Provider } from "react-redux";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { audioEngine } from "@/engine";
+import { DesktopStatusBanner } from "@/platform/desktop";
 import { store } from "@/store";
 import { ProjectLibraryGate } from "@/ui/ProjectLibraryGate";
 import { NowPlayingBar } from "@/ui/components/NowPlayingBar";
@@ -44,6 +45,7 @@ function ThemedApp() {
           needs - the inverse of our own dark/light theme mode. */}
       <StatusBar style={mode === "dark" ? "light" : "dark"} />
       <View style={{ flex: 1 }}>
+        <DesktopStatusBanner />
         {/* No transition animation: simpler and more predictable than an
             animated push/pop, and removes the window where two screens'
             native view trees are both present/rendering at once during a

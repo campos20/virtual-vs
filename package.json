@@ -56,7 +56,9 @@
     "test": "jest",
     "test:watch": "jest --watchAll",
     "test:coverage": "jest --coverage",
-    "test:summary": "jest && node scripts/coverage-summary.mjs"
+    "test:summary": "jest && node scripts/coverage-summary.mjs",
+    "desktop:serve": "expo start --port 8081",
+    "desktop:export": "expo export -p web"
   },
   "private": true
 }

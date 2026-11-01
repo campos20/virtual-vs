@@ -192,9 +192,31 @@ pub fn decode_stem(path: &Path, target_rate: u32) -> Result<StemAudio, String> {
     Ok(StemAudio::from_interleaved_stereo(resampled))
 }
 
+/// A coarse envelope for drawing waveforms: the loudest sample (of either
+/// channel) in each window of `sample_rate / per_second` frames. The UI
+/// resamples this to however many bars it draws, so the full audio never
+/// has to cross into the webview.
+pub fn peaks(stem: &StemAudio, sample_rate: u32, per_second: u32) -> Vec<f32> {
+    let window = (sample_rate / per_second.max(1)).max(1) as usize;
+    stem.interleaved()
+        .chunks(window * 2)
+        .map(|chunk| chunk.iter().fold(0.0f32, |peak, s| peak.max(s.abs())))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn peaks_follow_the_envelope() {
+        let mut samples = vec![0.0f32; 2000]; // 1000 frames at 1000 Hz
+        samples[1] = -0.8; // frame 0, right channel
+        samples[1500] = 0.3; // frame 750
+        let stem = StemAudio::from_interleaved_stereo(samples);
+        let p = peaks(&stem, 1000, 4); // 250-frame windows
+        assert_eq!(p, vec![0.8, 0.0, 0.0, 0.3]);
+    }
 
     #[test]
     fn mono_is_duplicated() {
