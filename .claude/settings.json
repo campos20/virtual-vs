@@ -1,9 +1,6 @@
 {
   "permissions": {
-    "allow": [
-      "WebSearch",
-      "WebFetch(domain:github.com)"
-    ]
+    "allow": ["WebSearch", "WebFetch(domain:github.com)"]
   },
   "enabledPlugins": {
     "expo@claude-plugins-official": true

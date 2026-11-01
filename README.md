@@ -402,7 +402,7 @@ npm run test:summary  # suite + a coverage table
 open coverage/index.html
 ```
 
-CI runs the same checks on every push and pull request, prints the coverage
+CI runs the same checks on open pull requests and on pushes to `main`, prints the coverage
 table on the run's summary page, and attaches the HTML report as an artifact -
 see [docs/RELEASING.md](docs/RELEASING.md#continuous-integration).
 

@@ -82,7 +82,7 @@ containing a `-` (`1.0.0-alpha.0`) are published as **pre-releases**.
 ### Release from main
 
 Tests don't run again during a release. CI ([`ci.yaml`](../.github/workflows/ci.yaml))
-already typechecks, lints and tests every push, so the release checks the
+already typechecks, lints and tests every push to `main`, so the release checks the
 _result_ instead: the tagged commit has to be on `main` and have a successful
 CI run. Tagging a commit that never reached main, or whose CI is red, fails
 before anything is built.
@@ -92,8 +92,9 @@ minutes) for CI to finish rather than failing the race.
 
 ## Continuous integration
 
-[`ci.yaml`](../.github/workflows/ci.yaml) runs on every push and pull request:
-typecheck, lint, tests. It also publishes a **coverage summary onto the run's
+[`ci.yaml`](../.github/workflows/ci.yaml) runs on open pull requests (each
+push to one) and on pushes to `main`: typecheck, lint, tests. A branch without
+a PR isn't checked until you open one. It also publishes a **coverage summary onto the run's
 own page** (Actions → the run → Summary) and uploads the browsable HTML report
 as an artifact. Nothing is sent to an external coverage service.
 
