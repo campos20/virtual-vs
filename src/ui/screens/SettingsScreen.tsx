@@ -4,6 +4,10 @@ import { StyleSheet, Text, View, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { type Locale, useTranslation } from "@/i18n";
 import {
+  DesktopAudioSettings,
+  DesktopShortcutsSettings,
+} from "@/platform/desktop";
+import {
   persistLanguageOverride,
   persistThemeOverride,
 } from "@/store/persistSettings";
@@ -136,6 +140,9 @@ export function SettingsScreen() {
             </View>
           </OverflowMenu>
         </View>
+
+        <DesktopAudioSettings />
+        <DesktopShortcutsSettings />
       </ScrollView>
     </SafeAreaView>
   );

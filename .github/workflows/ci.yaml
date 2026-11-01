@@ -1,7 +1,13 @@
 name: CI
 
-# Runs on every push and pull request. Until now the test suite only ran when
-# a release tag was pushed, which is the worst time to discover it's red.
+# Runs on open pull requests (each time one is opened, reopened or pushed to)
+# and on pushes to main. A feature branch is checked once it has a PR, not on
+# every push before that - and not twice per push once it does, which is what
+# triggering on both `push` (every branch) and `pull_request` used to do.
+#
+# Pushes to main still run because release.yaml's "require a green CI run"
+# gate looks for a successful run on the exact main commit being released,
+# and a PR's run is on its merge ref, a different commit.
 #
 # Also dispatchable directly: release.yaml's workflow_dispatch path pushes
 # the version-bump commit with the default GITHUB_TOKEN, which - by
@@ -10,7 +16,7 @@ name: CI
 # release-time "require a green CI run" gate has something to find.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
     tags-ignore: ["**"] # release.yaml already runs the same checks for tags
   pull_request:
   workflow_dispatch:

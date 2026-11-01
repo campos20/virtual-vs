@@ -3,8 +3,10 @@ import type { SetlistManifest } from "@/types/setlist";
 import {
   buildLibraryTree,
   folderKey,
+  neighbouringSongs,
   resolveFolderSongs,
   resolveLibraryOrder,
+  resolveSongSequence,
   songKey,
   type LibraryItem,
 } from "./libraryTree";
@@ -168,5 +170,48 @@ describe("resolveLibraryOrder", () => {
 
   it("returns nothing to order for a fresh install", () => {
     expect(resolveLibraryOrder({})).toEqual([]);
+  });
+});
+
+describe("resolveSongSequence", () => {
+  const projects = ["a", "b", "c", "d"].map(project);
+  const set = folder("set", ["c", "a"]);
+
+  it("follows the folder's own order when there is a folder", () => {
+    expect(
+      resolveSongSequence(set, projects, [set], []).map((p) => p.id),
+    ).toEqual(["c", "a"]);
+  });
+
+  it("otherwise follows the Library's top-level songs, in its order, skipping filed ones", () => {
+    const order = [songKey("d"), folderKey("set"), songKey("b")];
+    expect(
+      resolveSongSequence(undefined, projects, [set], order).map((p) => p.id),
+    ).toEqual(["d", "b"]);
+  });
+});
+
+describe("neighbouringSongs", () => {
+  const songs = ["a", "b", "c"].map(project);
+
+  it("finds the songs either side", () => {
+    expect(neighbouringSongs(songs, "b")).toEqual({
+      index: 1,
+      previousId: "a",
+      nextId: "c",
+    });
+  });
+
+  it("does not wrap at either end", () => {
+    expect(neighbouringSongs(songs, "a").previousId).toBeNull();
+    expect(neighbouringSongs(songs, "c").nextId).toBeNull();
+  });
+
+  it("offers nothing for a song that is not in the list", () => {
+    expect(neighbouringSongs(songs, "zzz")).toEqual({
+      index: -1,
+      previousId: null,
+      nextId: null,
+    });
   });
 });

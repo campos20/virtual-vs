@@ -2,8 +2,8 @@
 
 A release is cut by pushing a tag. The workflow
 ([`.github/workflows/release.yaml`](../.github/workflows/release.yaml)) builds a
-signed APK, attaches proof that GitHub built it, and publishes both to a
-GitHub Release.
+signed APK and the desktop installers, attaches proof that GitHub built them,
+and publishes it all to one GitHub Release.
 
 ## What makes a download trustworthy
 
@@ -82,7 +82,7 @@ containing a `-` (`1.0.0-alpha.0`) are published as **pre-releases**.
 ### Release from main
 
 Tests don't run again during a release. CI ([`ci.yaml`](../.github/workflows/ci.yaml))
-already typechecks, lints and tests every push, so the release checks the
+already typechecks, lints and tests every push to `main`, so the release checks the
 _result_ instead: the tagged commit has to be on `main` and have a successful
 CI run. Tagging a commit that never reached main, or whose CI is red, fails
 before anything is built.
@@ -92,8 +92,9 @@ minutes) for CI to finish rather than failing the race.
 
 ## Continuous integration
 
-[`ci.yaml`](../.github/workflows/ci.yaml) runs on every push and pull request:
-typecheck, lint, tests. It also publishes a **coverage summary onto the run's
+[`ci.yaml`](../.github/workflows/ci.yaml) runs on open pull requests (each
+push to one) and on pushes to `main`: typecheck, lint, tests. A branch without
+a PR isn't checked until you open one. It also publishes a **coverage summary onto the run's
 own page** (Actions → the run → Summary) and uploads the browsable HTML report
 as an artifact. Nothing is sent to an external coverage service.
 
@@ -107,10 +108,21 @@ open coverage/index.html
 ## What it produces
 
 - `virtual-vs-<version>.apk`
-- `SHA256SUMS.txt`
-- a **build provenance attestation**, signed and recorded in a public
-  transparency log, tying the APK to this repository, this commit and this
+- `virtual-vs-<version>-macos-universal.dmg`
+- `virtual-vs-<version>-windows-x64-setup.exe`
+- `virtual-vs-<version>-linux-amd64.deb` and `.AppImage`
+- `SHA256SUMS.txt`, covering every file above
+- a **build provenance attestation** for each file, signed and recorded in a
+  public transparency log, tying it to this repository, this commit and this
   workflow run - this is the check that matters
+
+The desktop installers are built by the `desktop` job on macOS, Windows and
+Ubuntu 22.04 runners, in parallel with the APK. The `publish-desktop` job
+attaches them only after the APK release is published (so after the green-CI
+check) and only if all three platforms built - a release never ships a
+partial set. The desktop version comes from `package.json` too; Windows
+installers need a purely numeric version, so a prerelease suffix is dropped
+inside the installer but kept in the file name.
 
 ## Version numbers
 
@@ -125,6 +137,10 @@ which is all Android requires.
   the signing config is injected by
   [`plugins/withAndroidSigning.js`](../plugins/withAndroidSigning.js) rather
   than committed into `build.gradle`.
+- The desktop installers aren't code-signed yet: macOS gets an ad-hoc
+  signature and Windows none, so Gatekeeper and SmartScreen ask once (the
+  release notes say how). Signing them properly needs an Apple Developer
+  account and a Windows code-signing certificate.
 - iOS is not covered here. Distributing an iOS build requires a paid Apple
   Developer account and Apple's signing infrastructure, which can't be
   reproduced with a keystore in a repository secret.

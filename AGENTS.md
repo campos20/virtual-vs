@@ -172,6 +172,15 @@ Guardrails for touching `AudioEngine.ts`:
 - Never schedule or stop stems inside a loop that awaits anything per
   iteration - a JS-thread delay between iterations is exactly how
   inter-track timing skew would sneak in.
+- Never assign `source.buffer` (or do any other slow work) between reading
+  the shared start time and the last `.start()` call. react-native-audio-api
+  deep-copies the samples on every buffer assignment, on the JS thread - tens
+  of MB per long stem - and a source whose `start(when, offset)` arrives after
+  `when` starts immediately from `offset`, permanently behind its siblings.
+  Build every source first, then take `startAt` from the clock, then call
+  `.start()` in a loop that does nothing else (`scheduleSources`/
+  `primeSources`). This was a real desync on long stems, seen after switching
+  songs back to back; see the "when assigning stem buffers is slow" tests.
 - Never introduce a second `AudioContext`/engine instance (e.g. one per
   track). The single shared context is _the_ invariant that makes drift
   structurally impossible in the first place.
@@ -181,3 +190,53 @@ Guardrails for touching `AudioEngine.ts`:
 - Run (and extend) `AudioEngine.test.ts`'s "keeps every stem sample-locked"
   suite whenever touching `scheduleSources`/`stopSources`/`play`/`pause`/
   `seek`.
+
+# Desktop app (`desktop/`)
+
+The desktop build is this app, rendered with react-native-web inside a Tauri
+2 window. Its audio runs in a Rust engine (`desktop/src-tauri/src/engine/`),
+outside the webview. See `desktop/README.md` for the full picture. What matters
+when working in `src/`:
+
+- `metro.config.js` swaps a few modules **for web bundles only**:
+  `expo-file-system`, `expo-document-picker`, `expo-sharing`,
+  `react-native-audio-api`, plus `src/engine/AudioEngine.ts`,
+  `src/engine/waveform.ts` and `src/platform/desktop.tsx`. Their desktop
+  versions live in `desktop/web/`. Changing the public API of one of the
+  swapped `src/` modules means updating its desktop version too. Code in
+  `src/` that needs decoded samples in JS (`getChannelData`) won't work on
+  desktop.
+- Imports made **from** `desktop/web/` are never redirected (so the desktop
+  waveform module can build on the mobile one). Inside `desktop/web/`, always
+  import the desktop shims by relative path, never `expo-file-system` and the
+  like by package name, or you get the real phone module.
+- `src/platform/desktop.tsx` holds desktop-only UI slots that render nothing
+  on the phone. Put desktop-only UI there, not in shared screens.
+- `desktop/src-tauri/src/project.rs` mirrors `src/types/project.ts`; keep the
+  two in step.
+
+Everything above about stability and sample-locked stems applies there too,
+with Rust equivalents:
+
+- `Mixer::process` (`engine/mixer.rs`) runs on the audio device's thread. It
+  must never allocate, free, lock, log or do I/O. Send state in through
+  `Command` and status out through `SharedStatus` atomics. Anything that needs
+  freeing goes back through the `Garbage` queue.
+- There is one playhead (`Mixer::position`) and every voice reads from it in
+  the same callback. Never give a voice its own start offset or clock, and
+  never add or remove a single voice from a playing `Program`. Replace the
+  whole program with `Command::Load`. Every stem in a program must be decoded
+  at the device's rate (`LoadedProject::assemble`/`redecoded`).
+- Volume, mute, solo, bus and routing changes are only gain ramps or route
+  swaps, so they can never move the playhead.
+- A mixer panic is caught in the audio callback (silence plus banner) rather
+  than aborting. Keep release builds on `panic = "unwind"` so this works, and
+  keep Tauri commands `async`, so they stay off the main thread.
+- The desktop `AudioEngine` sends commands through one serial queue, and only
+  adopts polled engine state once `pendingCommands === 0`. Don't bypass the
+  queue, and don't treat a poll as authoritative while commands are in flight.
+- After touching the engine or the desktop layer, run `npm test` and
+  `npm run selftest` in `desktop/` (the self-test drives the real app end to
+  end). Use `cargo run --example engine_smoke` to check on a real device.
+- Rust crates follow the dependency rule above: well-established crates only,
+  and only what is actually wired up.

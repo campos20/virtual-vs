@@ -1,0 +1,16 @@
+{
+  "name": "virtual-vs-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "selftest": "tauri build --debug --no-bundle && VVS_SELFTEST=1 ./src-tauri/target/debug/virtual-vs-desktop",
+    "icons": "tauri icon ../assets/images/icon.png"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

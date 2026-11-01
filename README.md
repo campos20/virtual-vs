@@ -5,7 +5,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/campos20/virtual-vs/ci.yaml?branch=main&label=CI)](https://github.com/campos20/virtual-vs/actions/workflows/ci.yaml)
 [![Release](https://img.shields.io/github/v/release/campos20/virtual-vs?include_prereleases&sort=semver&label=release)](https://github.com/campos20/virtual-vs/releases/latest)
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Android%20%7C%20iOS-lightgrey)](#running-the-app)
+[![Platform](https://img.shields.io/badge/platform-Android%20%7C%20iOS%20%7C%20macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)](#running-the-app)
 [![Expo SDK](https://img.shields.io/badge/Expo-SDK%2057-000020?logo=expo&logoColor=white)](https://docs.expo.dev/versions/v57.0.0/)
 
 <!-- The CI and release badges read live GitHub state, so until the first
@@ -20,6 +20,10 @@ replacing the laptop + audio interface + DAW rig (a "VS"/Playback-style
 setup). Load a project of audio stems and it plays them all sample-locked,
 with per-stem volume/mute/solo/bus routing and a click. Everything is local;
 there is no backend.
+
+There's also a **desktop app** for macOS, Windows and Linux: the same screens
+and project format, plus routing each stem to any output of a multichannel
+audio interface. See [Desktop app](#desktop-app).
 
 Built with [Expo](https://expo.dev) (SDK 57) and
 [`react-native-audio-api`](https://github.com/software-mansion/react-native-audio-api),
@@ -51,6 +55,9 @@ storage/    Loads a project's manifest.json and decodes its stems
 ui/         Library and Project screens (play + edit + create)
 setlist/    Stub - multi-song controller, preload-next, pad crossfade (TODO)
 control/    Stub - BLE-MIDI footswitch (TODO)
+platform/   Desktop-only UI slots - render nothing on the phone
+
+desktop/    The desktop app: this UI in a Tauri window + a Rust audio engine
 ```
 
 ### Audio engine (`engine/AudioEngine.ts`)
@@ -169,6 +176,34 @@ See `src/types/project.ts` and `src/types/setlist.ts`.
   need a Google/Microsoft OAuth client per build and token refresh; the
   share-sheet route deliberately avoids both.
 
+### Desktop app (`desktop/`)
+
+The desktop app is this app, not a port of it: the screens in `src/` rendered
+with [react-native-web](https://necolas.github.io/react-native-web/) inside a
+[Tauri 2](https://tauri.app) window. A feature added in `src/` shows up on
+desktop too.
+
+What differs is underneath. For web bundles only, `metro.config.js` swaps the
+phone-only modules - the audio engine, file system, file picker and share
+sheet - for desktop versions in `desktop/web/`. Audio runs in a Rust engine
+([cpal](https://crates.io/crates/cpal)) on the audio device's own thread,
+outside the webview, so playback carries on even if the UI freezes or
+reloads. Every stem and the click are mixed from a single playhead in one
+audio callback, the desktop equivalent of the shared `AudioContext` above.
+
+Desktop adds the one thing a computer can do that a phone can't: sending each
+stem to any output of a multichannel audio interface, instead of the phone's
+cue(L)/main(R) split.
+
+It also has DAW-style keyboard shortcuts: Space to play/pause, Return to stop,
+arrows to step by bars, number keys to jump to markers, and more. Press **?**
+in the app for the full list, or see
+[desktop/README.md](desktop/README.md#keyboard-shortcuts).
+
+Songs are stored exactly as on the phone, so a `.vvs` bundle (see below) moves
+between the two. [`desktop/README.md`](desktop/README.md) has the full
+picture.
+
 ## Backup and sharing
 
 A project or a whole folder can be packed into a single **`.vvs` bundle** -
@@ -228,11 +263,46 @@ hear that they stay in sync. Set a tempo if you want the generated click
 Then try dragging a fader, muting/soloing a track, changing its bus routing,
 and toggling monitor/split. **+ Folder** groups projects together.
 
+### Desktop
+
+Needs Rust (stable) and Node, plus
+[Tauri's system prerequisites](https://tauri.app/start/prerequisites/) on
+Linux. After `npm install` at the repo root:
+
+```bash
+cd desktop
+npm install          # Tauri CLI only
+npm run dev          # dev server + app window, with hot reload
+npm test             # Rust engine unit tests
+npm run selftest     # end-to-end self-test in the real app
+npm run build        # release installer for this machine
+```
+
+`npm run build` puts the installer under
+`desktop/src-tauri/target/release/bundle/`.
+
 ## Downloading a release
 
-Tagged releases publish a signed APK to the
-[Releases page](https://github.com/campos20/virtual-vs/releases). Download the
-`.apk` and open it on your Android device.
+Each tagged release on the
+[Releases page](https://github.com/campos20/virtual-vs/releases) has:
+
+| Platform                        | File                                         |
+| ------------------------------- | -------------------------------------------- |
+| Android                         | `virtual-vs-<version>.apk`                   |
+| macOS (Apple Silicon and Intel) | `virtual-vs-<version>-macos-universal.dmg`   |
+| Windows 10/11 (64-bit)          | `virtual-vs-<version>-windows-x64-setup.exe` |
+| Linux (Debian/Ubuntu)           | `virtual-vs-<version>-linux-amd64.deb`       |
+| Linux (other)                   | `virtual-vs-<version>-linux-amd64.AppImage`  |
+
+On Android, download the `.apk` and open it on your device.
+
+The desktop installers aren't signed with a paid developer certificate yet, so
+your system asks once before opening them:
+
+- **macOS:** open the app once, then go to **System Settings → Privacy &
+  Security** and click **Open Anyway**.
+- **Windows:** on the SmartScreen prompt, click **More info → Run anyway**.
+- **Linux (AppImage):** `chmod +x` the file, then run it.
 
 ### Verifying a download
 
@@ -245,6 +315,9 @@ where it came from, and all three checks below are things you run yourself.
 gh attestation verify virtual-vs-<version>.apk --repo campos20/virtual-vs
 ```
 
+The desktop installers are attested the same way - pass the `.dmg`, `.exe`,
+`.deb` or `.AppImage` instead.
+
 Each build records a signed
 [provenance attestation](https://docs.github.com/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds)
 in a public transparency log, tying the APK to the workflow run and commit that
@@ -254,10 +327,13 @@ This is the check that matters most - it covers the other two.
 **2. Confirm the file wasn't altered after upload:**
 
 ```bash
-sha256sum -c SHA256SUMS.txt
+sha256sum -c SHA256SUMS.txt --ignore-missing
 ```
 
-**3. Confirm it was signed with the project's release key:**
+`SHA256SUMS.txt` lists every file in the release; `--ignore-missing` checks
+just the ones you downloaded.
+
+**3. (APK only) Confirm it was signed with the project's release key:**
 
 ```bash
 apksigner verify --print-certs virtual-vs-<version>.apk
@@ -326,7 +402,7 @@ npm run test:summary  # suite + a coverage table
 open coverage/index.html
 ```
 
-CI runs the same checks on every push and pull request, prints the coverage
+CI runs the same checks on open pull requests and on pushes to `main`, prints the coverage
 table on the run's summary page, and attaches the HTML report as an artifact -
 see [docs/RELEASING.md](docs/RELEASING.md#continuous-integration).
 

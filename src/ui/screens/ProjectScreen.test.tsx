@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   screen,
   waitFor,
@@ -20,6 +21,7 @@ import { nowPlayingStore } from "@/playback/nowPlayingStore";
 import { createStore } from "@/store";
 import { projectAdded, type LibraryProjectEntry } from "@/store/projectsSlice";
 import { setlistAdded } from "@/store/setlistsSlice";
+import { libraryOrderSet } from "@/store/settingsSlice";
 import {
   trackEntityId,
   tracksInitializedForProject,
@@ -167,12 +169,11 @@ describe("ProjectScreen - playing", () => {
     await waitForMixer();
 
     expect(screen.getByText("Sync Test")).toBeTruthy();
-    expect(screen.getByText("120 BPM")).toBeTruthy();
-    // The waveform view labels each stem's lane too, so "Keys" is already on screen.
+    // The arrange view's track headers name each stem too, so "Keys" is already on screen.
     expect(screen.getByText("Keys")).toBeTruthy();
 
     openMixer();
-    // Now it appears twice: once for its waveform lane, once for its channel strip.
+    // Now it appears twice: once for its track header, once for its channel strip.
     expect(screen.getAllByText("Keys")).toHaveLength(2);
     expect(screen.getAllByText("Guide Vocal")).toHaveLength(2);
   });
@@ -195,8 +196,7 @@ describe("ProjectScreen - playing", () => {
     await waitForMixer();
     openMixer();
 
-    const [bassMute] = screen.getAllByText("M");
-    fireEvent.press(bassMute);
+    fireEvent.press(screen.getByTestId("mute-button-bass"));
 
     expect(audioEngine.getTrackState("bass")?.muted).toBe(true);
     expect(
@@ -394,30 +394,31 @@ describe("ProjectScreen - quick switch between songs in a folder", () => {
     return renderWithStore(<ProjectScreen />, store);
   }
 
-  function openFolderSongs() {
-    fireEvent.press(screen.getByTestId("folder-songs-menu-button"));
+  function openSongList() {
+    fireEvent.press(screen.getByTestId("song-list-menu-button"));
   }
 
-  it('offers no "songs in folder" button for a song opened outside any folder', async () => {
+  it("lists the Library's top-level songs for a song opened outside any folder", async () => {
     renderLoaded();
     await waitForMixer();
 
-    expect(screen.queryByTestId("folder-songs-menu-button")).toBeNull();
+    openSongList();
+
+    expect(screen.getByTestId("song-list-row-sync-test")).toBeTruthy();
   });
 
-  // Hidden by default - the whole point is that switching songs is never a
-  // one-tap accident near Markers/Mixer, only ever a deliberate "open the
-  // list, then tap a specific song" pair of taps.
-  it("keeps the folder song list hidden until its icon is pressed", async () => {
+  // Hidden by default - picking any song from the list, which works even
+  // mid-song, takes a deliberate "open the list, then tap a song" pair of taps.
+  it("keeps the song list hidden until its button is pressed", async () => {
     const songs = [song("a", "Song A"), song("b", "Song B")];
     renderInFolder("a", songs);
     await waitForMixer();
 
-    expect(screen.queryByTestId("folder-songs-row-b")).toBeNull();
+    expect(screen.queryByTestId("song-list-row-b")).toBeNull();
 
-    openFolderSongs();
+    openSongList();
 
-    expect(screen.getByTestId("folder-songs-row-b")).toBeTruthy();
+    expect(screen.getByTestId("song-list-row-b")).toBeTruthy();
   });
 
   it("lists every song in the folder, in its own order", async () => {
@@ -429,18 +430,18 @@ describe("ProjectScreen - quick switch between songs in a folder", () => {
     renderInFolder("a", songs);
     await waitForMixer();
 
-    openFolderSongs();
+    openSongList();
 
     // "Song A" is also the header title (this is the song currently open),
     // so these are found within their own drawer row rather than by text.
     expect(
-      within(screen.getByTestId("folder-songs-row-a")).getByText("Song A"),
+      within(screen.getByTestId("song-list-row-a")).getByText("Song A"),
     ).toBeTruthy();
     expect(
-      within(screen.getByTestId("folder-songs-row-b")).getByText("Song B"),
+      within(screen.getByTestId("song-list-row-b")).getByText("Song B"),
     ).toBeTruthy();
     expect(
-      within(screen.getByTestId("folder-songs-row-c")).getByText("Song C"),
+      within(screen.getByTestId("song-list-row-c")).getByText("Song C"),
     ).toBeTruthy();
   });
 
@@ -453,8 +454,8 @@ describe("ProjectScreen - quick switch between songs in a folder", () => {
     renderInFolder("a", songs);
     await waitForMixer();
 
-    openFolderSongs();
-    fireEvent.press(screen.getByTestId("folder-songs-row-c"));
+    openSongList();
+    fireEvent.press(screen.getByTestId("song-list-row-c"));
 
     expect(mockReplace).toHaveBeenCalledWith({
       pathname: "/project/[projectId]",
@@ -491,8 +492,8 @@ describe("ProjectScreen - quick switch between songs in a folder", () => {
     await waitForMixer();
     audioEngine.play();
 
-    openFolderSongs();
-    fireEvent.press(screen.getByTestId("folder-songs-row-c"));
+    openSongList();
+    fireEvent.press(screen.getByTestId("song-list-row-c"));
 
     expect(audioEngine.getTransportState()).toBe("stopped");
   });
@@ -502,11 +503,11 @@ describe("ProjectScreen - quick switch between songs in a folder", () => {
     renderInFolder("a", songs);
     await waitForMixer();
 
-    openFolderSongs();
-    fireEvent.press(screen.getByTestId("folder-songs-row-a"));
+    openSongList();
+    fireEvent.press(screen.getByTestId("song-list-row-a"));
 
     expect(mockReplace).not.toHaveBeenCalled();
-    expect(screen.queryByTestId("folder-songs-row-b")).toBeNull();
+    expect(screen.queryByTestId("song-list-row-b")).toBeNull();
   });
 
   it('disables "Play next" on the last song in the folder - it does not wrap', async () => {
@@ -514,7 +515,7 @@ describe("ProjectScreen - quick switch between songs in a folder", () => {
     renderInFolder("b", songs);
     await waitForMixer();
 
-    openFolderSongs();
+    openSongList();
 
     expect(
       screen.getByTestId("play-next-song-button").props.accessibilityState
@@ -531,14 +532,138 @@ describe("ProjectScreen - quick switch between songs in a folder", () => {
     renderInFolder("a", songs);
     await waitForMixer();
 
-    openFolderSongs();
+    openSongList();
     fireEvent.press(screen.getByTestId("play-next-song-button"));
 
     expect(mockReplace).toHaveBeenCalledWith({
       pathname: "/project/[projectId]",
       params: { projectId: "b", folderId: "sunday", autoPlay: "1" },
     });
-    expect(screen.queryByTestId("folder-songs-row-c")).toBeNull();
+    expect(screen.queryByTestId("song-list-row-c")).toBeNull();
+  });
+
+  it("shows where the song sits in its list", async () => {
+    const songs = [
+      song("a", "Song A"),
+      song("b", "Song B"),
+      song("c", "Song C"),
+    ];
+    renderInFolder("b", songs);
+    await waitForMixer();
+
+    expect(screen.getByTestId("song-position")).toHaveTextContent(
+      "2 of 3 · sunday",
+    );
+  });
+
+  it("steps to the next and previous song in one tap, left stopped and keeping the folder", async () => {
+    const songs = [
+      song("a", "Song A"),
+      song("b", "Song B"),
+      song("c", "Song C"),
+    ];
+    renderInFolder("b", songs);
+    await waitForMixer();
+
+    fireEvent.press(screen.getByTestId("next-song-button"));
+    expect(mockReplace).toHaveBeenLastCalledWith({
+      pathname: "/project/[projectId]",
+      params: { projectId: "c", folderId: "sunday" },
+    });
+
+    fireEvent.press(screen.getByTestId("previous-song-button"));
+    expect(mockReplace).toHaveBeenLastCalledWith({
+      pathname: "/project/[projectId]",
+      params: { projectId: "a", folderId: "sunday" },
+    });
+  });
+
+  it("disables previous on the first song and next on the last - nothing wraps", async () => {
+    const songs = [song("a", "Song A"), song("b", "Song B")];
+    renderInFolder("a", songs);
+    await waitForMixer();
+
+    expect(
+      screen.getByTestId("previous-song-button").props.accessibilityState
+        .disabled,
+    ).toBe(true);
+    expect(
+      screen.getByTestId("next-song-button").props.accessibilityState.disabled,
+    ).toBe(false);
+  });
+
+  // One tap beside the title is easy to hit by accident; mid-song that
+  // would cut the band off. The two-tap Songs list still works while playing.
+  it("locks previous/next while the transport is playing", async () => {
+    const songs = [
+      song("a", "Song A"),
+      song("b", "Song B"),
+      song("c", "Song C"),
+    ];
+    renderInFolder("b", songs);
+    await waitForMixer();
+    act(() => audioEngine.play());
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("next-song-button").props.accessibilityState
+          .disabled,
+      ).toBe(true),
+    );
+    fireEvent.press(screen.getByTestId("next-song-button"));
+    fireEvent.press(screen.getByTestId("previous-song-button"));
+
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(audioEngine.getTransportState()).toBe("playing");
+    act(() => audioEngine.stop());
+  });
+
+  it("allows stepping from a paused song", async () => {
+    const songs = [song("a", "Song A"), song("b", "Song B")];
+    renderInFolder("a", songs);
+    await waitForMixer();
+    act(() => {
+      audioEngine.play();
+      audioEngine.pause();
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("next-song-button").props.accessibilityState
+          .disabled,
+      ).toBe(false),
+    );
+    fireEvent.press(screen.getByTestId("next-song-button"));
+
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: "/project/[projectId]",
+      params: { projectId: "b", folderId: "sunday" },
+    });
+  });
+
+  it("steps through the Library's top-level songs, in its order, outside any folder", async () => {
+    const songs = [
+      song("a", "Song A"),
+      song("b", "Song B"),
+      song("c", "Song C"),
+    ];
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: songs[1],
+      resolveFile: () => 0,
+    });
+    mockParams = { projectId: "b" };
+    const store = createStore();
+    for (const entry of songs) store.dispatch(projectAdded(entry));
+    store.dispatch(libraryOrderSet(["project:c", "project:b", "project:a"]));
+    renderWithStore(<ProjectScreen />, store);
+    await waitForMixer();
+
+    fireEvent.press(screen.getByTestId("next-song-button"));
+
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: "/project/[projectId]",
+      params: { projectId: "a" },
+    });
   });
 
   // The button's whole point: unlike every other way to land on a song
@@ -640,18 +765,18 @@ describe("ProjectScreen - lyrics", () => {
     expect(screen.getByTestId("edit-lyrics-button")).toBeTruthy();
   });
 
-  it("collapses the BPM/Key header pills while viewing lyrics", async () => {
+  it("hides the song's list position while viewing lyrics", async () => {
     renderLoaded();
     await waitForMixer();
-    expect(screen.getByText("120 BPM")).toBeTruthy();
+    expect(screen.getByTestId("song-position")).toBeTruthy();
 
     toggleLyrics();
 
-    expect(screen.queryByText("120 BPM")).toBeNull();
+    expect(screen.queryByTestId("song-position")).toBeNull();
   });
 
   // The header shrinks around the title while viewing lyrics (padding, the
-  // BPM/Key pills hidden), but the title itself must not be part of that -
+  // list position hidden), but the title itself must not be part of that -
   // it answers the same "which song is this" question in both views, and
   // silently rendering it smaller there previously read as inconsistent.
   it("keeps the title the same size in both waveform and lyrics view", async () => {
