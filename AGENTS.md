@@ -172,6 +172,15 @@ Guardrails for touching `AudioEngine.ts`:
 - Never schedule or stop stems inside a loop that awaits anything per
   iteration - a JS-thread delay between iterations is exactly how
   inter-track timing skew would sneak in.
+- Never assign `source.buffer` (or do any other slow work) between reading
+  the shared start time and the last `.start()` call. react-native-audio-api
+  deep-copies the samples on every buffer assignment, on the JS thread - tens
+  of MB per long stem - and a source whose `start(when, offset)` arrives after
+  `when` starts immediately from `offset`, permanently behind its siblings.
+  Build every source first, then take `startAt` from the clock, then call
+  `.start()` in a loop that does nothing else (`scheduleSources`/
+  `primeSources`). This was a real desync on long stems, seen after switching
+  songs back to back; see the "when assigning stem buffers is slow" tests.
 - Never introduce a second `AudioContext`/engine instance (e.g. one per
   track). The single shared context is _the_ invariant that makes drift
   structurally impossible in the first place.

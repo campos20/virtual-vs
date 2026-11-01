@@ -223,6 +223,103 @@ describe("AudioEngine keeps every stem sample-locked", () => {
     expect(engine.getTransportState()).toBe("stopped");
   });
 
+  describe("when assigning stem buffers is slow", () => {
+    // react-native-audio-api deep-copies a buffer's samples on the JS thread
+    // every time one is assigned to a source (see
+    // AudioBufferSourceNodeHostObject::setBuffer). For a few long stereo
+    // stems that adds up to more than LOOKAHEAD_SEC, and a source whose
+    // `start(when, offset)` reaches the audio thread after `when` starts
+    // *now* from `offset` - behind its siblings for the rest of the song.
+    // This stands in for that copy by advancing the clock on every buffer
+    // assignment, and records what the clock read when each `start` was
+    // called.
+    const COPY_SEC = 0.25;
+
+    function recordLateness(engine: AudioEngine): {
+      starts: { when: number | undefined; calledAt: number }[];
+    } {
+      const ctx = engine.context as unknown as { _currentTime: number };
+      const starts: { when: number | undefined; calledAt: number }[] = [];
+      const createBufferSource = engine.context.createBufferSource.bind(
+        engine.context,
+      );
+      jest
+        .spyOn(engine.context, "createBufferSource")
+        .mockImplementation(() => {
+          const node = createBufferSource();
+          const proto = Object.getPrototypeOf(node);
+          const descriptor = Object.getOwnPropertyDescriptor(proto, "buffer")!;
+          Object.defineProperty(node, "buffer", {
+            configurable: true,
+            get() {
+              return descriptor.get!.call(this);
+            },
+            set(value) {
+              ctx._currentTime += COPY_SEC;
+              descriptor.set!.call(this, value);
+            },
+          });
+          jest
+            .spyOn(node, "start")
+            .mockImplementation((when?: number) =>
+              starts.push({ when, calledAt: engine.context.currentTime }),
+            );
+          jest.spyOn(node, "stop").mockImplementation(() => {});
+          return node;
+        });
+      return { starts };
+    }
+
+    function expectNoneLate(
+      starts: { when: number | undefined; calledAt: number }[],
+      expectedCount: number,
+    ) {
+      expectSampleLocked(
+        starts.map((s) => s.when),
+        expectedCount,
+      );
+      for (const { when, calledAt } of starts) {
+        expect(when!).toBeGreaterThan(calledAt);
+      }
+    }
+
+    it("still starts every stem and the click before their shared start time", () => {
+      const engine = new AudioEngine();
+      engine.loadProject(
+        decoded(engine, manifest({ bpm: 120, tracks: THREE_STEM_TRACKS })),
+      );
+      const { starts } = recordLateness(engine);
+
+      engine.play();
+
+      expectNoneLate(starts, 4);
+    });
+
+    it("still reschedules every stem in time on seek", () => {
+      const engine = new AudioEngine();
+      engine.loadProject(
+        decoded(engine, manifest({ bpm: 120, tracks: THREE_STEM_TRACKS })),
+      );
+      engine.play();
+      const { starts } = recordLateness(engine);
+
+      engine.seek(10);
+
+      expectNoneLate(starts, 4);
+    });
+
+    it("still primes every stem before its shared prime time", () => {
+      const engine = new AudioEngine();
+      const { starts } = recordLateness(engine);
+
+      engine.loadProject(
+        decoded(engine, manifest({ bpm: 120, tracks: THREE_STEM_TRACKS })),
+      );
+
+      expectNoneLate(starts, 4);
+    });
+  });
+
   it("never re-schedules any stem for a volume/mute/solo change - those are gain automation only", () => {
     const engine = new AudioEngine();
     engine.loadProject(

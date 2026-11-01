@@ -263,22 +263,30 @@ export class AudioEngine {
     // first-schedule cost live on the real first `play()` instead, landing
     // that one track a few ms off from its siblings on stage. See AGENTS.md
     // "Stems stay sample-locked".
-    const primeAt = this.ctx.currentTime + LOOKAHEAD_SEC;
-    const primeUntil = primeAt + PRIME_DURATION_SEC;
+    // Built first and started after, for the same reason as
+    // scheduleSources(): assigning each buffer is a slow copy, and the
+    // shared `primeAt` must be taken after all of them, not before.
     const silent = this.ctx.createGain();
     silent.gain.value = 0;
     silent.connect(this.ctx.destination);
 
-    const prime = (buffer: AudioBuffer) => {
+    const sources: AudioBufferSourceNode[] = [];
+    const prepare = (buffer: AudioBuffer) => {
       const source = this.ctx.createBufferSource();
       source.buffer = buffer;
       source.connect(silent);
-      source.start(primeAt);
-      source.stop(primeUntil);
+      sources.push(source);
     };
 
-    for (const node of this.tracks.values()) prime(node.buffer);
-    if (this.clickBuffer) prime(this.clickBuffer);
+    for (const node of this.tracks.values()) prepare(node.buffer);
+    if (this.clickBuffer) prepare(this.clickBuffer);
+
+    const primeAt = this.ctx.currentTime + LOOKAHEAD_SEC;
+    const primeUntil = primeAt + PRIME_DURATION_SEC;
+    for (const source of sources) {
+      source.start(primeAt);
+      source.stop(primeUntil);
+    }
 
     // Must fire after `primeUntil`, not a fixed delay - disconnecting `silent`
     // from the destination before then would cut every primed source out of
@@ -371,8 +379,19 @@ export class AudioEngine {
     return 0;
   }
 
+  /**
+   * Two passes, and the order matters. Assigning `source.buffer` makes
+   * react-native-audio-api deep-copy that stem's samples on the JS thread
+   * (AudioBufferSourceNodeHostObject::setBuffer) - tens of MB for a long
+   * stereo stem, so a handful of them can take longer than `LOOKAHEAD_SEC`.
+   * A source whose `start(when, offset)` arrives after `when` starts *now*
+   * from `offset`, i.e. behind its siblings for the rest of the song. So
+   * every source is fully built first, and only then is `startAt` taken
+   * from the clock and handed to every `start` in a loop that does nothing
+   * else. See AGENTS.md "Stems stay sample-locked".
+   */
   private scheduleSources(offsetSec: number): void {
-    const startAt = this.ctx.currentTime + LOOKAHEAD_SEC;
+    const sources: AudioBufferSourceNode[] = [];
 
     for (const [trackId, node] of this.tracks) {
       const source = this.ctx.createBufferSource();
@@ -381,17 +400,20 @@ export class AudioEngine {
       if (trackId === this.longestTrackId) {
         source.onEnded = () => this.handlePlaybackEndedNaturally();
       }
-      source.start(startAt, offsetSec);
       node.source = source;
+      sources.push(source);
     }
 
     if (this.clickBuffer && this.clickGain) {
       const clickSource = this.ctx.createBufferSource();
       clickSource.buffer = this.clickBuffer;
       clickSource.connect(this.clickGain);
-      clickSource.start(startAt, offsetSec);
       this.clickSource = clickSource;
+      sources.push(clickSource);
     }
+
+    const startAt = this.ctx.currentTime + LOOKAHEAD_SEC;
+    for (const source of sources) source.start(startAt, offsetSec);
 
     this.scheduledAtContextTime = startAt;
     this.playheadOffsetSec = offsetSec;
