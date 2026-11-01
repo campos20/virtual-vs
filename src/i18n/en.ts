@@ -68,6 +68,13 @@ export const en = {
     mixer: "Mixer",
     waveformView: "Waveform",
     folderSongs: "Songs in this folder",
+    songs: "Songs",
+    tracksView: "Tracks",
+    previousSong: "Previous song",
+    nextSong: "Next song",
+    songPosition: (position: number, total: number) =>
+      `${position} of ${total}`,
+    switchLockedWhilePlaying: "Stop playback to change songs",
     playNextSong: "Play next song",
     lockedWhilePlaying: "Stop playback to edit",
     lockedWhilePlayingBody:
@@ -139,6 +146,13 @@ export const en = {
     sync: "Sync",
     syncHeading: "Tap to Sync",
     remove: "Remove",
+  },
+  transport: {
+    play: "Play",
+    pause: "Pause",
+    stop: "Stop",
+    bar: "BAR",
+    bpm: "BPM",
   },
   nowPlaying: {
     heading: "Now Playing",

@@ -11,7 +11,7 @@ import {
   trackVolumeCommitted,
 } from "@/store/tracksSlice";
 import type { Bus, TrackManifest } from "@/types/project";
-import { glow, radii, useThemeColors, type ThemeColors } from "@/ui/theme";
+import { lcd, radii, useThemeColors, type ThemeColors } from "@/ui/theme";
 import { getTrackColor } from "../trackColors";
 import { VerticalFader } from "./VerticalFader";
 
@@ -25,14 +25,8 @@ const BUS_OPTIONS: { value: Bus; label: string }[] = [
   { value: "both", label: "L+R" },
 ];
 
-/**
- * The bus-selector row sits on a fixed dark surface regardless of theme (see
- * `busRow`'s hardcoded background below) - its inactive label text must stay
- * fixed too, or it silently loses contrast in light mode, where
- * `colors.textSecondary` is recalibrated for a *light* surface this one
- * never is (see TransportBar's identical fix for its elapsed-time readout).
- */
-const FIXED_DARK_SURFACE_TEXT_SECONDARY = "#9b9b9d";
+/** Text on a track-colored surface - the palette is all bright mid-tones, so dark text reads on every one in either theme. */
+const ON_TRACK_COLOR_TEXT = "#111114";
 
 interface ChannelStripProps {
   projectId: string;
@@ -79,20 +73,10 @@ export function ChannelStrip({ projectId, track, index }: ChannelStripProps) {
     dispatch(persistProjectMixer(projectId));
   }
 
+  // Laid out top to bottom like a console channel: routing, mute/solo,
+  // fader, and the name plate at the foot of the strip.
   return (
     <View style={styles.strip}>
-      <View
-        style={[
-          styles.colorBar,
-          { backgroundColor: accentColor },
-          committed.soloed && glow(accentColor, 8),
-        ]}
-      />
-
-      <Text style={styles.name} numberOfLines={2}>
-        {track.name}
-      </Text>
-
       <View style={styles.busRow}>
         {BUS_OPTIONS.map(({ value, label }) => {
           const active = committed.bus === value;
@@ -103,7 +87,6 @@ export function ChannelStrip({ projectId, track, index }: ChannelStripProps) {
               style={[
                 styles.busPill,
                 active && { backgroundColor: accentColor },
-                active && glow(accentColor, 6),
               ]}
             >
               <Text
@@ -119,23 +102,25 @@ export function ChannelStrip({ projectId, track, index }: ChannelStripProps) {
       <View style={styles.toggles}>
         <Pressable
           onPress={toggleMute}
-          style={[
-            styles.pill,
-            committed.muted && styles.pillMuteActive,
-            committed.muted && glow(colors.danger, 8),
-          ]}
+          testID={`mute-button-${track.id}`}
+          style={[styles.pill, committed.muted && styles.pillMuteActive]}
         >
-          <Text style={styles.pillText}>M</Text>
+          <Text
+            style={[styles.pillText, committed.muted && styles.pillTextMute]}
+          >
+            M
+          </Text>
         </Pressable>
         <Pressable
           onPress={toggleSolo}
-          style={[
-            styles.pill,
-            committed.soloed && styles.pillSoloActive,
-            committed.soloed && glow(colors.warning, 8),
-          ]}
+          testID={`solo-button-${track.id}`}
+          style={[styles.pill, committed.soloed && styles.pillSoloActive]}
         >
-          <Text style={styles.pillText}>S</Text>
+          <Text
+            style={[styles.pillText, committed.soloed && styles.pillTextSolo]}
+          >
+            S
+          </Text>
         </Pressable>
       </View>
 
@@ -147,6 +132,12 @@ export function ChannelStrip({ projectId, track, index }: ChannelStripProps) {
         onCommit={handleCommitVolume}
         accentColor={accentColor}
       />
+
+      <View style={[styles.namePlate, { backgroundColor: accentColor }]}>
+        <Text style={styles.name} numberOfLines={2}>
+          {track.name}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -155,84 +146,97 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     strip: {
       width: 104,
-      marginVertical: 10,
-      marginHorizontal: 4,
-      paddingBottom: 16,
+      marginVertical: 8,
+      marginHorizontal: 2,
       paddingTop: 8,
       paddingHorizontal: 8,
-      borderRadius: radii.lg,
+      borderRadius: radii.md,
       alignItems: "center",
       gap: 10,
       backgroundColor: colors.panelRaised,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.borderLight,
+      borderWidth: 1,
+      borderColor: colors.border,
       overflow: "hidden",
     },
-    colorBar: {
-      height: 4,
+    namePlate: {
       alignSelf: "stretch",
       marginHorizontal: -8,
-      marginTop: -8,
+      minHeight: 40,
+      paddingHorizontal: 6,
+      paddingVertical: 4,
+      justifyContent: "center",
     },
     name: {
-      color: colors.textPrimary,
-      fontSize: 13,
-      fontWeight: "700",
+      color: ON_TRACK_COLOR_TEXT,
+      fontSize: 12,
+      fontWeight: "800",
       textAlign: "center",
-      minHeight: 32,
     },
     spacer: {
       flex: 1,
     },
     busRow: {
+      alignSelf: "stretch",
       flexDirection: "row",
-      gap: 4,
-      backgroundColor: "#08080a",
+      gap: 2,
+      backgroundColor: lcd.background,
       borderRadius: radii.sm,
-      padding: 3,
+      padding: 2,
     },
     busPill: {
-      paddingVertical: 3,
-      paddingHorizontal: 6,
-      borderRadius: 5,
+      flex: 1,
+      // Tall enough to hit reliably on stage, even though it reads small.
+      minHeight: 30,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 2,
       backgroundColor: "transparent",
     },
     busPillText: {
-      color: FIXED_DARK_SURFACE_TEXT_SECONDARY,
-      fontSize: 10,
+      color: lcd.textDim,
+      fontSize: 11,
       fontWeight: "700",
     },
     busPillTextActive: {
-      color: "#0a0a0a",
+      color: ON_TRACK_COLOR_TEXT,
     },
     toggles: {
+      alignSelf: "stretch",
       flexDirection: "row",
       gap: 6,
     },
     pill: {
-      width: 30,
-      height: 26,
+      flex: 1,
+      height: 40,
       borderRadius: radii.sm,
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: colors.surface,
-      borderTopWidth: 1,
+      borderWidth: 1,
+      borderColor: colors.border,
       borderTopColor: colors.bevelLight,
-      borderBottomWidth: 2,
       borderBottomColor: colors.bevelDark,
     },
     pillMuteActive: {
       backgroundColor: colors.danger,
-      borderTopColor: "rgba(255,255,255,0.4)",
+      borderColor: colors.danger,
     },
     pillSoloActive: {
       backgroundColor: colors.warning,
-      borderTopColor: "rgba(255,255,255,0.4)",
+      borderColor: colors.warning,
     },
     pillText: {
-      color: colors.textPrimary,
-      fontWeight: "700",
-      fontSize: 12,
+      color: colors.textSecondary,
+      fontWeight: "800",
+      fontSize: 14,
+    },
+    pillTextMute: {
+      color: "#ffffff",
+    },
+    // `warning` is a bright yellow in dark mode and a dark amber in light
+    // mode; `background` inverts the same way, so it stays legible on both.
+    pillTextSolo: {
+      color: colors.background,
     },
   });
 }

@@ -40,24 +40,20 @@ import {
 } from "@/store/tracksSlice";
 import type { LyricsSyncPoint, SectionManifest } from "@/types/project";
 import { BackButton } from "@/ui/components/BackButton";
-import { FolderSongsDrawer } from "@/ui/components/FolderSongsDrawer";
-import { HamburgerIcon } from "@/ui/components/HamburgerIcon";
+import { Chevron } from "@/ui/components/Chevron";
 import { HeaderButton } from "@/ui/components/HeaderButton";
 import { LyricsDrawer } from "@/ui/components/LyricsDrawer";
-import { LyricsIcon } from "@/ui/components/LyricsIcon";
 import { LyricsSyncDrawer } from "@/ui/components/LyricsSyncDrawer";
 import { LyricsView } from "@/ui/components/LyricsView";
-import { MarkerIcon } from "@/ui/components/MarkerIcon";
 import { MarkersDrawer } from "@/ui/components/MarkersDrawer";
 import { MixerDrawer } from "@/ui/components/MixerDrawer";
 import {
   ProjectForm,
   type ProjectFormValues,
 } from "@/ui/components/ProjectForm";
-import { SongListIcon } from "@/ui/components/SongListIcon";
-import { WaveformIcon } from "@/ui/components/WaveformIcon";
+import { SongListDrawer } from "@/ui/components/SongListDrawer";
 import { WaveformView } from "@/ui/components/WaveformView";
-import { resolveFolderSongs } from "@/ui/libraryTree";
+import { neighbouringSongs, resolveSongSequence } from "@/ui/libraryTree";
 import { radii, spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
 import {
   getDocumentAsync,
@@ -99,7 +95,7 @@ export function ProjectScreen() {
   const { projectId, folderId, autoPlay } = useLocalSearchParams<{
     projectId?: string;
     folderId?: string;
-    /** Set only by the folder songs drawer's "Play next" button - see `handleSwitchToSong`. */
+    /** Set only by the song list drawer's "Play next" button - see `handleSwitchToSong`. */
     autoPlay?: string;
   }>();
   const dispatch = useAppDispatch();
@@ -112,32 +108,32 @@ export function ProjectScreen() {
     projectId ? projectsSelectors.selectById(s.projects, projectId) : undefined,
   );
   // Only set when this screen was opened from inside a folder (see
-  // LibraryScreen's `openProject`) - powers the "songs in this folder" list,
-  // opened deliberately via its own icon rather than any one-tap control, so
-  // a mis-tap near Markers/Mixer can never jump to a different song. `folder`
-  // is looked up fresh each render rather than trusted from whatever the
-  // Library passed, so a rename is reflected and a deletion (of the folder,
-  // or of this song from it) since this screen opened correctly hides the
-  // list instead of showing something stale.
+  // LibraryScreen's `openProject`) - then previous/next and the Songs list
+  // follow that folder; otherwise they follow the Library's top-level songs.
+  // `folder` is looked up fresh each render rather than trusted from
+  // whatever the Library passed, so a rename is reflected and a deletion
+  // (of the folder, or of this song from it) since this screen opened falls
+  // back to the Library list instead of showing something stale.
   const folder = useAppSelector((s) =>
     folderId ? setlistsSelectors.selectById(s.setlists, folderId) : undefined,
   );
   const allProjects = useAppSelector((s) =>
     projectsSelectors.selectAll(s.projects),
   );
-  const folderSongs = useMemo(
-    () => (folder ? resolveFolderSongs(folder, allProjects) : []),
-    [folder, allProjects],
+  const allFolders = useAppSelector((s) =>
+    setlistsSelectors.selectAll(s.setlists),
   );
-  // The very next song after this one in the folder - null at the last song
-  // (never wraps back to the first) and whenever there's no folder context.
-  const currentFolderIndex = folderSongs.findIndex(
-    (song) => song.id === entry?.id,
+  const libraryOrder = useAppSelector((s) => s.settings.libraryOrder);
+  const songSequence = useMemo(
+    () => resolveSongSequence(folder, allProjects, allFolders, libraryOrder),
+    [folder, allProjects, allFolders, libraryOrder],
   );
-  const nextSongId =
-    currentFolderIndex >= 0 && currentFolderIndex < folderSongs.length - 1
-      ? folderSongs[currentFolderIndex + 1].id
-      : null;
+  // Never wraps: null at either end of the list.
+  const {
+    index: sequenceIndex,
+    previousId: previousSongId,
+    nextId: nextSongId,
+  } = neighbouringSongs(songSequence, entry?.id);
   const monitorMode = useAppSelector((s) => s.settings.monitorMode);
   const lyricsFontSizePt = useAppSelector((s) => s.settings.lyricsFontSizePt);
   const lyricsAllCaps = useAppSelector((s) => s.settings.lyricsAllCaps);
@@ -161,7 +157,7 @@ export function ProjectScreen() {
   const [error, setError] = useState<string | null>(null);
   const [mixerOpen, setMixerOpen] = useState(false);
   const [markersOpen, setMarkersOpen] = useState(false);
-  const [folderSongsOpen, setFolderSongsOpen] = useState(false);
+  const [songListOpen, setSongListOpen] = useState(false);
   const [lyricsEditorOpen, setLyricsEditorOpen] = useState(false);
   const [lyricsSyncOpen, setLyricsSyncOpen] = useState(false);
   // A project with no stems can't be played, so it opens straight in edit
@@ -297,8 +293,8 @@ export function ProjectScreen() {
             tracks: manifest.tracks,
           }),
         );
-        // Set only by the folder songs drawer's "Play next" button - jumping
-        // here any other way (Library, a plain row tap in that same drawer)
+        // Set only by the song list drawer's "Play next" button - jumping
+        // here any other way (Library, previous/next, a plain row tap in that drawer)
         // loads the song and stops, same as always; only this one path is
         // meant to carry straight on without a separate Play tap.
         if (autoPlay === "1") audioEngine.play();
@@ -663,8 +659,8 @@ export function ProjectScreen() {
   }
 
   /**
-   * Jumps to a different song, picked from the "songs in this folder" list
-   * (see `folderSongs`), without detouring back through the Library.
+   * Jumps to a different song - previous/next, or one picked from the song
+   * list (see `songSequence`) - without detouring back through the Library.
    * `replace`, not `push` - so paging through an entire set doesn't stack a
    * screen per song; Back from wherever you stop should return to the
    * Library, not step backward through every song already passed on the way
@@ -679,8 +675,8 @@ export function ProjectScreen() {
    * however long that takes, then abruptly cut over. A definite stop now,
    * even with a beat of silence while the next one loads, beats an
    * unpredictable overlap. Safe to call unconditionally: every caller of
-   * this function is gated behind `isCurrent` already (see the folder songs
-   * button/drawer), so the engine is always playing *this* project when it
+   * this function is gated behind `isCurrent` already (see the header's
+   * song controls), so the engine is always playing *this* project when it
    * fires.
    */
   function handleSwitchToSong(
@@ -702,14 +698,31 @@ export function ProjectScreen() {
   }
 
   /**
-   * The folder songs drawer's one CTA that's more than "load and stop where
-   * every other jump leaves you": load the next song in the folder and carry
-   * straight on playing, for a set with no gap between songs.
+   * The song list drawer's one CTA that's more than "load and stop where
+   * every other jump leaves you": load the next song in the list and carry
+   * straight on playing, for a set with no gap between songs. Allowed while
+   * playing, because it takes two deliberate taps (open the list, press it).
    */
   function handlePlayNextSong() {
     if (!nextSongId) return;
-    setFolderSongsOpen(false);
+    setSongListOpen(false);
     handleSwitchToSong(nextSongId, { autoPlay: true });
+  }
+
+  /**
+   * The header's one-tap previous/next. Loads the song and leaves it
+   * stopped, ready to play - the performer still starts it.
+   *
+   * Only while the transport isn't running: one tap next to the title is
+   * easy to hit by accident, and mid-song that would cut the band off. A
+   * song that has ended has stopped, so stepping on from there needs no
+   * extra tap. Checked against the engine itself, not `isPlaying` - see
+   * `transportIsRunning`. Changing songs mid-song is still possible through
+   * the Songs list, which takes two deliberate taps.
+   */
+  function handleStepSong(targetId: string | null) {
+    if (!targetId || transportIsRunning()) return;
+    handleSwitchToSong(targetId);
   }
 
   /**
@@ -774,18 +787,22 @@ export function ProjectScreen() {
 
   function renderHeader() {
     // Collapsed while viewing lyrics, to give the auto-scrolling text as
-    // much of the screen as it reasonably can: the BPM/Key pills are purely
-    // decorative once the user is reading lyrics, so they're hidden and the
-    // header's own padding shrinks. The title itself stays the same size in
-    // both views - it's the one piece of chrome that's still the same
-    // "which song is this" answer either way, so it must not be the thing
-    // that visibly changes underneath the reader. The back button and the
-    // action icon row are unchanged either way - those are controls still
-    // needed while reading lyrics. No animation on the switch, matching
-    // AGENTS.md's `animation: 'none'` precedent - an abrupt layout change
-    // here avoids any transition-timing complexity for what is otherwise a
-    // plain toggle.
+    // much of the screen as it reasonably can: the song's position in its
+    // list is hidden and the header's own padding shrinks. The title itself
+    // stays the same size in both views - it's the one piece of chrome
+    // that's still the same "which song is this" answer either way, so it
+    // must not be the thing that visibly changes underneath the reader. The
+    // controls are unchanged either way - those are still needed while
+    // reading lyrics. No animation on the switch, matching AGENTS.md's
+    // `animation: 'none'` precedent.
+    //
+    // Every Pressable here keeps static children, with press feedback in
+    // `style` - previous/next and Back navigate, and a function child there
+    // is exactly the Fabric crash AGENTS.md documents.
     const compact = showLyrics;
+    const showControls = isCurrent && nowPlaying.manifest && !editing;
+    const stepLocked = isPlaying;
+    const listName = folder?.name ?? t.project.backToLibrary;
     return (
       <View style={[styles.header, compact && styles.headerCompact]}>
         <View style={styles.headerTopRow}>
@@ -794,115 +811,156 @@ export function ProjectScreen() {
             onPress={handleBackFromProject}
             testID="back-button"
           />
-          {isCurrent && nowPlaying.manifest && !editing && (
-            <View style={styles.headerActions}>
-              {/* Waveform/Lyrics grouped as one segmented control - the two
-                  are alternate views of the same content, so picking one
-                  switches straight to it rather than toggling a single icon. */}
-              <View style={styles.buttonGroup} testID="view-switch-group">
-                <Pressable
-                  onPress={() => handleSetLyricsView(false)}
-                  style={({ pressed }) => [
-                    styles.groupButton,
-                    !showLyrics && styles.groupButtonActive,
-                    pressed && styles.groupButtonPressed,
-                  ]}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 0 }}
-                  testID="waveform-view-button"
-                  accessibilityLabel={t.project.waveformView}
-                  accessibilityState={{ selected: !showLyrics }}
-                >
-                  <WaveformIcon
-                    color={!showLyrics ? colors.surface : colors.textSecondary}
-                  />
-                </Pressable>
-                <Pressable
-                  onPress={() => handleSetLyricsView(true)}
-                  style={({ pressed }) => [
-                    styles.groupButton,
-                    showLyrics && styles.groupButtonActive,
-                    pressed && styles.groupButtonPressed,
-                  ]}
-                  hitSlop={{ top: 8, bottom: 8, left: 0, right: 8 }}
-                  testID="lyrics-toggle-button"
-                  accessibilityLabel={t.lyrics.toggleLabel}
-                  accessibilityState={{ selected: showLyrics }}
-                >
-                  <LyricsIcon
-                    color={showLyrics ? colors.surface : colors.textSecondary}
-                  />
-                </Pressable>
-              </View>
-              {/* Markers/Mixer grouped as one unit - both open a drawer that
-                  overlays the current view, rather than switching it. */}
-              <View style={styles.buttonGroup} testID="overlay-menu-group">
-                <Pressable
-                  onPress={() => setMarkersOpen(true)}
-                  style={({ pressed }) => [
-                    styles.groupButton,
-                    pressed && styles.groupButtonPressed,
-                  ]}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 0 }}
-                  testID="markers-menu-button"
-                  accessibilityLabel={t.markers.heading}
-                >
-                  <MarkerIcon />
-                </Pressable>
-                <Pressable
-                  onPress={() => setMixerOpen(true)}
-                  style={({ pressed }) => [
-                    styles.groupButton,
-                    pressed && styles.groupButtonPressed,
-                  ]}
-                  hitSlop={{ top: 8, bottom: 8, left: 0, right: 8 }}
-                  testID="mixer-menu-button"
-                  accessibilityLabel={t.project.mixer}
-                >
-                  <HamburgerIcon />
-                </Pressable>
-              </View>
-
-              {/* Its own separate group, apart from Markers/Mixer above - on
-                  its own so there's no chance of it sitting close enough to
-                  either for a mis-tap to land on it (or vice versa), given
-                  it's the one button in this row that can lead to a
-                  different song playing. */}
-              {folder && (
-                <View style={styles.buttonGroup} testID="folder-songs-group">
-                  <Pressable
-                    onPress={() => setFolderSongsOpen(true)}
-                    style={({ pressed }) => [
-                      styles.groupButton,
-                      pressed && styles.groupButtonPressed,
-                    ]}
-                    hitSlop={8}
-                    testID="folder-songs-menu-button"
-                    accessibilityLabel={t.project.folderSongs}
-                  >
-                    <SongListIcon />
-                  </Pressable>
-                </View>
-              )}
-            </View>
+          {showControls && songSequence.length > 0 && (
+            <Pressable
+              onPress={() => setSongListOpen(true)}
+              style={({ pressed }) => [
+                styles.toolButton,
+                pressed && styles.pressed,
+              ]}
+              hitSlop={6}
+              testID="song-list-menu-button"
+              accessibilityLabel={t.project.songs}
+            >
+              <Text style={styles.toolButtonText}>{t.project.songs}</Text>
+            </Pressable>
           )}
         </View>
-        <Text style={styles.title} numberOfLines={1}>
-          {headerTitle}
-        </Text>
-        {isCurrent && nowPlaying.manifest && !editing && !compact && (
-          <View style={styles.subtitleRow}>
-            {nowPlaying.manifest.bpm !== undefined && (
-              <View style={styles.subtitlePill}>
-                <Text style={styles.subtitlePillText}>
-                  {nowPlaying.manifest.bpm} BPM
-                </Text>
-              </View>
-            )}
-            <View style={styles.subtitlePill}>
-              <Text style={styles.subtitlePillText}>
-                {nowPlaying.manifest.key || "—"}
+
+        <View style={styles.titleRow}>
+          {showControls && (
+            <Pressable
+              onPress={() => handleStepSong(previousSongId)}
+              disabled={!previousSongId || stepLocked}
+              style={({ pressed }) => [
+                styles.stepButton,
+                (!previousSongId || stepLocked) && styles.stepButtonDisabled,
+                pressed && styles.pressed,
+              ]}
+              testID="previous-song-button"
+              accessibilityLabel={t.project.previousSong}
+              accessibilityHint={
+                stepLocked ? t.project.switchLockedWhilePlaying : undefined
+              }
+            >
+              <Chevron
+                direction="left"
+                color={colors.textPrimary}
+                size={11}
+                style={styles.chevronLeft}
+              />
+            </Pressable>
+          )}
+          <View style={styles.titleBlock}>
+            <Text style={styles.title} numberOfLines={1}>
+              {headerTitle}
+            </Text>
+            {showControls && !compact && sequenceIndex >= 0 && (
+              <Text
+                style={styles.position}
+                numberOfLines={1}
+                testID="song-position"
+              >
+                {t.project.songPosition(sequenceIndex + 1, songSequence.length)}
+                {" · "}
+                {listName}
               </Text>
+            )}
+          </View>
+          {showControls && (
+            <Pressable
+              onPress={() => handleStepSong(nextSongId)}
+              disabled={!nextSongId || stepLocked}
+              style={({ pressed }) => [
+                styles.stepButton,
+                (!nextSongId || stepLocked) && styles.stepButtonDisabled,
+                pressed && styles.pressed,
+              ]}
+              testID="next-song-button"
+              accessibilityLabel={t.project.nextSong}
+              accessibilityHint={
+                stepLocked ? t.project.switchLockedWhilePlaying : undefined
+              }
+            >
+              <Chevron
+                direction="right"
+                color={colors.textPrimary}
+                size={11}
+                style={styles.chevronRight}
+              />
+            </Pressable>
+          )}
+        </View>
+
+        {showControls && (
+          <View style={styles.toolbar}>
+            {/* Tracks/Lyrics: two views of the same song, so a segmented
+                switch. Markers/Mixer open a drawer over the current view. */}
+            <View style={styles.segmented} testID="view-switch-group">
+              <Pressable
+                onPress={() => handleSetLyricsView(false)}
+                style={({ pressed }) => [
+                  styles.segment,
+                  !showLyrics && styles.segmentActive,
+                  pressed && styles.pressed,
+                ]}
+                testID="waveform-view-button"
+                accessibilityLabel={t.project.tracksView}
+                accessibilityState={{ selected: !showLyrics }}
+              >
+                <Text
+                  style={[
+                    styles.segmentText,
+                    !showLyrics && styles.segmentTextActive,
+                  ]}
+                >
+                  {t.project.tracksView}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => handleSetLyricsView(true)}
+                style={({ pressed }) => [
+                  styles.segment,
+                  showLyrics && styles.segmentActive,
+                  pressed && styles.pressed,
+                ]}
+                testID="lyrics-toggle-button"
+                accessibilityLabel={t.lyrics.toggleLabel}
+                accessibilityState={{ selected: showLyrics }}
+              >
+                <Text
+                  style={[
+                    styles.segmentText,
+                    showLyrics && styles.segmentTextActive,
+                  ]}
+                >
+                  {t.lyrics.toggleLabel}
+                </Text>
+              </Pressable>
             </View>
+            <View style={styles.toolbarSpacer} />
+            <Pressable
+              onPress={() => setMarkersOpen(true)}
+              style={({ pressed }) => [
+                styles.toolButton,
+                pressed && styles.pressed,
+              ]}
+              testID="markers-menu-button"
+              accessibilityLabel={t.markers.heading}
+            >
+              <Text style={styles.toolButtonText}>{t.markers.heading}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setMixerOpen(true)}
+              style={({ pressed }) => [
+                styles.toolButton,
+                pressed && styles.pressed,
+              ]}
+              testID="mixer-menu-button"
+              accessibilityLabel={t.project.mixer}
+            >
+              <Text style={styles.toolButtonText}>{t.project.mixer}</Text>
+            </Pressable>
           </View>
         )}
       </View>
@@ -1001,9 +1059,12 @@ export function ProjectScreen() {
           />
         ) : (
           <WaveformView
+            projectId={entry.id}
             tracks={nowPlaying.waveformTracks}
             durationSec={nowPlaying.durationSec}
             playheadSec={playheadSec}
+            bpm={nowPlaying.manifest.bpm}
+            sections={nowPlaying.manifest.sections}
           />
         )}
       </View>
@@ -1018,20 +1079,18 @@ export function ProjectScreen() {
         onJump={handleJumpToMarker}
       />
 
-      {folder && (
-        <FolderSongsDrawer
-          visible={folderSongsOpen}
-          onClose={() => setFolderSongsOpen(false)}
-          folderName={folder.name}
-          songs={folderSongs}
-          currentProjectId={entry?.id}
-          onJump={(nextProjectId) => {
-            setFolderSongsOpen(false);
-            handleSwitchToSong(nextProjectId);
-          }}
-          onPlayNext={nextSongId ? handlePlayNextSong : undefined}
-        />
-      )}
+      <SongListDrawer
+        visible={songListOpen}
+        onClose={() => setSongListOpen(false)}
+        title={folder?.name ?? t.project.backToLibrary}
+        songs={songSequence}
+        currentProjectId={entry?.id}
+        onJump={(nextProjectId) => {
+          setSongListOpen(false);
+          handleSwitchToSong(nextProjectId);
+        }}
+        onPlayNext={nextSongId ? handlePlayNextSong : undefined}
+      />
 
       <LyricsDrawer
         visible={lyricsEditorOpen}
@@ -1107,30 +1166,101 @@ function createStyles(colors: ThemeColors) {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      marginBottom: spacing.sm,
+      marginBottom: spacing.xs,
+    },
+    titleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+    },
+    titleBlock: {
+      flex: 1,
+      alignItems: "center",
     },
     title: {
       color: colors.textPrimary,
-      fontSize: 24,
+      fontSize: 22,
       fontWeight: "800",
       letterSpacing: -0.3,
     },
-    subtitleRow: {
-      flexDirection: "row",
-      gap: 6,
-      marginTop: 6,
-    },
-    subtitlePill: {
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: radii.pill,
-      backgroundColor: colors.borderLight,
-    },
-    subtitlePillText: {
+    position: {
       color: colors.textSecondary,
-      fontSize: 11,
+      fontSize: 12,
+      fontWeight: "600",
+      marginTop: 2,
+    },
+    stepButton: {
+      width: 48,
+      height: 44,
+      borderRadius: radii.md,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    stepButtonDisabled: {
+      opacity: 0.3,
+    },
+    // The chevron is a rotated corner; nudge it so it reads as centred.
+    chevronLeft: {
+      marginLeft: 4,
+    },
+    chevronRight: {
+      marginRight: 4,
+    },
+    toolbar: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      marginTop: spacing.sm,
+    },
+    toolbarSpacer: {
+      flex: 1,
+    },
+    segmented: {
+      flexDirection: "row",
+      borderRadius: radii.md,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    segment: {
+      minHeight: 36,
+      paddingHorizontal: spacing.md,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    segmentActive: {
+      backgroundColor: colors.accent,
+    },
+    segmentText: {
+      color: colors.textSecondary,
+      fontSize: 13,
       fontWeight: "700",
-      letterSpacing: 0.3,
+    },
+    // `surface` inverts the same way `accent` does, so it reads on both.
+    segmentTextActive: {
+      color: colors.surface,
+    },
+    toolButton: {
+      minHeight: 36,
+      paddingHorizontal: spacing.md,
+      borderRadius: radii.md,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    toolButtonText: {
+      color: colors.textPrimary,
+      fontSize: 13,
+      fontWeight: "700",
+    },
+    pressed: {
+      opacity: 0.6,
     },
     notice: {
       color: colors.textSecondary,
@@ -1143,33 +1273,6 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       backgroundColor: colors.background,
       justifyContent: "center",
-    },
-    headerActions: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.sm,
-    },
-    buttonGroup: {
-      flex: 1,
-      flexDirection: "row",
-      borderRadius: radii.pill,
-      overflow: "hidden",
-      backgroundColor: colors.borderLight,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.borderLight,
-    },
-    groupButton: {
-      flex: 1,
-      height: 36,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    groupButtonActive: {
-      backgroundColor: colors.accent,
-    },
-    groupButtonPressed: {
-      opacity: 0.7,
     },
     error: {
       color: colors.danger,

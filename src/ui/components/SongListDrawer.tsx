@@ -18,26 +18,27 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-interface FolderSongsDrawerProps {
+interface SongListDrawerProps {
   visible: boolean;
   onClose: () => void;
-  folderName: string;
+  /** The folder's name, or "Library" for a song opened from the Library's top level. */
+  title: string;
   songs: LibraryProjectEntry[];
   currentProjectId?: string;
   onJump: (projectId: string) => void;
-  /** Omitted (rather than a no-op) when the current song is last in the folder - disables the footer button instead of hiding it, so it doesn't move around from song to song. */
+  /** Omitted (rather than a no-op) when the current song is last in the list - disables the footer button instead of hiding it, so it doesn't move around from song to song. */
   onPlayNext?: () => void;
 }
 
 /**
- * The full list of songs in the folder the current one was opened from -
- * hidden by default, opened only by its own icon (see ProjectScreen's
- * header, in its own button group away from Markers/Mixer), never a one-tap
- * control. That's deliberate: switching songs from inside a live set is
- * exactly the kind of action a stray tap must never trigger by accident, so
- * it's gated behind an extra, explicit step - open the list, then tap the
- * specific song wanted - rather than a quick prev/next that could fire from
- * a mis-tap.
+ * The full list of songs the current one belongs to - its folder, or the
+ * Library's top level (see `resolveSongSequence`) - opened by the Songs
+ * button in ProjectScreen's header.
+ *
+ * This is the one way to change songs *while the transport is running*: it
+ * takes two deliberate taps (open the list, then pick a song), so a stray
+ * tap can't cut a song off. ProjectScreen's one-tap previous/next buttons
+ * are only enabled while stopped or paused, for the same reason.
  *
  * A right-anchored side panel rather than a bottom sheet like
  * MarkersDrawer/MixerDrawer - this one is a *list to browse*, closer to a
@@ -50,15 +51,15 @@ interface FolderSongsDrawerProps {
  * without hand-rolling a custom slide animation (see AGENTS.md "Stability
  * over appearance" on preferring the plain, already-reliable option).
  */
-export function FolderSongsDrawer({
+export function SongListDrawer({
   visible,
   onClose,
-  folderName,
+  title,
   songs,
   currentProjectId,
   onJump,
   onPlayNext,
-}: FolderSongsDrawerProps) {
+}: SongListDrawerProps) {
   const { t } = useTranslation();
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -83,17 +84,17 @@ export function FolderSongsDrawer({
         style={StyleSheet.absoluteFill}
         onPress={onClose}
         accessibilityLabel={t.common.close}
-        testID="folder-songs-drawer-backdrop"
+        testID="song-list-drawer-backdrop"
       />
       <SafeAreaView edges={["top", "bottom", "right"]} style={styles.panel}>
         <View style={styles.panelHeader}>
           <Text style={styles.panelTitle} numberOfLines={1}>
-            {folderName}
+            {title}
           </Text>
           <Pressable
             onPress={onClose}
             hitSlop={8}
-            testID="close-folder-songs-button"
+            testID="close-song-list-button"
             style={({ pressed }) => [
               styles.closeButton,
               pressed && styles.pressed,
@@ -113,7 +114,7 @@ export function FolderSongsDrawer({
               <Pressable
                 key={song.id}
                 onPress={() => handlePress(song.id)}
-                testID={`folder-songs-row-${song.id}`}
+                testID={`song-list-row-${song.id}`}
                 accessibilityLabel={song.title}
                 accessibilityState={{ selected: isCurrent }}
                 style={({ pressed }) => [
@@ -132,7 +133,7 @@ export function FolderSongsDrawer({
                 {isCurrent && (
                   <View
                     style={styles.nowPlayingDot}
-                    testID={`folder-songs-row-${song.id}-now-playing`}
+                    testID={`song-list-row-${song.id}-now-playing`}
                   />
                 )}
               </Pressable>

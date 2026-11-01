@@ -1,4 +1,12 @@
-import { glow, radii, useThemeColors, type ThemeColors } from "@/ui/theme";
+import { useTranslation } from "@/i18n";
+import {
+  lcd,
+  monoFont,
+  radii,
+  useThemeColors,
+  type ThemeColors,
+} from "@/ui/theme";
+import { formatBarsBeats, formatTime } from "@/ui/transportFormat";
 import { useCallback, useMemo, useRef } from "react";
 import {
   PanResponder,
@@ -13,44 +21,37 @@ interface TransportBarProps {
   isPlaying: boolean;
   playheadSec: number;
   durationSec: number;
+  /** Shows a bar.beat counter and the tempo when set - same grid as the click. */
+  bpm?: number;
+  /** The song's key, shown beside the tempo. */
+  songKey?: string;
   onPlayPause: () => void;
   onStop: () => void;
   onSeek: (seconds: number) => void;
 }
 
 /**
- * The scrub track and elapsed-time readout are fixed dark, LCD-style
- * surfaces regardless of theme - like a hardware console's own display, not
- * part of the app's light/dark chrome (same reasoning `bevelLight`/
- * `bevelDark` in theme.ts stay fixed). Anything drawn on top of them must
- * stay fixed too, or it silently loses contrast in light mode: the theme's
- * `accent`/text colors are recalibrated for a *light* surface, and this
- * surface is never light. This was the actual cause of the current-time
- * progress fill (and the readout's own text) going near-invisible in light
- * mode - both were pulling `colors.*` values meant for a white background
- * onto a track/readout that's always near-black.
+ * A DAW-style control bar: a timeline to scrub, square stop/play buttons,
+ * and an LCD counter. The scrub timeline and the LCD are fixed dark
+ * surfaces in both themes (see `lcd` in theme.ts) - anything drawn on them
+ * uses `lcd.*`, never the theme's text/accent colors, which are tuned for a
+ * light surface in light mode and went near-invisible here before.
+ *
+ * Every control keeps static children: press feedback goes through `style`
+ * only, and the play/pause icon swap is driven by `isPlaying`, never by
+ * press state (see AGENTS.md on function-as-child Pressables).
  */
-const FIXED_DARK_SURFACE_ACCENT = "#208AEF";
-const FIXED_DARK_SURFACE_TEXT_PRIMARY = "#ffffff";
-const FIXED_DARK_SURFACE_TEXT_SECONDARY = "#9b9b9d";
-const FIXED_DARK_SURFACE_TEXT_TERTIARY = "#5f5f63";
-
-function formatTime(totalSeconds: number): string {
-  const clamped = Math.max(0, totalSeconds);
-  const minutes = Math.floor(clamped / 60);
-  const seconds = Math.floor(clamped % 60);
-  const tenths = Math.floor((clamped - Math.floor(clamped)) * 10);
-  return `${minutes}:${seconds.toString().padStart(2, "0")}.${tenths}`;
-}
-
 export function TransportBar({
   isPlaying,
   playheadSec,
   durationSec,
+  bpm,
+  songKey,
   onPlayPause,
   onStop,
   onSeek,
 }: TransportBarProps) {
+  const { t } = useTranslation();
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const widthRef = useRef(0);
@@ -70,8 +71,8 @@ export function TransportBar({
   );
 
   /* eslint-disable react-hooks/refs -- these callbacks run on later native
-   * touch responder events, never during render; see VerticalFader.tsx for
-   * the same pattern. */
+     touch events, never during render, so reading widthRef (via
+     seekFromLocationX) is safe here. */
   const panResponder = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
@@ -84,61 +85,94 @@ export function TransportBar({
 
   const progressPercent =
     `${Math.max(0, Math.min(1, playheadSec / Math.max(durationSec, 1))) * 100}%` as const;
+  const tempo = bpm !== undefined && bpm > 0 ? bpm : null;
 
   return (
     <View style={styles.container}>
+      {/* The touch area is taller than the line drawn inside it, and every
+          child ignores touches, so `locationX` is always measured against
+          this full-width view - never against the head or the fill. */}
       <View
-        style={styles.scrubTrack}
+        style={styles.scrubHitArea}
         onLayout={handleLayout}
+        testID="scrub-track"
         {...panResponder.panHandlers}
       >
-        <View style={[styles.scrubFill, { width: progressPercent }]} />
+        <View style={styles.scrubTrack} pointerEvents="none">
+          <View style={[styles.scrubFill, { width: progressPercent }]} />
+        </View>
         <View
-          style={[
-            styles.scrubHead,
-            { left: progressPercent },
-            isPlaying && glow(FIXED_DARK_SURFACE_ACCENT, 6),
-          ]}
+          style={[styles.scrubHead, { left: progressPercent }]}
+          pointerEvents="none"
         />
       </View>
 
       <View style={styles.row}>
         <Pressable
           onPress={onStop}
-          style={styles.stopButton}
-          hitSlop={8}
+          style={({ pressed }) => [
+            styles.transportButton,
+            pressed && styles.pressed,
+          ]}
+          hitSlop={6}
           testID="stop-button"
+          accessibilityLabel={t.transport.stop}
         >
           <View style={styles.stopIcon} />
         </Pressable>
 
-        <View style={styles.readout}>
-          <Text style={styles.time}>
-            <Text style={styles.timePlayed}>{formatTime(playheadSec)}</Text>
-            <Text style={styles.timeSep}> / </Text>
-            {formatTime(durationSec)}
-          </Text>
-        </View>
-
-        <View style={styles.playButtonWrap}>
-          {isPlaying && (
-            <View style={[styles.playGlow, glow(colors.accent, 16)]} />
+        <Pressable
+          onPress={onPlayPause}
+          style={({ pressed }) => [
+            styles.transportButton,
+            isPlaying && styles.playButtonActive,
+            pressed && styles.pressed,
+          ]}
+          hitSlop={6}
+          testID="play-pause-button"
+          accessibilityLabel={isPlaying ? t.transport.pause : t.transport.play}
+        >
+          {isPlaying ? (
+            <View style={styles.pauseIcon} testID="pause-icon">
+              <View style={styles.pauseBar} />
+              <View style={styles.pauseBar} />
+            </View>
+          ) : (
+            <View style={styles.playTriangle} testID="play-icon" />
           )}
-          <Pressable
-            onPress={onPlayPause}
-            style={styles.playButton}
-            hitSlop={8}
-            testID="play-pause-button"
-          >
-            {isPlaying ? (
-              <View style={styles.pauseIcon} testID="pause-icon">
-                <View style={styles.pauseBar} />
-                <View style={styles.pauseBar} />
+        </Pressable>
+
+        <View style={styles.lcd}>
+          <View style={styles.lcdCell}>
+            <Text style={styles.lcdMain} numberOfLines={1}>
+              {formatTime(playheadSec)}
+            </Text>
+            <Text style={styles.lcdSub} numberOfLines={1}>
+              / {formatTime(durationSec)}
+            </Text>
+          </View>
+          {tempo !== null && (
+            <>
+              <View style={styles.lcdDivider} />
+              <View style={styles.lcdCell}>
+                <Text style={styles.lcdMain} numberOfLines={1}>
+                  {formatBarsBeats(playheadSec, tempo)}
+                </Text>
+                <Text style={styles.lcdSub} numberOfLines={1}>
+                  {t.transport.bar}
+                </Text>
               </View>
-            ) : (
-              <View style={styles.playTriangle} testID="play-icon" />
-            )}
-          </Pressable>
+            </>
+          )}
+          <View style={styles.lcdDivider} />
+          <View style={[styles.lcdCell, styles.lcdCellInfo]}>
+            <Text style={styles.lcdInfo} numberOfLines={1}>
+              {tempo !== null ? `${tempo} ${t.transport.bpm}` : "—"}
+            </Text>
+            <Text style={styles.lcdSub} numberOfLines={1}>
+              {songKey || "—"}
+            </Text>
+          </View>
         </View>
       </View>
     </View>
@@ -148,115 +182,78 @@ export function TransportBar({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
-      paddingTop: 14,
-      paddingBottom: 18,
-      paddingHorizontal: 16,
-      gap: 18,
+      paddingTop: 4,
+      paddingBottom: 12,
+      paddingHorizontal: 12,
+      gap: 8,
+    },
+    scrubHitArea: {
+      height: 24,
+      justifyContent: "center",
     },
     scrubTrack: {
-      height: 8,
-      borderRadius: radii.pill,
-      backgroundColor: "#08080a",
+      height: 6,
+      borderRadius: 1,
+      backgroundColor: lcd.background,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: "rgba(0,0,0,0.6)",
+      borderColor: lcd.border,
+      overflow: "hidden",
     },
     scrubFill: {
       height: "100%",
-      borderRadius: radii.pill,
-      backgroundColor: FIXED_DARK_SURFACE_ACCENT,
+      backgroundColor: lcd.accent,
     },
     scrubHead: {
       position: "absolute",
-      top: -4,
-      width: 16,
-      height: 16,
-      marginLeft: -8,
-      borderRadius: 8,
+      top: 2,
+      bottom: 2,
+      width: 3,
+      marginLeft: -1.5,
+      borderRadius: 1,
       backgroundColor: "#ffffff",
-      borderWidth: 2,
-      borderColor: FIXED_DARK_SURFACE_ACCENT,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: "rgba(0,0,0,0.6)",
     },
     row: {
       flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
+      alignItems: "stretch",
+      gap: 6,
     },
-    readout: {
-      backgroundColor: "#08080a",
-      borderRadius: radii.md,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.bevelDark,
-    },
-    time: {
-      color: FIXED_DARK_SURFACE_TEXT_SECONDARY,
-      fontVariant: ["tabular-nums"],
-      fontSize: 16,
-      fontWeight: "600",
-      textAlign: "center",
-    },
-    timePlayed: {
-      color: FIXED_DARK_SURFACE_TEXT_PRIMARY,
-    },
-    timeSep: {
-      color: FIXED_DARK_SURFACE_TEXT_TERTIARY,
-    },
-    stopButton: {
-      width: 46,
-      height: 46,
+    transportButton: {
+      width: 52,
+      minHeight: 52,
       borderRadius: radii.md,
       backgroundColor: colors.surface,
       alignItems: "center",
       justifyContent: "center",
-      borderTopWidth: 1,
+      borderWidth: 1,
+      borderColor: colors.border,
       borderTopColor: colors.bevelLight,
-      borderBottomWidth: 2,
       borderBottomColor: colors.bevelDark,
     },
+    playButtonActive: {
+      backgroundColor: colors.play,
+      borderColor: colors.play,
+    },
+    pressed: {
+      opacity: 0.7,
+    },
     stopIcon: {
-      width: 15,
-      height: 15,
-      borderRadius: 3,
-      // Unlike the fixed-dark surfaces above, `stopButton` itself is
-      // theme-adaptive (`colors.surface`) - a hardcoded white icon here was
-      // invisible against a white button in light mode. `textPrimary` tracks
-      // the button's own background in both themes.
+      width: 16,
+      height: 16,
+      borderRadius: 1,
       backgroundColor: colors.textPrimary,
-    },
-    playButtonWrap: {
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    playGlow: {
-      position: "absolute",
-      width: 60,
-      height: 60,
-      borderRadius: 30,
-      backgroundColor: colors.accent,
-    },
-    playButton: {
-      width: 60,
-      height: 60,
-      borderRadius: 30,
-      backgroundColor: colors.accent,
-      alignItems: "center",
-      justifyContent: "center",
-      borderTopWidth: 1,
-      borderTopColor: "rgba(255,255,255,0.5)",
-      borderBottomWidth: 2,
-      borderBottomColor: "rgba(0,0,0,0.3)",
     },
     playTriangle: {
       width: 0,
       height: 0,
       marginLeft: 4,
-      borderTopWidth: 11,
-      borderBottomWidth: 11,
-      borderLeftWidth: 18,
+      borderTopWidth: 10,
+      borderBottomWidth: 10,
+      borderLeftWidth: 16,
       borderTopColor: "transparent",
       borderBottomColor: "transparent",
-      borderLeftColor: colors.surface,
+      borderLeftColor: colors.play,
     },
     pauseIcon: {
       flexDirection: "row",
@@ -264,13 +261,54 @@ function createStyles(colors: ThemeColors) {
     },
     pauseBar: {
       width: 5,
-      height: 19,
-      borderRadius: 1.5,
-      // Matches playTriangle above: the play button itself is theme-adaptive
-      // (`colors.accent`), so its icon has to track the theme too, or the
-      // two icons on the same button read with different contrast logic the
-      // moment the theme switches.
-      backgroundColor: colors.surface,
+      height: 18,
+      borderRadius: 1,
+      // Dark in dark mode on bright green, light in light mode on deep green.
+      backgroundColor: colors.background,
+    },
+    lcd: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: lcd.background,
+      borderRadius: radii.md,
+      borderWidth: 1,
+      borderColor: lcd.border,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    lcdCell: {
+      justifyContent: "center",
+    },
+    lcdCellInfo: {
+      flex: 1,
+      alignItems: "flex-end",
+    },
+    lcdDivider: {
+      width: StyleSheet.hairlineWidth,
+      alignSelf: "stretch",
+      backgroundColor: lcd.textFaint,
+      marginHorizontal: 10,
+    },
+    lcdMain: {
+      color: lcd.text,
+      fontFamily: monoFont,
+      fontVariant: ["tabular-nums"],
+      fontSize: 18,
+      fontWeight: "600",
+    },
+    lcdSub: {
+      color: lcd.textDim,
+      fontFamily: monoFont,
+      fontVariant: ["tabular-nums"],
+      fontSize: 10,
+      marginTop: 1,
+    },
+    lcdInfo: {
+      color: lcd.text,
+      fontFamily: monoFont,
+      fontSize: 13,
+      fontWeight: "600",
     },
   });
 }

@@ -102,3 +102,35 @@ function applyOrder(items: LibraryItem[], order: string[]): LibraryItem[] {
 
   return [...placed, ...items.filter((item) => !placedKeys.has(item.key))];
 }
+
+/**
+ * The songs "previous"/"next" step through from the song screen, in order:
+ * the folder's own order when the song was opened from a folder, otherwise
+ * the Library's top-level songs in the order the Library shows them - the
+ * same list the user was looking at when they picked this song.
+ */
+export function resolveSongSequence(
+  folder: SetlistManifest | undefined,
+  projects: LibraryProjectEntry[],
+  folders: SetlistManifest[],
+  order: string[],
+): LibraryProjectEntry[] {
+  if (folder) return resolveFolderSongs(folder, projects);
+  return buildLibraryTree(projects, folders, order).flatMap((item) =>
+    item.kind === "song" ? [item.project] : [],
+  );
+}
+
+/** The songs either side of `currentId` in `songs` - `null` at either end; nothing wraps around. */
+export function neighbouringSongs(
+  songs: LibraryProjectEntry[],
+  currentId: string | undefined,
+): { index: number; previousId: string | null; nextId: string | null } {
+  const index = songs.findIndex((song) => song.id === currentId);
+  if (index < 0) return { index, previousId: null, nextId: null };
+  return {
+    index,
+    previousId: index > 0 ? songs[index - 1].id : null,
+    nextId: index < songs.length - 1 ? songs[index + 1].id : null,
+  };
+}

@@ -78,6 +78,13 @@ export const ptBR: TranslationDictionary = {
     mixer: "Mixer",
     waveformView: "Forma de onda",
     folderSongs: "Músicas desta pasta",
+    songs: "Músicas",
+    tracksView: "Faixas",
+    previousSong: "Música anterior",
+    nextSong: "Próxima música",
+    songPosition: (position: number, total: number) =>
+      `${position} de ${total}`,
+    switchLockedWhilePlaying: "Pare a reprodução para trocar de música",
     playNextSong: "Tocar a próxima música",
     lockedWhilePlaying: "Pare a reprodução para editar",
     lockedWhilePlayingBody:
@@ -149,6 +156,13 @@ export const ptBR: TranslationDictionary = {
     sync: "Sincronizar",
     syncHeading: "Toque para Sincronizar",
     remove: "Remover",
+  },
+  transport: {
+    play: "Tocar",
+    pause: "Pausar",
+    stop: "Parar",
+    bar: "COMPASSO",
+    bpm: "BPM",
   },
   nowPlaying: {
     heading: "Tocando Agora",

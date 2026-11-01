@@ -6,18 +6,23 @@ import {
   View,
   type LayoutChangeEvent,
 } from "react-native";
-import { glow, radii, useThemeColors, type ThemeColors } from "@/ui/theme";
-import { UNITY_GAIN, classifyGestureEnd, valueFromDrag } from "./faderGesture";
+import {
+  lcd,
+  monoFont,
+  radii,
+  useThemeColors,
+  type ThemeColors,
+} from "@/ui/theme";
+import {
+  FADER_SCALE_DB,
+  UNITY_GAIN,
+  classifyGestureEnd,
+  dbToGain,
+  formatDb,
+  valueFromDrag,
+} from "./faderGesture";
 
-/**
- * The volume readout sits on a fixed dark, LCD-style surface regardless of
- * theme (see `readout`'s hardcoded background below) - not part of the
- * app's light/dark chrome. Its text must stay fixed too, or it silently
- * loses contrast in light mode, where `colors.textSecondary` is
- * recalibrated for a *light* surface this one never is (see TransportBar's
- * identical fix for its elapsed-time readout and scrub-progress fill).
- */
-const FIXED_DARK_SURFACE_TEXT_SECONDARY = "#9b9b9d";
+const TRACK_HEIGHT = 260;
 
 interface VerticalFaderProps {
   /** Committed value from the store; only reflected while not actively dragging. */
@@ -51,6 +56,10 @@ interface VerticalFaderProps {
  * channel to a new level; with relative dragging a tap moves nothing.
  *
  * Double-tapping resets the channel to unity, the marked line on the track.
+ *
+ * The scale beside the track and the readout above it are in dB, the way a
+ * mixer labels them. Both are display only: the fader still moves linearly
+ * in gain, and the value it reports is the same linear gain as before.
  */
 export function VerticalFader({
   value,
@@ -165,43 +174,63 @@ export function VerticalFader({
   const displayValue = liveValue ?? value;
   const ratio = Math.max(0, Math.min(1, displayValue / maxValue));
   const fillPercent = `${ratio * 100}%` as const;
-  const unityPercent = `${Math.min(100, (1 / maxValue) * 100)}%` as const;
+  const unityPercent =
+    `${Math.min(100, (UNITY_GAIN / maxValue) * 100)}%` as const;
 
   return (
     <View style={styles.wrapper}>
-      <View style={[styles.readout, dragging && glow(accentColor, 6)]}>
-        <Text style={[styles.readoutText, dragging && { color: accentColor }]}>
-          {Math.round(ratio * 100)}
+      <View style={[styles.readout, dragging && { borderColor: accentColor }]}>
+        <Text style={[styles.readoutText, dragging && { color: lcd.text }]}>
+          {formatDb(displayValue)}
         </Text>
       </View>
-      <View
-        style={styles.track}
-        onLayout={handleLayout}
-        testID={testID}
-        {...panResponder.panHandlers}
-      >
-        <View style={styles.groove} pointerEvents="none" />
-        {/* Unity-gain (1.0) reference mark, like the 0 dB tick on a real fader. */}
+      <View style={styles.body}>
+        {/* Static dB scale, positioned on the same linear-gain axis the cap uses. */}
+        <View style={styles.scale} pointerEvents="none">
+          {FADER_SCALE_DB.map((db) => {
+            const position = Math.min(1, dbToGain(db) / maxValue);
+            return (
+              <View
+                key={db}
+                style={[styles.scaleMark, { bottom: `${position * 100}%` }]}
+              >
+                <Text style={styles.scaleLabel}>
+                  {db === -Infinity ? "∞" : Math.abs(db)}
+                </Text>
+                <View style={styles.scaleTick} />
+              </View>
+            );
+          })}
+        </View>
         <View
-          style={[styles.unityTick, { bottom: unityPercent }]}
-          pointerEvents="none"
-        />
-        <View
-          style={[
-            styles.fill,
-            { height: fillPercent, backgroundColor: accentColor },
-          ]}
-          pointerEvents="none"
-        />
-        <View
-          style={[
-            styles.cap,
-            { bottom: fillPercent, borderColor: accentColor },
-            dragging && glow(accentColor, 8),
-          ]}
-          pointerEvents="none"
+          style={styles.track}
+          onLayout={handleLayout}
+          testID={testID}
+          {...panResponder.panHandlers}
         >
-          <View style={styles.capRidge} />
+          <View style={styles.groove} pointerEvents="none" />
+          {/* Unity-gain (0 dB) reference mark across the track. */}
+          <View
+            style={[styles.unityTick, { bottom: unityPercent }]}
+            pointerEvents="none"
+          />
+          <View
+            style={[
+              styles.fill,
+              { height: fillPercent, backgroundColor: accentColor },
+            ]}
+            pointerEvents="none"
+          />
+          <View
+            style={[
+              styles.cap,
+              { bottom: fillPercent },
+              dragging && { borderColor: accentColor },
+            ]}
+            pointerEvents="none"
+          >
+            <View style={[styles.capLine, { backgroundColor: accentColor }]} />
+          </View>
         </View>
       </View>
     </View>
@@ -215,28 +244,55 @@ function createStyles(colors: ThemeColors) {
       width: "100%",
     },
     readout: {
-      backgroundColor: "#08080a",
+      alignSelf: "stretch",
+      backgroundColor: lcd.background,
       borderRadius: radii.sm,
-      paddingHorizontal: 8,
-      paddingVertical: 2,
-      marginBottom: 8,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.bevelDark,
+      paddingVertical: 3,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: lcd.border,
     },
     readoutText: {
-      color: FIXED_DARK_SURFACE_TEXT_SECONDARY,
-      fontSize: 11,
+      color: lcd.textDim,
+      fontFamily: monoFont,
+      fontSize: 12,
       fontVariant: ["tabular-nums"],
-      fontWeight: "700",
+      fontWeight: "600",
+      textAlign: "center",
+    },
+    body: {
+      flexDirection: "row",
+      height: TRACK_HEIGHT,
+    },
+    scale: {
+      width: 24,
+      marginRight: 6,
+    },
+    scaleMark: {
+      position: "absolute",
+      right: 0,
+      flexDirection: "row",
+      alignItems: "center",
+      // Centres the label's text on the mark rather than sitting above it.
+      marginBottom: -6,
+      height: 12,
+    },
+    scaleLabel: {
+      color: colors.textTertiary,
+      fontFamily: monoFont,
+      fontSize: 9,
+      marginRight: 2,
+    },
+    scaleTick: {
+      width: 4,
+      height: StyleSheet.hairlineWidth * 2,
+      backgroundColor: colors.textTertiary,
     },
     track: {
-      // Fixed throw rather than flex: a fader that stretches to the full
-      // screen height has a uselessly long travel distance and doesn't read
-      // as a mixer fader.
-      height: 260,
+      height: TRACK_HEIGHT,
       width: 36,
       borderRadius: radii.sm,
-      backgroundColor: "#0a0a0c",
+      backgroundColor: lcd.background,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       borderTopColor: colors.bevelDark,
@@ -248,17 +304,15 @@ function createStyles(colors: ThemeColors) {
       top: 6,
       bottom: 6,
       width: 4,
-      borderRadius: 2,
+      borderRadius: 1,
       backgroundColor: "#000000",
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: "rgba(0,0,0,0.8)",
     },
     unityTick: {
       position: "absolute",
-      left: -3,
-      right: -3,
+      left: 0,
+      right: 0,
       height: 1,
-      backgroundColor: "rgba(255,255,255,0.25)",
+      backgroundColor: "rgba(255,255,255,0.35)",
     },
     fill: {
       position: "absolute",
@@ -266,25 +320,26 @@ function createStyles(colors: ThemeColors) {
       marginLeft: -2,
       width: 4,
       bottom: 0,
-      borderRadius: 2,
+      borderRadius: 1,
     },
     cap: {
       position: "absolute",
-      left: -8,
-      right: -8,
-      height: 18,
-      marginBottom: -9,
-      borderRadius: 4,
-      backgroundColor: "#e8e8ea",
-      borderWidth: 3,
+      left: -6,
+      right: -6,
+      height: 22,
+      marginBottom: -11,
+      borderRadius: radii.sm,
+      backgroundColor: "#d8d8dc",
+      borderWidth: 1,
+      borderColor: "#8a8a90",
+      borderTopColor: "#f4f4f6",
+      borderBottomColor: "#5a5a60",
       alignItems: "center",
       justifyContent: "center",
     },
-    capRidge: {
-      width: "60%",
+    capLine: {
+      alignSelf: "stretch",
       height: 2,
-      borderRadius: 1,
-      backgroundColor: "rgba(0,0,0,0.25)",
     },
   });
 }

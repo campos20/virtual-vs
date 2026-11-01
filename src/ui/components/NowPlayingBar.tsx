@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useRouter } from "expo-router";
+import { usePathname, useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { audioEngine } from "@/engine";
@@ -63,6 +63,7 @@ function NowPlayingBarContent({
   folderId,
 }: NowPlayingBarContentProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { t } = useTranslation();
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -73,6 +74,15 @@ function NowPlayingBarContent({
   // so jumping back into the Player from here still shows the "songs in
   // this folder" list instead of silently losing it, matching how
   // `ProjectScreen.handleSwitchToSong` forwards the same param.
+  //
+  // Already on this song's own screen, the bar is just its transport: the
+  // title row would repeat the header right above it, and tapping through
+  // would push a second copy of the screen already showing. Both are handled
+  // with props/styles only (`disabled`, `display: none`), never by mounting
+  // or unmounting children, so the bar's view tree stays structurally the
+  // same across navigation (see AGENTS.md on Fabric and navigation).
+  const onSongScreen = pathname === `/project/${projectId}`;
+
   function goToSong() {
     router.push({
       pathname: "/project/[projectId]",
@@ -84,11 +94,12 @@ function NowPlayingBarContent({
     <SafeAreaView edges={["bottom"]} style={styles.safeArea}>
       <Pressable
         onPress={goToSong}
+        disabled={onSongScreen}
         testID="now-playing-bar"
         accessibilityLabel={t.nowPlaying.goToSong(manifest.title)}
         style={({ pressed }) => [styles.bar, pressed && styles.pressed]}
       >
-        <View style={styles.titleRow}>
+        <View style={[styles.titleRow, onSongScreen && styles.hidden]}>
           <Text style={styles.eyebrow}>{t.nowPlaying.heading}</Text>
           <Text style={styles.title} numberOfLines={1}>
             {manifest.title}
@@ -98,6 +109,8 @@ function NowPlayingBarContent({
           isPlaying={transportState === "playing"}
           playheadSec={playheadSec}
           durationSec={durationSec}
+          bpm={manifest.bpm}
+          songKey={manifest.key}
           onPlayPause={() =>
             audioEngine.getTransportState() === "playing"
               ? audioEngine.pause()
@@ -125,9 +138,12 @@ function createStyles(colors: ThemeColors) {
     pressed: {
       opacity: 0.9,
     },
+    hidden: {
+      display: "none",
+    },
     titleRow: {
-      paddingHorizontal: 16,
-      paddingTop: 10,
+      paddingHorizontal: 12,
+      paddingTop: 8,
     },
     eyebrow: {
       color: colors.textTertiary,

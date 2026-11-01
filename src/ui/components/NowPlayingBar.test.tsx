@@ -7,9 +7,11 @@ import { renderWithStore } from "@/test-utils/renderWithStore";
 import { NowPlayingBar } from "./NowPlayingBar";
 
 const mockPush = jest.fn();
+let mockPathname = "/";
 
 jest.mock("expo-router", () => ({
   useRouter: () => ({ push: mockPush }),
+  usePathname: () => mockPathname,
 }));
 
 jest.mock("@/storage", () => ({
@@ -45,6 +47,7 @@ afterEach(() => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockPush.mockClear();
+  mockPathname = "/";
   nowPlayingStore.resetForTests();
   getSourceMock.mockResolvedValue({ manifest: entry, resolveFile: () => 0 });
   decodeMock.mockResolvedValue({ manifest: entry, trackBuffers: {} });
@@ -127,6 +130,41 @@ describe("NowPlayingBar", () => {
       pathname: "/project/[projectId]",
       params: { projectId: "my-song", folderId: "folder-1" },
     });
+  });
+
+  it("on the song's own screen, is just a transport: no title row, no navigation", async () => {
+    mockPathname = "/project/my-song";
+    renderWithStore(<NowPlayingBar />);
+    await nowPlayingStore.openProject(entry, {
+      monitorMode: "split",
+      clickEnabled: true,
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("now-playing-bar")).toBeTruthy(),
+    );
+
+    // Hidden by style, not unmounted, so the tree stays the same shape.
+    expect(screen.queryByText("My Song")).toBeNull();
+    fireEvent.press(screen.getByTestId("now-playing-bar"));
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("shows the tempo and bar counter when the song has a tempo", async () => {
+    const withTempo = { ...entry, bpm: 120, key: "A minor" };
+    getSourceMock.mockResolvedValue({
+      manifest: withTempo,
+      resolveFile: () => 0,
+    });
+    decodeMock.mockResolvedValue({ manifest: withTempo, trackBuffers: {} });
+    renderWithStore(<NowPlayingBar />);
+    await nowPlayingStore.openProject(withTempo, {
+      monitorMode: "split",
+      clickEnabled: true,
+    });
+
+    await waitFor(() => expect(screen.getByText("120 BPM")).toBeTruthy());
+    expect(screen.getByText("A minor")).toBeTruthy();
+    expect(screen.getByText("1.1")).toBeTruthy();
   });
 
   it("play/pause drives the real audio engine transport without navigating", async () => {

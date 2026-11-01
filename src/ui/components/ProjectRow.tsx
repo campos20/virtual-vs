@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
   elevation,
-  glow,
   radii,
   spacing,
   useThemeColors,
@@ -82,13 +81,7 @@ export function ProjectRow({
         testID={testID}
         style={({ pressed }) => [styles.row, pressed && styles.pressed]}
       >
-        <View
-          style={[
-            styles.colorBar,
-            { backgroundColor: accentColor },
-            isNowPlaying && glow(accentColor, 8),
-          ]}
-        />
+        <View style={[styles.colorBar, { backgroundColor: accentColor }]} />
         {position !== undefined && (
           <Text
             style={styles.position}
@@ -103,7 +96,7 @@ export function ProjectRow({
           <View style={styles.titleRow}>
             {isNowPlaying && (
               <View
-                style={[styles.nowPlayingDot, glow(colors.accent, 6)]}
+                style={styles.nowPlayingDot}
                 accessible
                 accessibilityRole="image"
                 accessibilityLabel={nowPlayingAccessibilityLabel}

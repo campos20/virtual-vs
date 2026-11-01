@@ -3,6 +3,9 @@ import {
   TAP_SLOP_PX,
   UNITY_GAIN,
   classifyGestureEnd,
+  dbToGain,
+  formatDb,
+  gainToDb,
   valueFromDrag,
 } from "./faderGesture";
 
@@ -75,5 +78,37 @@ describe("classifyGestureEnd", () => {
 
   it("resets to the marked unity line, not to silence", () => {
     expect(UNITY_GAIN).toBe(1);
+  });
+});
+
+describe("formatDb", () => {
+  it("reads unity gain as 0 dB", () => {
+    expect(formatDb(UNITY_GAIN)).toBe("0.0");
+  });
+
+  it("marks boost with an explicit plus sign", () => {
+    expect(formatDb(1.2)).toBe("+1.6");
+  });
+
+  it("prints cuts with one decimal", () => {
+    expect(formatDb(0.5)).toBe("-6.0");
+  });
+
+  it("shows silence as minus infinity", () => {
+    expect(formatDb(0)).toBe("-∞");
+  });
+
+  it("never prints a negative zero just under unity", () => {
+    expect(formatDb(0.999)).toBe("0.0");
+  });
+});
+
+describe("gainToDb/dbToGain", () => {
+  it("round-trip", () => {
+    for (const db of [-20, -6, 0, 1.5]) {
+      expect(gainToDb(dbToGain(db))).toBeCloseTo(db, 10);
+    }
+    expect(dbToGain(-Infinity)).toBe(0);
+    expect(gainToDb(0)).toBe(-Infinity);
   });
 });
