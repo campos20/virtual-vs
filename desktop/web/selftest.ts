@@ -89,6 +89,15 @@ export async function runSelfTest(): Promise<void> {
   };
 
   try {
+    // --- Styling ----------------------------------------------------------
+    // react-native-web puts its styles in a <style> tag it creates at runtime.
+    // The nonce Tauri adds to the shipped CSP blocks that tag unless style-src
+    // is in dangerousDisableAssetCspModification. `tauri dev` doesn't show it,
+    // and the app still works, just unstyled. A View is flex only if styled.
+    const view = document.querySelector("#root div");
+    const display = view ? getComputedStyle(view).display : "no View found";
+    check("UI styles are applied", display === "flex", display);
+
     // --- Song creation and stem import (storage layer over vvsfs) ---------
     const draft = await createDraftProject();
     check("create song", new Directory(draft.sourceDir!).exists);

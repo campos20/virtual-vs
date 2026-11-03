@@ -21,6 +21,7 @@
       }
     ],
     "security": {
+      "dangerousDisableAssetCspModification": ["style-src"],
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self'; connect-src 'self' ipc: http://ipc.localhost vvsfs: http://vvsfs.localhost",
       "devCsp": "default-src 'self' http://localhost:8081; script-src 'self' 'unsafe-eval' http://localhost:8081; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://localhost:8081; font-src 'self' data: http://localhost:8081; connect-src 'self' ipc: http://ipc.localhost vvsfs: http://vvsfs.localhost http://localhost:8081 ws://localhost:8081"
     }
