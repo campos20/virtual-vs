@@ -468,6 +468,11 @@ jobs:
           npm ci
           npm ci --prefix desktop
 
+      # The About screen reads app.json's version, bundled in by the web
+      # export below. No versionCode: that's Android-only.
+      - name: Set the app version
+        run: node scripts/sync-app-version.mjs "$VERSION"
+
       # The version lives in package.json; tauri.conf.json's own is only a
       # placeholder for local builds. Windows installers need a purely
       # numeric version, so a prerelease suffix is dropped there - the file
