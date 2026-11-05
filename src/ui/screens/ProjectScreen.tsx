@@ -56,6 +56,7 @@ import {
 import { SongListDrawer } from "@/ui/components/SongListDrawer";
 import { WaveformView } from "@/ui/components/WaveformView";
 import { neighbouringSongs, resolveSongSequence } from "@/ui/libraryTree";
+import { moveId } from "@/ui/reorder";
 import { radii, spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
 import {
   getDocumentAsync,
@@ -650,10 +651,17 @@ export function ProjectScreen() {
    * Moves a track one place up or down. Like a rename, this is allowed while
    * playing: track order is display-only (the engine keys every stem by id
    * and starts them all from one shared time), so it patches the loaded
-   * project in place and never rebuilds the audio graph. The one exception is
-   * a project with more stems than have waveform lanes, where moving one into
-   * view needs its waveform computed - that falls back to a full reload, and
-   * so only happens while stopped.
+   * project in place and never rebuilds the audio graph.
+   *
+   * The one exception is a project with more stems than have waveform lanes,
+   * where moving one into view needs its waveform computed - only a full
+   * reload can do that, and a reload rebuilds the graph. So that one move is
+   * refused while playing, before anything is saved (playback can be started
+   * from the NowPlayingBar while the editor is open). Saving it anyway would
+   * leave the saved order and what's on screen out of step until the next
+   * load. Reloading once playback stops was considered and rejected: the
+   * performer may press play again during that reload, and a reload stops
+   * whatever is playing.
    *
    * Quick repeated taps, or a tap while a rename is still saving, are safe:
    * the storage layer runs every manifest edit for a project one at a time
@@ -664,29 +672,57 @@ export function ProjectScreen() {
     if (!entry?.sourceDir) return;
     const sourceDir = entry.sourceDir;
     const projectId = entry.id;
+    const ids = entry.tracks.map((track) => track.id);
+    const index = ids.indexOf(stemId);
+    if (index < 0) return;
+    const expected = moveId(ids, index, direction);
+    if (expected === ids) return; // already at that end of the list
+    if (
+      transportIsRunning() &&
+      nowPlayingStore.needsReloadToReorder(projectId, expected)
+    ) {
+      setFormError(t.project.lockedWhilePlayingBody);
+      return;
+    }
     setFormError(null);
     (async () => {
       const updated = await moveStemInProject(sourceDir, stemId, direction);
+      const updatedIds = updated.tracks.map((track) => track.id);
       dispatch(
         projectUpdated({ id: projectId, changes: { tracks: updated.tracks } }),
       );
-      const patched = nowPlayingStore.reorderTracksLocal(
-        projectId,
-        updated.tracks.map((track) => track.id),
-      );
-      if (
-        !patched &&
-        nowPlayingStore.getSnapshot().projectId === projectId &&
-        !transportIsRunning()
-      ) {
-        if (mountedRef.current) setBusy(true);
-        try {
-          await reloadAndSeed();
-        } finally {
-          if (mountedRef.current) {
-            setBusy(false);
-            setStatus(null);
-          }
+      const patched = nowPlayingStore.reorderTracksLocal(projectId, updatedIds);
+      if (patched || nowPlayingStore.getSnapshot().projectId !== projectId) {
+        return;
+      }
+      if (transportIsRunning()) {
+        // Playback started between the check above and the save landing.
+        // Undo the move, so the saved order matches what's loaded and on
+        // screen - but only when the save did exactly the move expected, so
+        // the opposite move is its exact inverse.
+        if (updatedIds.join("\n") === expected.join("\n")) {
+          const reverted = await moveStemInProject(
+            sourceDir,
+            stemId,
+            direction === "up" ? "down" : "up",
+          );
+          dispatch(
+            projectUpdated({
+              id: projectId,
+              changes: { tracks: reverted.tracks },
+            }),
+          );
+        }
+        if (mountedRef.current) setFormError(t.project.lockedWhilePlayingBody);
+        return;
+      }
+      if (mountedRef.current) setBusy(true);
+      try {
+        await reloadAndSeed();
+      } finally {
+        if (mountedRef.current) {
+          setBusy(false);
+          setStatus(null);
         }
       }
     })().catch((e) => {

@@ -252,7 +252,7 @@ class NowPlayingStore {
 
     const lanesById = new Map(waveformTracks.map((w) => [w.id, w]));
     const visibleIds = trackIds.slice(0, MAX_WAVEFORM_STEMS);
-    if (visibleIds.some((id) => !lanesById.has(id))) return false;
+    if (this.missingLane(visibleIds)) return false;
 
     this.commit({
       ...this.snapshot,
@@ -266,6 +266,26 @@ class NowPlayingStore {
       })),
     });
     return true;
+  }
+
+  /**
+   * Whether re-ordering the loaded project to `trackIds` would need a full
+   * `reload()` - i.e. it brings a stem that has no computed waveform into the
+   * visible lanes, which `reorderTracksLocal` can't do in place. Only ever
+   * true for the loaded project and a project with more stems than lanes.
+   * Lets a caller refuse such a move up front while the song is playing,
+   * since a reload rebuilds the audio graph.
+   */
+  needsReloadToReorder(projectId: string, trackIds: string[]): boolean {
+    if (!this.snapshot.manifest || this.snapshot.projectId !== projectId) {
+      return false;
+    }
+    return this.missingLane(trackIds.slice(0, MAX_WAVEFORM_STEMS));
+  }
+
+  private missingLane(visibleIds: string[]): boolean {
+    const laneIds = new Set(this.snapshot.waveformTracks.map((w) => w.id));
+    return visibleIds.some((id) => !laneIds.has(id));
   }
 
   /** Patches the current project's markers in place after a successful write - no re-decode needed, same reasoning as `renameTrackLocal`. */

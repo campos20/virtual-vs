@@ -241,6 +241,30 @@ describe("nowPlayingStore", () => {
       ).toEqual(["x", "y", "z"]);
     });
 
+    it("says when a move would bring a stem without a waveform into view", async () => {
+      const ids = Array.from({ length: 17 }, (_, i) => `s${i + 1}`);
+      const many = entry("a", {
+        tracks: ids.map((id) => ({
+          id,
+          name: id,
+          file: `${id}.wav`,
+          gain: 1,
+          bus: "main" as const,
+        })),
+      });
+      await nowPlayingStore.openProject(many, ENGINE_OPTIONS);
+      const s17Up = [...ids.slice(0, 15), "s17", "s16"];
+      const s2Up = ["s2", "s1", ...ids.slice(2)];
+
+      expect(nowPlayingStore.needsReloadToReorder("a", s17Up)).toBe(true);
+      expect(nowPlayingStore.needsReloadToReorder("a", s2Up)).toBe(false);
+      // Only the loaded project can need it.
+      expect(nowPlayingStore.needsReloadToReorder("b", s17Up)).toBe(false);
+      // And the in-place patch agrees, refusing exactly the same move.
+      expect(nowPlayingStore.reorderTracksLocal("a", s17Up)).toBe(false);
+      expect(nowPlayingStore.reorderTracksLocal("a", s2Up)).toBe(true);
+    });
+
     it("refuses when a different project is loaded, or none", async () => {
       expect(nowPlayingStore.reorderTracksLocal("a", ["x", "y", "z"])).toBe(
         false,

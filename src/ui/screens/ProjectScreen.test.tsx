@@ -1386,6 +1386,140 @@ describe("ProjectScreen - locked while playing", () => {
   });
 });
 
+// The arrange view only computes waveforms for its first 16 lanes, so in a
+// song with more stems, moving one into those lanes needs a full reload -
+// which rebuilds the audio graph and so can't happen mid-song.
+describe("ProjectScreen - reordering past the waveform lanes", () => {
+  const manyStems: LibraryProjectEntry = {
+    id: "big-song",
+    title: "Big Song",
+    bpm: 100,
+    key: "",
+    tracks: Array.from({ length: 17 }, (_, i) => ({
+      id: `t${i + 1}`,
+      name: `Track ${i + 1}`,
+      file: `t${i + 1}.wav`,
+      gain: 1,
+      bus: "main" as const,
+    })),
+    sections: [],
+    origin: "filesystem",
+    sourceDir: "file:///mock/document/projects/big-song",
+  };
+  const ids = manyStems.tracks.map((t) => t.id);
+  /** t17 swapped with t16 - the move that brings t17 into the lanes. */
+  const t17Up = [...ids.slice(0, 15), "t17", "t16"];
+
+  function manifestWithOrder(order: string[]) {
+    return {
+      ...manyStems,
+      tracks: order.map((id) => manyStems.tracks.find((t) => t.id === id)!),
+    };
+  }
+
+  async function renderInEditMode() {
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: manyStems,
+      resolveFile: () => 0,
+    });
+    mockParams = { projectId: "big-song" };
+    const store = createStore();
+    store.dispatch(projectAdded(manyStems));
+    const rendered = renderWithStore(<ProjectScreen />, store);
+    await waitForMixer();
+    fireEvent.press(screen.getByTestId("edit-button"));
+    return rendered;
+  }
+
+  afterEach(() => {
+    audioEngine.stop();
+  });
+
+  it("refuses the move while playing, before saving anything", async () => {
+    const { store } = await renderInEditMode();
+    act(() => audioEngine.play());
+    const loadSpy = jest.spyOn(audioEngine, "loadProject");
+
+    fireEvent.press(screen.getByTestId("stem-t17-move-up"));
+
+    expect(moveStemInProject).not.toHaveBeenCalled();
+    expect(screen.getByText(/Stop playback first/)).toBeTruthy();
+    expect(loadSpy).not.toHaveBeenCalled();
+    expect(audioEngine.getTransportState()).toBe("playing");
+    expect(
+      store.getState().projects.entities["big-song"]?.tracks.map((t) => t.id),
+    ).toEqual(ids);
+  });
+
+  // Moves within the lanes are display-only, so they stay allowed mid-song.
+  it("still allows moves inside the lanes while playing", async () => {
+    (moveStemInProject as jest.Mock).mockResolvedValue(
+      manifestWithOrder(["t2", "t1", ...ids.slice(2)]),
+    );
+    await renderInEditMode();
+    act(() => audioEngine.play());
+
+    fireEvent.press(screen.getByTestId("stem-t2-move-up"));
+
+    await waitFor(() => expect(moveStemInProject).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(
+        nowPlayingStore.getSnapshot().manifest?.tracks.map((t) => t.id),
+      ).toEqual(["t2", "t1", ...ids.slice(2)]),
+    );
+    expect(audioEngine.getTransportState()).toBe("playing");
+  });
+
+  it("saves the move and reloads when stopped", async () => {
+    (moveStemInProject as jest.Mock).mockResolvedValue(
+      manifestWithOrder(t17Up),
+    );
+    await renderInEditMode();
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: manifestWithOrder(t17Up),
+      resolveFile: () => 0,
+    });
+    const loadSpy = jest.spyOn(audioEngine, "loadProject");
+
+    fireEvent.press(screen.getByTestId("stem-t17-move-up"));
+
+    await waitFor(() => expect(loadSpy).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(
+        nowPlayingStore.getSnapshot().waveformTracks.map((w) => w.id),
+      ).toContain("t17"),
+    );
+  });
+
+  // Playback can start in the moment between the check and the save landing.
+  // The move is then undone, so the saved order matches what's on screen.
+  it("undoes the move if playback started while it was saving", async () => {
+    (moveStemInProject as jest.Mock)
+      .mockImplementationOnce(async () => {
+        audioEngine.play();
+        return manifestWithOrder(t17Up);
+      })
+      .mockResolvedValueOnce(manyStems);
+    const { store } = await renderInEditMode();
+
+    fireEvent.press(screen.getByTestId("stem-t17-move-up"));
+
+    await waitFor(() => expect(moveStemInProject).toHaveBeenCalledTimes(2));
+    expect(moveStemInProject).toHaveBeenLastCalledWith(
+      manyStems.sourceDir,
+      "t17",
+      "down",
+    );
+    await waitFor(() =>
+      expect(
+        store.getState().projects.entities["big-song"]?.tracks.map((t) => t.id),
+      ).toEqual(ids),
+    );
+    expect(screen.getByText(/Stop playback first/)).toBeTruthy();
+    expect(audioEngine.getTransportState()).toBe("playing");
+  });
+});
+
 describe("ProjectScreen - deleting", () => {
   async function renderEditableInEditMode() {
     mockParams = { projectId: "my-song" };
