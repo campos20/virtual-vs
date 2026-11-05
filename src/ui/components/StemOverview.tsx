@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { radii } from "@/ui/theme";
+import { peakToHeight } from "@/ui/waveformScale";
 
 const BAR_WIDTH = 2;
 const BAR_GAP = 1;
@@ -63,7 +64,7 @@ export function StemOverview({ color, peaks, height }: StemOverviewProps) {
         style={[
           styles.bar,
           {
-            height: Math.max(MIN_BAR_HEIGHT, Math.min(1, peak) * (height - 4)),
+            height: Math.max(MIN_BAR_HEIGHT, peakToHeight(peak) * (height - 4)),
             backgroundColor: color,
           },
         ]}
@@ -85,6 +86,7 @@ export function StemOverview({ color, peaks, height }: StemOverviewProps) {
       ]}
       onLayout={onLayout}
     >
+      <View style={[styles.centerLine, { backgroundColor: `${color}59` }]} />
       {bars}
     </View>
   );
@@ -98,6 +100,13 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
+  },
+  centerLine: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: "50%",
+    height: StyleSheet.hairlineWidth,
   },
   bar: {
     width: BAR_WIDTH,
