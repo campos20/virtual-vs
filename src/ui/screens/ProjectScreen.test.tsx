@@ -1220,35 +1220,6 @@ describe("ProjectScreen - editing in place", () => {
 
     expect(moveStemInProject).not.toHaveBeenCalled();
   });
-
-  // Both are read-modify-writes of manifest.json - run concurrently, the
-  // later one could save over the earlier one with a stale read.
-  it("waits for a pending rename to save before moving a stem", async () => {
-    let finishRename: (value: unknown) => void = () => {};
-    (renameStemInProject as jest.Mock).mockReturnValue(
-      new Promise((resolve) => {
-        finishRename = resolve;
-      }),
-    );
-    (moveStemInProject as jest.Mock).mockResolvedValue(filesystemProject);
-
-    renderEditable();
-    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
-    fireEvent.press(screen.getByTestId("edit-button"));
-
-    const field = screen.getByTestId("rename-stem-bass");
-    fireEvent.changeText(field, "Low End");
-    fireEvent(field, "blur");
-    fireEvent.press(screen.getByTestId("stem-keys-move-up"));
-
-    await waitFor(() => expect(renameStemInProject).toHaveBeenCalled());
-    expect(moveStemInProject).not.toHaveBeenCalled();
-
-    await act(async () => {
-      finishRename(filesystemProject);
-    });
-    await waitFor(() => expect(moveStemInProject).toHaveBeenCalled());
-  });
 });
 
 describe("ProjectScreen - a brand-new (stemless) project", () => {

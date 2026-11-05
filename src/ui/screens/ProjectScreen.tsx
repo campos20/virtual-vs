@@ -631,39 +631,19 @@ export function ProjectScreen() {
   ): Promise<boolean> {
     setFormError(null);
     if (!entry?.sourceDir) return false;
-    const sourceDir = entry.sourceDir;
     const projectId = entry.id;
     try {
-      await enqueueManifestWrite(async () => {
-        const updated = await renameStemInProject(sourceDir, stemId, name);
-        dispatch(
-          projectUpdated({
-            id: projectId,
-            changes: { tracks: updated.tracks },
-          }),
-        );
-        nowPlayingStore.renameTrackLocal(stemId, name);
-      });
+      const updated = await renameStemInProject(entry.sourceDir, stemId, name);
+      dispatch(
+        projectUpdated({ id: projectId, changes: { tracks: updated.tracks } }),
+      );
+      nowPlayingStore.renameTrackLocal(stemId, name);
       return true;
     } catch (e) {
       if (mountedRef.current)
         setFormError(e instanceof Error ? e.message : String(e));
       return false;
     }
-  }
-
-  /**
-   * Renames and moves are each a read-modify-write of manifest.json, and
-   * both can fire in quick succession (rename a track, tap an arrow while the
-   * name field is still blurring; tap an arrow twice). Run concurrently, the
-   * second write could land on a manifest read before the first one saved
-   * and silently undo it - so they go through one queue, one at a time.
-   */
-  const manifestWriteQueue = useRef<Promise<void>>(Promise.resolve());
-  function enqueueManifestWrite(work: () => Promise<void>): Promise<void> {
-    const run = manifestWriteQueue.current.then(work);
-    manifestWriteQueue.current = run.catch(() => {});
-    return run;
   }
 
   /**
@@ -674,13 +654,18 @@ export function ProjectScreen() {
    * a project with more stems than have waveform lanes, where moving one into
    * view needs its waveform computed - that falls back to a full reload, and
    * so only happens while stopped.
+   *
+   * Quick repeated taps, or a tap while a rename is still saving, are safe:
+   * the storage layer runs every manifest edit for a project one at a time
+   * (see `withManifestLock` in importProject.ts), and each one reads the
+   * manifest fresh, so the last result to land is always the latest state.
    */
   function handleMoveStem(stemId: string, direction: "up" | "down") {
     if (!entry?.sourceDir) return;
     const sourceDir = entry.sourceDir;
     const projectId = entry.id;
     setFormError(null);
-    enqueueManifestWrite(async () => {
+    (async () => {
       const updated = await moveStemInProject(sourceDir, stemId, direction);
       dispatch(
         projectUpdated({ id: projectId, changes: { tracks: updated.tracks } }),
@@ -704,7 +689,7 @@ export function ProjectScreen() {
           }
         }
       }
-    }).catch((e) => {
+    })().catch((e) => {
       if (mountedRef.current)
         setFormError(e instanceof Error ? e.message : String(e));
     });
