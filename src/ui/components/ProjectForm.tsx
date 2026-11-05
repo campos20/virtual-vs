@@ -7,11 +7,12 @@ import {
   Text,
   TextInput,
   View,
-  type StyleProp,
-  type TextStyle,
 } from "react-native";
 import { useTranslation } from "@/i18n";
 import { radii, spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
+import { getTrackColor } from "@/ui/trackColors";
+import { MoveColumn } from "./MoveColumn";
+import { StemOverview } from "./StemOverview";
 
 export interface ProjectFormValues {
   title: string;
@@ -23,6 +24,8 @@ export interface ProjectFormValues {
 export interface ProjectFormStem {
   id: string;
   name: string;
+  /** Whole-song waveform peaks, when the project is loaded - drawn as the track's region. */
+  peaks?: Float32Array;
 }
 
 interface ProjectFormProps {
@@ -36,44 +39,55 @@ interface ProjectFormProps {
   onRemoveStem: (stemId: string) => void;
   /** Resolves to whether the rename actually persisted, so a failed write doesn't leave the field showing an unsaved name. */
   onRenameStem: (stemId: string, name: string) => Promise<boolean>;
+  onMoveStem: (stemId: string, direction: "up" | "down") => void;
   onSubmit: (values: ProjectFormValues) => void;
   onCancel: () => void;
   /** Omitted for a project that can't be deleted. */
   onDelete?: () => void;
 }
 
+const LANE_HEIGHT = 64;
+const OVERVIEW_HEIGHT = 40;
+
 interface StemNameFieldProps {
   stemId: string;
   name: string;
+  accessibilityLabel: string;
   disabled?: boolean;
   onRename: (stemId: string, name: string) => Promise<boolean>;
-  style: StyleProp<TextStyle>;
+  styles: ReturnType<typeof createStyles>;
 }
 
 /**
- * A stem's name, editable in place. Local state (seeded once from `name`)
- * rather than a value fully controlled by the `stems` prop, because that
- * prop is recomputed fresh on every ProjectScreen render (a new array/object
- * per stem) - a fully-controlled input would be fine at rest but risks
- * clobbering an in-progress edit if an unrelated re-render lands mid-type.
- * Committing on blur only (not per keystroke, and not also on
- * `onEndEditing` - a single-line TextInput's default `blurOnSubmit`
- * behavior means submitting already blurs it, so wiring both fires the
- * commit twice for one edit) keeps a manifest rewrite off every character
- * typed and off every edit. Keyed by `stemId` in the parent's `.map()`, so
- * this naturally remounts (and re-seeds) if the stem itself is removed and
- * a different one added in its place.
+ * A track's name, editable in place - drawn as a visible input box, the way a
+ * DAW's track header name field is, so it reads as something you can tap and
+ * type into rather than as a plain label.
+ *
+ * Local state (seeded once from `name`) rather than a value fully controlled
+ * by the `stems` prop, because that prop is recomputed fresh on every
+ * ProjectScreen render (a new array/object per stem) - a fully-controlled
+ * input would be fine at rest but risks clobbering an in-progress edit if an
+ * unrelated re-render lands mid-type. Committing on blur only (not per
+ * keystroke, and not also on `onEndEditing` - a single-line TextInput's
+ * default `blurOnSubmit` behavior means submitting already blurs it, so
+ * wiring both fires the commit twice for one edit) keeps a manifest rewrite
+ * off every character typed. Keyed by `stemId` in the parent's `.map()`, so it
+ * keeps its state when the track moves and remounts if the stem itself is
+ * removed and a different one added in its place.
  */
 function StemNameField({
   stemId,
   name,
+  accessibilityLabel,
   disabled,
   onRename,
-  style,
+  styles,
 }: StemNameFieldProps) {
   const [draft, setDraft] = useState(name);
+  const [focused, setFocused] = useState(false);
 
   async function commit() {
+    setFocused(false);
     const trimmed = draft.trim();
     if (trimmed.length === 0 || trimmed === name) {
       setDraft(name);
@@ -91,23 +105,37 @@ function StemNameField({
     <TextInput
       value={draft}
       onChangeText={setDraft}
+      onFocus={() => setFocused(true)}
       onBlur={commit}
       editable={!disabled}
+      selectTextOnFocus
+      returnKeyType="done"
+      autoCorrect={false}
       underlineColorAndroid="transparent"
-      style={style}
+      accessibilityLabel={accessibilityLabel}
+      style={[styles.nameField, focused && styles.nameFieldFocused]}
       testID={`rename-stem-${stemId}`}
     />
   );
 }
 
 /**
- * The metadata + stems editor shown inside the project screen. There is no
- * separate "create" variant: a brand-new project is just one with no stems
- * yet, so this same form covers both.
+ * The song editor shown inside the project screen, laid out like a DAW's
+ * session view: a song-info strip (title, tempo, key) on top, then one lane
+ * per track - colour, number, name, a zoomed-out region of its audio, and
+ * its move/remove controls - with "Add Tracks" closing the list the way an
+ * empty slot does in a DAW. Cancel/Done stay pinned at the bottom so they're
+ * reachable however long the track list gets.
  *
- * Stem add/remove is delegated to the caller because those are real file
- * operations against the project folder, applied as they happen rather than
- * staged behind Save.
+ * There is no separate "create" variant: a brand-new project is just one
+ * with no stems yet, so this same editor covers both.
+ *
+ * Track add/remove/rename/move is delegated to the caller because those are
+ * real file operations against the project folder, applied as they happen
+ * rather than staged behind Done. Only the song info waits for Done.
+ *
+ * Every Pressable keeps static children with press feedback in `style` - see
+ * AGENTS.md on Fabric and function-as-child Pressables.
  */
 export function ProjectForm({
   initial,
@@ -118,6 +146,7 @@ export function ProjectForm({
   onAddStems,
   onRemoveStem,
   onRenameStem,
+  onMoveStem,
   onSubmit,
   onCancel,
   onDelete,
@@ -140,246 +169,383 @@ export function ProjectForm({
   const canSubmit = title.trim().length > 0 && bpmValid && !busy;
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.form}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Text style={styles.label}>{t.projectForm.titleLabel}</Text>
-      <TextInput
-        value={title}
-        onChangeText={setTitle}
-        placeholder={t.projectForm.titlePlaceholder}
-        placeholderTextColor={colors.textTertiary}
-        style={styles.input}
-        testID="title-input"
-      />
-
-      <Text style={styles.label}>{t.projectForm.tempoLabel}</Text>
-      <TextInput
-        value={bpmText}
-        onChangeText={setBpmText}
-        keyboardType="number-pad"
-        placeholder={t.projectForm.tempoPlaceholder}
-        placeholderTextColor={colors.textTertiary}
-        style={styles.input}
-        testID="bpm-input"
-      />
-      <Text style={styles.hint}>
-        {bpm === undefined
-          ? t.projectForm.tempoHintNone
-          : t.projectForm.tempoHintSet}
-      </Text>
-
-      <Text style={styles.label}>{t.projectForm.keyLabel}</Text>
-      <TextInput
-        value={key}
-        onChangeText={setKey}
-        placeholder={t.projectForm.keyPlaceholder}
-        placeholderTextColor={colors.textTertiary}
-        style={styles.input}
-        testID="key-input"
-      />
-
-      <Text style={styles.label}>{t.projectForm.stemsLabel}</Text>
-      <Pressable
-        style={({ pressed }) => [styles.pickButton, pressed && styles.pressed]}
-        onPress={onAddStems}
-        disabled={busy}
-        testID="pick-files-button"
+    <View style={styles.root}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.pickButtonText}>{t.projectForm.addAudioFiles}</Text>
-      </Pressable>
-
-      {busy && status ? (
-        <View style={styles.statusRow} testID="import-status">
-          <ActivityIndicator color={colors.accent} size="small" />
-          <Text style={styles.statusText}>{status}</Text>
-        </View>
-      ) : null}
-
-      {stems.length === 0 ? (
-        <Text style={styles.emptyText}>{t.projectForm.noStemsYet}</Text>
-      ) : (
-        stems.map((stem) => (
-          <View key={stem.id} style={styles.fileRow}>
-            <StemNameField
-              stemId={stem.id}
-              name={stem.name}
-              disabled={busy}
-              onRename={onRenameStem}
-              style={styles.fileName}
-            />
-            <Pressable
-              onPress={() => onRemoveStem(stem.id)}
-              hitSlop={8}
-              disabled={busy}
-              testID={`remove-stem-${stem.id}`}
-              style={({ pressed }) => pressed && styles.pressed}
-            >
-              <Text style={styles.removeText}>{t.projectForm.remove}</Text>
-            </Pressable>
+        <Text style={styles.sectionLabel}>{t.projectForm.songSection}</Text>
+        <View style={styles.card}>
+          <Text style={styles.fieldLabel}>{t.projectForm.titleLabel}</Text>
+          <TextInput
+            value={title}
+            onChangeText={setTitle}
+            placeholder={t.projectForm.titlePlaceholder}
+            placeholderTextColor={colors.textTertiary}
+            style={styles.input}
+            testID="title-input"
+          />
+          <View style={styles.fieldRow}>
+            <View style={styles.fieldTempo}>
+              <Text style={styles.fieldLabel}>{t.projectForm.tempoLabel}</Text>
+              <TextInput
+                value={bpmText}
+                onChangeText={setBpmText}
+                keyboardType="number-pad"
+                placeholder="—"
+                placeholderTextColor={colors.textTertiary}
+                style={[styles.input, !bpmValid && styles.inputInvalid]}
+                testID="bpm-input"
+              />
+            </View>
+            <View style={styles.fieldKey}>
+              <Text style={styles.fieldLabel}>{t.projectForm.keyLabel}</Text>
+              <TextInput
+                value={key}
+                onChangeText={setKey}
+                placeholder={t.projectForm.keyPlaceholder}
+                placeholderTextColor={colors.textTertiary}
+                style={styles.input}
+                testID="key-input"
+              />
+            </View>
           </View>
-        ))
-      )}
+          <Text style={styles.hint}>
+            {bpm === undefined
+              ? t.projectForm.tempoHintNone
+              : t.projectForm.tempoHintSet}
+          </Text>
+        </View>
 
-      {error && <Text style={styles.error}>{error}</Text>}
+        <Text style={styles.sectionLabel}>
+          {t.projectForm.tracksSection(stems.length)}
+        </Text>
+        <View style={styles.trackList} testID="track-list">
+          {stems.length === 0 ? (
+            <Text style={styles.emptyText}>{t.projectForm.noStemsYet}</Text>
+          ) : (
+            stems.map((stem, index) => {
+              const color = getTrackColor(index);
+              const isFirst = index === 0;
+              const isLast = index === stems.length - 1;
+              return (
+                <View
+                  key={stem.id}
+                  style={[styles.lane, index % 2 === 1 && styles.laneAlt]}
+                  testID={`track-lane-${stem.id}`}
+                >
+                  <View
+                    style={[styles.laneColor, { backgroundColor: color }]}
+                  />
+                  <View style={styles.laneHeader}>
+                    <Text style={styles.laneNumber}>{index + 1}</Text>
+                    <StemNameField
+                      stemId={stem.id}
+                      name={stem.name}
+                      accessibilityLabel={t.projectForm.trackNameLabel(
+                        index + 1,
+                      )}
+                      disabled={busy}
+                      onRename={onRenameStem}
+                      styles={styles}
+                    />
+                  </View>
+                  <View style={styles.laneRegion}>
+                    <StemOverview
+                      color={color}
+                      peaks={stem.peaks}
+                      height={OVERVIEW_HEIGHT}
+                    />
+                  </View>
+                  <MoveColumn
+                    canMoveUp={!busy && !isFirst}
+                    canMoveDown={!busy && !isLast}
+                    onMoveUp={() => onMoveStem(stem.id, "up")}
+                    onMoveDown={() => onMoveStem(stem.id, "down")}
+                    moveUpAccessibilityLabel={t.projectForm.moveTrackUp(
+                      stem.name,
+                    )}
+                    moveDownAccessibilityLabel={t.projectForm.moveTrackDown(
+                      stem.name,
+                    )}
+                    testID={`stem-${stem.id}`}
+                  />
+                  <Pressable
+                    onPress={() => onRemoveStem(stem.id)}
+                    disabled={busy}
+                    hitSlop={4}
+                    accessibilityRole="button"
+                    accessibilityLabel={t.projectForm.removeTrack(stem.name)}
+                    testID={`remove-stem-${stem.id}`}
+                    style={({ pressed }) => [
+                      styles.removeButton,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={styles.removeGlyph}>✕</Text>
+                  </Pressable>
+                </View>
+              );
+            })
+          )}
 
-      <Pressable
-        style={({ pressed }) => [
-          styles.submitButton,
-          !canSubmit && styles.submitButtonDisabled,
-          pressed && styles.pressed,
-        ]}
-        onPress={() => onSubmit({ title: title.trim(), bpm, key: key.trim() })}
-        disabled={!canSubmit}
-        testID="save-button"
-      >
-        {busy ? (
-          <ActivityIndicator color="#0a0a0a" />
-        ) : (
-          <Text style={styles.submitButtonText}>{t.common.save}</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.addLane,
+              busy && styles.disabled,
+              pressed && styles.pressed,
+            ]}
+            onPress={onAddStems}
+            disabled={busy}
+            testID="pick-files-button"
+          >
+            <Text style={styles.addLaneText}>{t.projectForm.addTracks}</Text>
+          </Pressable>
+        </View>
+
+        {busy && status ? (
+          <View style={styles.statusRow} testID="import-status">
+            <ActivityIndicator color={colors.accent} size="small" />
+            <Text style={styles.statusText}>{status}</Text>
+          </View>
+        ) : null}
+
+        {stems.length > 0 && (
+          <Text style={styles.hint}>{t.projectForm.tracksHint}</Text>
         )}
-      </Pressable>
 
-      <Pressable
-        onPress={onCancel}
-        disabled={busy}
-        testID="cancel-button"
-        style={({ pressed }) => [
-          styles.cancelButton,
-          pressed && styles.pressed,
-        ]}
-      >
-        <Text style={styles.cancelText}>{t.common.cancel}</Text>
-      </Pressable>
+        {onDelete && (
+          <Pressable
+            onPress={onDelete}
+            disabled={busy}
+            testID="delete-project-button"
+            style={({ pressed }) => [
+              styles.deleteButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.deleteText}>{t.projectForm.deleteProject}</Text>
+          </Pressable>
+        )}
+      </ScrollView>
 
-      {onDelete && (
-        <Pressable
-          onPress={onDelete}
-          disabled={busy}
-          testID="delete-project-button"
-          style={({ pressed }) => [
-            styles.deleteButton,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={styles.deleteText}>{t.projectForm.deleteProject}</Text>
-        </Pressable>
-      )}
-    </ScrollView>
+      <View style={styles.footer}>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <View style={styles.footerButtons}>
+          <Pressable
+            onPress={onCancel}
+            disabled={busy}
+            testID="cancel-button"
+            style={({ pressed }) => [
+              styles.cancelButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.cancelText}>{t.common.cancel}</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.submitButton,
+              !canSubmit && styles.disabled,
+              pressed && styles.pressed,
+            ]}
+            onPress={() =>
+              onSubmit({ title: title.trim(), bpm, key: key.trim() })
+            }
+            disabled={!canSubmit}
+            testID="save-button"
+          >
+            {busy ? (
+              <ActivityIndicator color="#0a0a0a" />
+            ) : (
+              <Text style={styles.submitButtonText}>{t.projectForm.done}</Text>
+            )}
+          </Pressable>
+        </View>
+      </View>
+    </View>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    form: {
-      paddingHorizontal: spacing.lg,
-      paddingTop: spacing.lg,
-      paddingBottom: 40,
-      gap: 6,
+    root: {
+      flex: 1,
     },
-    label: {
+    scroll: {
+      flex: 1,
+    },
+    content: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.xl,
+    },
+    sectionLabel: {
       color: colors.textTertiary,
       fontSize: 11,
       fontWeight: "700",
       letterSpacing: 1,
-      marginTop: 12,
+      marginTop: spacing.lg,
+      marginBottom: spacing.sm,
+    },
+    card: {
+      backgroundColor: colors.panel,
+      borderRadius: radii.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      padding: spacing.md,
+      gap: 6,
+    },
+    fieldRow: {
+      flexDirection: "row",
+      gap: spacing.md,
+      marginTop: spacing.xs,
+    },
+    fieldTempo: {
+      width: 96,
+      gap: 6,
+    },
+    fieldKey: {
+      flex: 1,
+      gap: 6,
+    },
+    fieldLabel: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 0.5,
     },
     input: {
       color: colors.textPrimary,
       fontSize: 16,
       backgroundColor: colors.surface,
       borderRadius: radii.md,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+    },
+    inputInvalid: {
+      borderColor: colors.danger,
     },
     hint: {
       color: colors.textTertiary,
       fontSize: 12,
-      marginTop: 4,
+      marginTop: spacing.sm,
     },
-    pressed: {
-      opacity: 0.7,
+    trackList: {
+      borderRadius: radii.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      overflow: "hidden",
+      backgroundColor: colors.background,
     },
-    pickButton: {
-      backgroundColor: colors.surface,
-      borderRadius: radii.md,
-      paddingVertical: 12,
-      alignItems: "center",
-    },
-    pickButtonText: {
-      color: colors.accent,
-      fontSize: 15,
-      fontWeight: "600",
-    },
-    fileRow: {
+    lane: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
-      paddingVertical: 10,
+      height: LANE_HEIGHT,
+      backgroundColor: colors.background,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
     },
-    fileName: {
+    laneAlt: {
+      backgroundColor: colors.panel,
+    },
+    laneColor: {
+      width: 5,
+      alignSelf: "stretch",
+    },
+    // Like WaveformView's track header: a raised block left of the region.
+    laneHeader: {
+      width: 148,
+      alignSelf: "stretch",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 6,
+      backgroundColor: colors.panelRaised,
+      borderRightWidth: 1,
+      borderRightColor: colors.border,
+    },
+    laneNumber: {
+      width: 18,
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: "800",
+      textAlign: "center",
+      fontVariant: ["tabular-nums"],
+    },
+    nameField: {
+      flex: 1,
       color: colors.textPrimary,
       fontSize: 14,
-      flex: 1,
-      marginRight: 12,
-      padding: 0,
+      fontWeight: "700",
+      backgroundColor: colors.surface,
+      borderRadius: radii.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
     },
-    removeText: {
+    nameFieldFocused: {
+      borderColor: colors.accent,
+    },
+    laneRegion: {
+      flex: 1,
+      paddingHorizontal: spacing.sm,
+    },
+    removeButton: {
+      width: 40,
+      alignSelf: "stretch",
+      alignItems: "center",
+      justifyContent: "center",
+      borderLeftWidth: StyleSheet.hairlineWidth,
+      borderLeftColor: colors.border,
+    },
+    removeGlyph: {
       color: colors.danger,
+      fontSize: 16,
+      fontWeight: "700",
+    },
+    addLane: {
+      height: 48,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.panel,
+    },
+    addLaneText: {
+      color: colors.accent,
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    emptyText: {
+      color: colors.textTertiary,
       fontSize: 13,
-      fontWeight: "600",
+      padding: spacing.lg,
+      textAlign: "center",
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
     },
     statusRow: {
       flexDirection: "row",
       alignItems: "center",
       gap: 10,
-      paddingVertical: 12,
+      paddingVertical: spacing.md,
     },
     statusText: {
       color: colors.textSecondary,
       fontSize: 13,
       flex: 1,
     },
-    emptyText: {
-      color: colors.textTertiary,
-      fontSize: 13,
-      paddingVertical: 10,
+    pressed: {
+      opacity: 0.6,
     },
-    error: {
-      color: colors.danger,
-      fontSize: 13,
-      marginTop: 12,
-    },
-    submitButton: {
-      backgroundColor: colors.accent,
-      borderRadius: radii.lg,
-      paddingVertical: 14,
-      alignItems: "center",
-      marginTop: 24,
-    },
-    submitButtonDisabled: {
+    disabled: {
       opacity: 0.4,
     },
-    submitButtonText: {
-      color: "#0a0a0a",
-      fontSize: 16,
-      fontWeight: "700",
-    },
-    cancelButton: {
-      paddingVertical: 14,
-      alignItems: "center",
-      marginTop: 4,
-    },
-    cancelText: {
-      color: colors.textSecondary,
-      fontSize: 15,
-      fontWeight: "600",
-    },
     deleteButton: {
-      marginTop: 32,
+      marginTop: 40,
       paddingVertical: 14,
       alignItems: "center",
       borderRadius: radii.lg,
@@ -389,6 +555,49 @@ function createStyles(colors: ThemeColors) {
     deleteText: {
       color: colors.danger,
       fontSize: 15,
+      fontWeight: "700",
+    },
+    footer: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.sm,
+      backgroundColor: colors.panel,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    footerButtons: {
+      flexDirection: "row",
+      gap: spacing.md,
+    },
+    error: {
+      color: colors.danger,
+      fontSize: 13,
+      marginBottom: spacing.sm,
+    },
+    cancelButton: {
+      flex: 1,
+      paddingVertical: 13,
+      alignItems: "center",
+      borderRadius: radii.lg,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    cancelText: {
+      color: colors.textPrimary,
+      fontSize: 15,
+      fontWeight: "600",
+    },
+    submitButton: {
+      flex: 2,
+      backgroundColor: colors.accent,
+      borderRadius: radii.lg,
+      paddingVertical: 13,
+      alignItems: "center",
+    },
+    submitButtonText: {
+      color: "#0a0a0a",
+      fontSize: 16,
       fontWeight: "700",
     },
   });

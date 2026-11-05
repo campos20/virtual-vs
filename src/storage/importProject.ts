@@ -261,6 +261,38 @@ export async function renameStemInProject(
 }
 
 /**
+ * Moves a stem one place up or down the project's track list. Only the order
+ * of `manifest.tracks` changes - ids, files and mixer state stay as they
+ * were - so, like a rename, this never has to touch the audio graph: the
+ * engine keys every stem by id and schedules them all together regardless
+ * of order. Order only decides how the arrange view and mixer list them.
+ *
+ * Reads the order from disk rather than taking a whole new order from the
+ * caller, so a move always applies to what is actually saved. A move past
+ * either end, or of an unknown stem, leaves the manifest untouched.
+ */
+export async function moveStemInProject(
+  sourceDir: string,
+  trackId: string,
+  direction: "up" | "down",
+): Promise<ProjectManifest> {
+  const directory = new Directory(sourceDir);
+  const manifest = await readProjectManifest(directory);
+
+  const index = manifest.tracks.findIndex((t) => t.id === trackId);
+  const targetIndex = direction === "up" ? index - 1 : index + 1;
+  if (index < 0 || targetIndex < 0 || targetIndex >= manifest.tracks.length) {
+    return manifest;
+  }
+
+  const tracks = [...manifest.tracks];
+  [tracks[index], tracks[targetIndex]] = [tracks[targetIndex], tracks[index]];
+  const updated: ProjectManifest = { ...manifest, tracks };
+  new File(directory, "manifest.json").write(JSON.stringify(updated, null, 2));
+  return updated;
+}
+
+/**
  * Merges `changes` into a project's manifest.json on disk.
  *
  * This is how mixer state survives the app closing: the manifest is the

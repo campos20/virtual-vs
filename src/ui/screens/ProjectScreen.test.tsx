@@ -12,6 +12,7 @@ import {
   addStemsToProject,
   deleteProjectDirectory,
   getProjectSourceForEntry,
+  moveStemInProject,
   patchProjectManifest,
   removeStemFromProject,
   renameStemInProject,
@@ -48,6 +49,7 @@ jest.mock("@/storage", () => ({
   addStemsToProject: jest.fn(),
   removeStemFromProject: jest.fn(),
   renameStemInProject: jest.fn(),
+  moveStemInProject: jest.fn(),
   deleteProjectDirectory: jest.fn(),
   getProjectSourceForEntry: jest.fn(),
   patchProjectManifest: jest.fn(),
@@ -156,6 +158,15 @@ async function waitForMixer() {
   await waitFor(() =>
     expect(screen.getByTestId("mixer-menu-button")).toBeTruthy(),
   );
+}
+
+/** Makes the next Alert behave as if the user tapped the button labelled `label`. */
+function answerAlertWith(label: string) {
+  return jest
+    .spyOn(Alert, "alert")
+    .mockImplementation((_title, _message, buttons) => {
+      buttons?.find((button) => button.text === label)?.onPress?.();
+    });
 }
 
 /** Volume/output/click controls live behind the hamburger drawer now - open it before touching them. */
@@ -897,9 +908,9 @@ describe("ProjectScreen - editing in place", () => {
     return renderWithStore(<ProjectScreen />, store);
   }
 
-  // Edit lives behind the mixer drawer now, not in the main header, so a
-  // stray tap during a set can't land on it - it takes opening the mixer first.
-  it("keeps Edit out of the header and reachable only through the mixer once loaded", async () => {
+  // Editing the song is a song-level action, so it's in the header - not
+  // hidden inside the mixer, where nobody would look for it.
+  it("offers Edit in the header once loaded, and not again inside the mixer", async () => {
     (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
       manifest: filesystemProject,
       resolveFile: () => 0,
@@ -907,10 +918,13 @@ describe("ProjectScreen - editing in place", () => {
 
     renderEditable();
     await waitForMixer();
-    expect(screen.queryByTestId("edit-button")).toBeNull();
+    expect(screen.getByTestId("edit-button")).toBeTruthy();
 
     openMixer();
-    expect(screen.getByTestId("edit-button")).toBeTruthy();
+    expect(screen.getAllByTestId("edit-button")).toHaveLength(1);
+
+    fireEvent.press(screen.getByTestId("edit-button"));
+    expect(screen.getByTestId("save-button")).toBeTruthy();
   });
 
   // A failed load (e.g. a corrupted stem) is exactly when the user needs to
@@ -1058,6 +1072,7 @@ describe("ProjectScreen - editing in place", () => {
       tracks: filesystemProject.tracks.filter((t) => t.id !== "bass"),
     });
 
+    answerAlertWith("Remove");
     const { store } = renderEditable();
     await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
     fireEvent.press(screen.getByTestId("edit-button"));
@@ -1146,6 +1161,93 @@ describe("ProjectScreen - editing in place", () => {
     await waitFor(() => expect(renameStemInProject).toHaveBeenCalled());
     await waitFor(() => expect(bassNameInput.props.value).toBe("Bass"));
     expect(screen.getByText("disk full")).toBeTruthy();
+  });
+
+  // Removing deletes the stem's audio file with no undo, and the ✕ sits right
+  // next to the move arrows - so it must never happen on one tap.
+  it("asks before removing a stem, and keeps it if dismissed", async () => {
+    const alertSpy = answerAlertWith("Cancel");
+    renderEditable();
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
+    fireEvent.press(screen.getByTestId("edit-button"));
+    fireEvent.press(screen.getByTestId("remove-stem-bass"));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      "Remove track?",
+      expect.stringContaining("Bass"),
+      expect.any(Array),
+    );
+    expect(removeStemFromProject).not.toHaveBeenCalled();
+  });
+
+  it("moves a stem through to the project folder and reorders the editor", async () => {
+    const reversed = [...filesystemProject.tracks].reverse();
+    (moveStemInProject as jest.Mock).mockResolvedValue({
+      ...filesystemProject,
+      tracks: reversed,
+    });
+
+    const { store } = renderEditable();
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
+    fireEvent.press(screen.getByTestId("edit-button"));
+    fireEvent.press(screen.getByTestId("stem-keys-move-up"));
+
+    await waitFor(() =>
+      expect(moveStemInProject).toHaveBeenCalledWith(
+        filesystemProject.sourceDir,
+        "keys",
+        "up",
+      ),
+    );
+    await waitFor(() =>
+      expect(
+        store.getState().projects.entities["my-song"]?.tracks.map((t) => t.id),
+      ).toEqual(["keys", "bass"]),
+    );
+    const lanes = within(screen.getByTestId("track-list"))
+      .getAllByTestId(/^track-lane-/)
+      .map((lane) => lane.props.testID);
+    expect(lanes).toEqual(["track-lane-keys", "track-lane-bass"]);
+  });
+
+  it("can't move the first track up or the last track down", async () => {
+    renderEditable();
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
+    fireEvent.press(screen.getByTestId("edit-button"));
+
+    fireEvent.press(screen.getByTestId("stem-bass-move-up"));
+    fireEvent.press(screen.getByTestId("stem-keys-move-down"));
+
+    expect(moveStemInProject).not.toHaveBeenCalled();
+  });
+
+  // Both are read-modify-writes of manifest.json - run concurrently, the
+  // later one could save over the earlier one with a stale read.
+  it("waits for a pending rename to save before moving a stem", async () => {
+    let finishRename: (value: unknown) => void = () => {};
+    (renameStemInProject as jest.Mock).mockReturnValue(
+      new Promise((resolve) => {
+        finishRename = resolve;
+      }),
+    );
+    (moveStemInProject as jest.Mock).mockResolvedValue(filesystemProject);
+
+    renderEditable();
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
+    fireEvent.press(screen.getByTestId("edit-button"));
+
+    const field = screen.getByTestId("rename-stem-bass");
+    fireEvent.changeText(field, "Low End");
+    fireEvent(field, "blur");
+    fireEvent.press(screen.getByTestId("stem-keys-move-up"));
+
+    await waitFor(() => expect(renameStemInProject).toHaveBeenCalled());
+    expect(moveStemInProject).not.toHaveBeenCalled();
+
+    await act(async () => {
+      finishRename(filesystemProject);
+    });
+    await waitFor(() => expect(moveStemInProject).toHaveBeenCalled());
   });
 });
 
@@ -1246,25 +1348,25 @@ describe("ProjectScreen - locked while playing", () => {
     audioEngine.stop();
   });
 
-  it("offers no Edit button while the transport is running", async () => {
+  it("greys Edit out while the transport is running, saying why", async () => {
     renderEditing();
     await waitForMixer();
-    audioEngine.play();
+    act(() => audioEngine.play());
 
-    openMixer();
+    const edit = screen.getByTestId("edit-button");
+    expect(edit.props.accessibilityState).toMatchObject({ disabled: true });
+    expect(edit.props.accessibilityHint).toBe("Stop playback to edit");
 
-    expect(screen.queryByTestId("edit-button")).toBeNull();
-    expect(screen.getByTestId("edit-locked-reason")).toBeTruthy();
+    fireEvent.press(edit);
+    expect(screen.queryByTestId("save-button")).toBeNull();
   });
 
   it("offers Edit when the transport is stopped", async () => {
     renderEditing();
     await waitForMixer();
 
-    openMixer();
-
-    expect(screen.getByTestId("edit-button")).toBeTruthy();
-    expect(screen.queryByTestId("edit-locked-reason")).toBeNull();
+    const edit = screen.getByTestId("edit-button");
+    expect(edit.props.accessibilityState).toMatchObject({ disabled: false });
   });
 
   // The buttons are hidden, but a stale tap or a race must not get through
@@ -1273,7 +1375,6 @@ describe("ProjectScreen - locked while playing", () => {
   it("refuses to import, remove or save while playing, even if invoked directly", async () => {
     renderEditing();
     await waitForMixer();
-    openMixer();
     fireEvent.press(screen.getByTestId("edit-button"));
 
     audioEngine.play();
@@ -1302,7 +1403,6 @@ describe("ProjectScreen - locked while playing", () => {
     (renameStemInProject as jest.Mock).mockResolvedValue(filesystemProject);
     renderEditing();
     await waitForMixer();
-    openMixer();
     fireEvent.press(screen.getByTestId("edit-button"));
 
     audioEngine.play();
@@ -1336,14 +1436,6 @@ describe("ProjectScreen - deleting", () => {
   }
 
   /** Drives Alert.alert by invoking the button matching `label`. */
-  function answerAlertWith(label: string) {
-    return jest
-      .spyOn(Alert, "alert")
-      .mockImplementation((_title, _message, buttons) => {
-        buttons?.find((button) => button.text === label)?.onPress?.();
-      });
-  }
-
   // Deleting needs a folder to delete. Nothing produces a sourceDir-less
   // entry now that the bundled demo is gone, but the guard is still there and
   // a project the app can't locate must not offer to destroy it.
@@ -1439,7 +1531,6 @@ describe("ProjectScreen - deleting", () => {
     // Edit can't be opened mid-song any more (see "locked while playing"), so
     // open it first and start playback after - what's under test is that
     // deleting a *playing* project stops the engine, not how Edit was reached.
-    openMixer();
     fireEvent.press(screen.getByTestId("edit-button"));
     audioEngine.play();
 

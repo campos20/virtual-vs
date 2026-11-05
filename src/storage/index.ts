@@ -3,6 +3,7 @@ export {
   addStemsToProject,
   createDraftProject,
   deleteProjectDirectory,
+  moveStemInProject,
   patchProjectManifest,
   removeStemFromProject,
   renameStemInProject,

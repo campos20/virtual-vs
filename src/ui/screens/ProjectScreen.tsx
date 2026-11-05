@@ -8,6 +8,7 @@ import { useSongScreenShortcuts } from "@/platform/desktop";
 import {
   addStemsToProject,
   deleteProjectDirectory,
+  moveStemInProject,
   removeStemFromProject,
   renameStemInProject,
   shareBundle,
@@ -480,8 +481,8 @@ export function ProjectScreen() {
     if (transportIsRunning()) return;
     setFormError(null);
     setEditing(true);
-    // Otherwise cancelling out of the form would land back on the mixer
-    // with the drawer still open, right where the user tapped Edit from.
+    // Edit (or a keyboard shortcut) can be hit with the mixer open, and
+    // cancelling out of the form shouldn't land back on the open drawer.
     setMixerOpen(false);
   }
 
@@ -560,7 +561,36 @@ export function ProjectScreen() {
     }
   }
 
-  async function handleRemoveStem(stemId: string) {
+  /**
+   * Removing a track deletes this app's copy of its audio file, and there is
+   * no undo - so, like deleting a whole song, it asks first. The ✕ sits right
+   * next to the move arrows, which makes a stray tap easy.
+   */
+  function handleRemoveStem(stemId: string) {
+    if (transportIsRunning()) {
+      setFormError(t.project.lockedWhilePlayingBody);
+      return;
+    }
+    if (!entry?.sourceDir) return;
+    const name = entry.tracks.find((track) => track.id === stemId)?.name ?? "";
+    Alert.alert(
+      t.projectForm.removeConfirmTitle,
+      t.projectForm.removeConfirmBody(name),
+      [
+        { text: t.common.cancel, style: "cancel" },
+        {
+          text: t.projectForm.removeConfirmConfirm,
+          style: "destructive",
+          onPress: () => {
+            void removeStem(stemId);
+          },
+        },
+      ],
+    );
+  }
+
+  async function removeStem(stemId: string) {
+    // Re-checked: the transport may have started while the dialog was open.
     if (transportIsRunning()) {
       setFormError(t.project.lockedWhilePlayingBody);
       return;
@@ -601,18 +631,83 @@ export function ProjectScreen() {
   ): Promise<boolean> {
     setFormError(null);
     if (!entry?.sourceDir) return false;
+    const sourceDir = entry.sourceDir;
+    const projectId = entry.id;
     try {
-      const updated = await renameStemInProject(entry.sourceDir, stemId, name);
-      dispatch(
-        projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }),
-      );
-      nowPlayingStore.renameTrackLocal(stemId, name);
+      await enqueueManifestWrite(async () => {
+        const updated = await renameStemInProject(sourceDir, stemId, name);
+        dispatch(
+          projectUpdated({
+            id: projectId,
+            changes: { tracks: updated.tracks },
+          }),
+        );
+        nowPlayingStore.renameTrackLocal(stemId, name);
+      });
       return true;
     } catch (e) {
       if (mountedRef.current)
         setFormError(e instanceof Error ? e.message : String(e));
       return false;
     }
+  }
+
+  /**
+   * Renames and moves are each a read-modify-write of manifest.json, and
+   * both can fire in quick succession (rename a track, tap an arrow while the
+   * name field is still blurring; tap an arrow twice). Run concurrently, the
+   * second write could land on a manifest read before the first one saved
+   * and silently undo it - so they go through one queue, one at a time.
+   */
+  const manifestWriteQueue = useRef<Promise<void>>(Promise.resolve());
+  function enqueueManifestWrite(work: () => Promise<void>): Promise<void> {
+    const run = manifestWriteQueue.current.then(work);
+    manifestWriteQueue.current = run.catch(() => {});
+    return run;
+  }
+
+  /**
+   * Moves a track one place up or down. Like a rename, this is allowed while
+   * playing: track order is display-only (the engine keys every stem by id
+   * and starts them all from one shared time), so it patches the loaded
+   * project in place and never rebuilds the audio graph. The one exception is
+   * a project with more stems than have waveform lanes, where moving one into
+   * view needs its waveform computed - that falls back to a full reload, and
+   * so only happens while stopped.
+   */
+  function handleMoveStem(stemId: string, direction: "up" | "down") {
+    if (!entry?.sourceDir) return;
+    const sourceDir = entry.sourceDir;
+    const projectId = entry.id;
+    setFormError(null);
+    enqueueManifestWrite(async () => {
+      const updated = await moveStemInProject(sourceDir, stemId, direction);
+      dispatch(
+        projectUpdated({ id: projectId, changes: { tracks: updated.tracks } }),
+      );
+      const patched = nowPlayingStore.reorderTracksLocal(
+        projectId,
+        updated.tracks.map((track) => track.id),
+      );
+      if (
+        !patched &&
+        nowPlayingStore.getSnapshot().projectId === projectId &&
+        !transportIsRunning()
+      ) {
+        if (mountedRef.current) setBusy(true);
+        try {
+          await reloadAndSeed();
+        } finally {
+          if (mountedRef.current) {
+            setBusy(false);
+            setStatus(null);
+          }
+        }
+      }
+    }).catch((e) => {
+      if (mountedRef.current)
+        setFormError(e instanceof Error ? e.message : String(e));
+    });
   }
 
   async function handleSubmit(values: ProjectFormValues) {
@@ -779,9 +874,16 @@ export function ProjectScreen() {
   }
 
   const canEdit = entry?.origin === "filesystem";
+  // The loaded waveforms, when this is the current project, so each track in
+  // the editor shows its audio like a DAW lane. Matched by id, not position,
+  // so they follow a track through a move.
+  const peaksById = new Map(
+    isCurrent ? nowPlaying.waveformTracks.map((w) => [w.id, w.peaks]) : [],
+  );
   const formStems = (entry?.tracks ?? []).map((t) => ({
     id: t.id,
     name: t.name,
+    peaks: peaksById.get(t.id),
   }));
   const headerTitle =
     (isCurrent ? nowPlaying.manifest?.title : undefined) ?? entry?.title ?? "";
@@ -838,20 +940,47 @@ export function ProjectScreen() {
             onPress={handleBackFromProject}
             testID="back-button"
           />
-          {showControls && songSequence.length > 0 && (
-            <Pressable
-              onPress={() => setSongListOpen(true)}
-              style={({ pressed }) => [
-                styles.toolButton,
-                pressed && styles.pressed,
-              ]}
-              hitSlop={6}
-              testID="song-list-menu-button"
-              accessibilityLabel={t.project.songs}
-            >
-              <Text style={styles.toolButtonText}>{t.project.songs}</Text>
-            </Pressable>
-          )}
+          <View style={styles.headerActions}>
+            {/* Edit sits up here with the song's other "between songs"
+                actions, out of the toolbar the performer uses mid-song.
+                Shown but inert while playing - editing can rebuild the audio
+                graph, and a greyed-out button explains itself where a
+                missing one would just be confusing. */}
+            {showControls && canEdit && (
+              <Pressable
+                onPress={handleStartEditing}
+                disabled={isPlaying}
+                style={({ pressed }) => [
+                  styles.toolButton,
+                  isPlaying && styles.stepButtonDisabled,
+                  pressed && styles.pressed,
+                ]}
+                hitSlop={6}
+                testID="edit-button"
+                accessibilityLabel={t.project.edit}
+                accessibilityState={{ disabled: isPlaying }}
+                accessibilityHint={
+                  isPlaying ? t.project.lockedWhilePlaying : undefined
+                }
+              >
+                <Text style={styles.toolButtonText}>{t.project.edit}</Text>
+              </Pressable>
+            )}
+            {showControls && songSequence.length > 0 && (
+              <Pressable
+                onPress={() => setSongListOpen(true)}
+                style={({ pressed }) => [
+                  styles.toolButton,
+                  pressed && styles.pressed,
+                ]}
+                hitSlop={6}
+                testID="song-list-menu-button"
+                accessibilityLabel={t.project.songs}
+              >
+                <Text style={styles.toolButtonText}>{t.project.songs}</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
 
         <View style={styles.titleRow}>
@@ -1011,6 +1140,7 @@ export function ProjectScreen() {
           onAddStems={handleAddStems}
           onRemoveStem={handleRemoveStem}
           onRenameStem={handleRenameStem}
+          onMoveStem={handleMoveStem}
           onSubmit={handleSubmit}
           onCancel={handleCancelEditing}
           onDelete={entry?.sourceDir ? handleDelete : undefined}
@@ -1050,8 +1180,8 @@ export function ProjectScreen() {
         {renderHeader()}
         <Text style={styles.error}>{error ?? t.project.loadFailed}</Text>
         {/* A failed load (e.g. a corrupted stem) is exactly when editing - to remove or
-            replace the offending stem - matters most, so this can't live only behind the
-            mixer drawer like the rest of Edit's access: there's no mixer to open here. */}
+            replace the offending stem - matters most. The header's Edit only shows for a
+            loaded song, so it's offered here as well. */}
         {canEdit && (
           <View style={styles.errorActions}>
             <HeaderButton
@@ -1143,13 +1273,8 @@ export function ProjectScreen() {
         onMonitorModeChange={handleMonitorModeChange}
         clickEnabled={clickEnabled}
         onClickEnabledChange={handleClickEnabledChange}
-        onEdit={canEdit ? handleStartEditing : undefined}
-        editDisabledReason={
-          isPlaying ? t.project.lockedWhilePlaying : undefined
-        }
-        // Hidden rather than disabled while playing: unlike Edit, which sits
-        // in the same row and explains itself, an export is a thing you do
-        // between sets - there's nothing useful to say about it mid-song.
+        // Hidden while playing: an export is a thing you do between sets -
+        // there's nothing useful to say about it mid-song.
         onExport={entry?.sourceDir && !isPlaying ? handleExport : undefined}
       />
     </SafeAreaView>
@@ -1194,6 +1319,11 @@ function createStyles(colors: ThemeColors) {
       alignItems: "center",
       justifyContent: "space-between",
       marginBottom: spacing.xs,
+    },
+    headerActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
     },
     titleRow: {
       flexDirection: "row",

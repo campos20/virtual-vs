@@ -179,6 +179,79 @@ describe("nowPlayingStore", () => {
     expect(nowPlayingStore.getSnapshot().projectId).toBeNull();
   });
 
+  describe("reorderTracksLocal", () => {
+    const threeTracks = entry("a", {
+      tracks: ["x", "y", "z"].map((id) => ({
+        id,
+        name: id.toUpperCase(),
+        file: `${id}.wav`,
+        gain: 1,
+        bus: "main" as const,
+      })),
+    });
+
+    it("reorders the manifest and the waveform lanes, recolouring lanes by position", async () => {
+      await nowPlayingStore.openProject(threeTracks, ENGINE_OPTIONS);
+      const before = nowPlayingStore.getSnapshot().waveformTracks;
+
+      expect(nowPlayingStore.reorderTracksLocal("a", ["z", "x", "y"])).toBe(
+        true,
+      );
+
+      const snapshot = nowPlayingStore.getSnapshot();
+      expect(snapshot.manifest?.tracks.map((t) => t.id)).toEqual([
+        "z",
+        "x",
+        "y",
+      ]);
+      expect(snapshot.waveformTracks.map((t) => t.id)).toEqual(["z", "x", "y"]);
+      // Colours belong to positions, the same as on a fresh load.
+      expect(snapshot.waveformTracks.map((t) => t.color)).toEqual(
+        before.map((t) => t.color),
+      );
+      // The waveform itself travels with its track.
+      expect(snapshot.waveformTracks[0].peaks).toBe(before[2].peaks);
+    });
+
+    // Order is display-only, so a move must never rebuild the graph or
+    // interrupt a running transport.
+    it("never touches the engine", async () => {
+      await nowPlayingStore.openProject(threeTracks, ENGINE_OPTIONS);
+      audioEngine.play();
+      const loadSpy = jest.spyOn(audioEngine, "loadProject");
+      const stopSpy = jest.spyOn(audioEngine, "stop");
+
+      nowPlayingStore.reorderTracksLocal("a", ["y", "z", "x"]);
+
+      expect(loadSpy).not.toHaveBeenCalled();
+      expect(stopSpy).not.toHaveBeenCalled();
+      expect(audioEngine.getTransportState()).toBe("playing");
+      audioEngine.stop();
+    });
+
+    it("refuses an order that isn't exactly the loaded stems", async () => {
+      await nowPlayingStore.openProject(threeTracks, ENGINE_OPTIONS);
+
+      expect(nowPlayingStore.reorderTracksLocal("a", ["x", "y"])).toBe(false);
+      expect(nowPlayingStore.reorderTracksLocal("a", ["x", "y", "nope"])).toBe(
+        false,
+      );
+      expect(
+        nowPlayingStore.getSnapshot().manifest?.tracks.map((t) => t.id),
+      ).toEqual(["x", "y", "z"]);
+    });
+
+    it("refuses when a different project is loaded, or none", async () => {
+      expect(nowPlayingStore.reorderTracksLocal("a", ["x", "y", "z"])).toBe(
+        false,
+      );
+      await nowPlayingStore.openProject(threeTracks, ENGINE_OPTIONS);
+      expect(nowPlayingStore.reorderTracksLocal("b", ["z", "y", "x"])).toBe(
+        false,
+      );
+    });
+  });
+
   it("setSectionsLocal patches the manifest with the new marker list", async () => {
     await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
 

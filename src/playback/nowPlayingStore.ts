@@ -228,6 +228,46 @@ class NowPlayingStore {
     });
   }
 
+  /**
+   * Re-orders the current project's stems in place after a successful write -
+   * no re-decode needed, same reasoning as `renameTrackLocal`: the engine keys
+   * every stem by id and starts them all together, so order is display-only.
+   * Lane colors follow position (as they do on a fresh load), so they're
+   * re-assigned here too.
+   *
+   * Returns false, changing nothing, when the patch can't be done faithfully -
+   * `projectId` isn't the loaded project, `trackIds` isn't exactly its stems,
+   * or the move would bring a stem without a computed waveform (past
+   * MAX_WAVEFORM_STEMS) into view. The caller should do a full `reload()`
+   * then instead.
+   */
+  reorderTracksLocal(projectId: string, trackIds: string[]): boolean {
+    const { manifest, waveformTracks } = this.snapshot;
+    if (!manifest || this.snapshot.projectId !== projectId) return false;
+    if (trackIds.length !== manifest.tracks.length) return false;
+
+    const tracksById = new Map(manifest.tracks.map((t) => [t.id, t]));
+    const tracks = trackIds.map((id) => tracksById.get(id));
+    if (tracks.some((t) => t === undefined)) return false;
+
+    const lanesById = new Map(waveformTracks.map((w) => [w.id, w]));
+    const visibleIds = trackIds.slice(0, MAX_WAVEFORM_STEMS);
+    if (visibleIds.some((id) => !lanesById.has(id))) return false;
+
+    this.commit({
+      ...this.snapshot,
+      manifest: {
+        ...manifest,
+        tracks: tracks as ProjectManifest["tracks"],
+      },
+      waveformTracks: visibleIds.map((id, index) => ({
+        ...lanesById.get(id)!,
+        color: getTrackColor(index),
+      })),
+    });
+    return true;
+  }
+
   /** Patches the current project's markers in place after a successful write - no re-decode needed, same reasoning as `renameTrackLocal`. */
   setSectionsLocal(sections: SectionManifest[]): void {
     const { manifest } = this.snapshot;
