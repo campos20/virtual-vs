@@ -26,6 +26,12 @@ interface TransportBarProps {
   /** The song's key, shown beside the tempo. */
   songKey?: string;
   onPlayPause: () => void;
+  /**
+   * Play is shown but inert - a song is loading, and starting it now would be
+   * cut off when the load finishes. Only ever set while stopped/paused, so
+   * pausing a playing song is never blocked.
+   */
+  playDisabled?: boolean;
   onStop: () => void;
   onSeek: (seconds: number) => void;
 }
@@ -48,6 +54,7 @@ export function TransportBar({
   bpm,
   songKey,
   onPlayPause,
+  playDisabled = false,
   onStop,
   onSeek,
 }: TransportBarProps) {
@@ -123,14 +130,17 @@ export function TransportBar({
 
         <Pressable
           onPress={onPlayPause}
+          disabled={playDisabled}
           style={({ pressed }) => [
             styles.transportButton,
             isPlaying && styles.playButtonActive,
+            playDisabled && styles.playButtonDisabled,
             pressed && styles.pressed,
           ]}
           hitSlop={6}
           testID="play-pause-button"
           accessibilityLabel={isPlaying ? t.transport.pause : t.transport.play}
+          accessibilityState={{ disabled: playDisabled }}
         >
           {isPlaying ? (
             <View style={styles.pauseIcon} testID="pause-icon">
@@ -234,6 +244,9 @@ function createStyles(colors: ThemeColors) {
     playButtonActive: {
       backgroundColor: colors.play,
       borderColor: colors.play,
+    },
+    playButtonDisabled: {
+      opacity: 0.35,
     },
     pressed: {
       opacity: 0.7,

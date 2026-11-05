@@ -7,6 +7,7 @@ import { useNowPlaying } from "@/hooks/useNowPlaying";
 import { usePlayhead } from "@/hooks/usePlayhead";
 import { useTransportState } from "@/hooks/useTransportState";
 import { useTranslation } from "@/i18n";
+import { nowPlayingStore } from "@/playback/nowPlayingStore";
 import type { ProjectManifest } from "@/types/project";
 import { elevation, useThemeColors, type ThemeColors } from "@/ui/theme";
 import { TransportBar } from "./TransportBar";
@@ -26,13 +27,15 @@ import { TransportBar } from "./TransportBar";
  * there's actually something to show.
  */
 export function NowPlayingBar() {
-  const { projectId, manifest, durationSec, folderId } = useNowPlaying();
+  const { projectId, manifest, durationSec, folderId, loading } =
+    useNowPlaying();
 
   if (!projectId || !manifest) return null;
 
   return (
     <NowPlayingBarContent
       projectId={projectId}
+      loading={loading}
       manifest={manifest}
       durationSec={durationSec}
       folderId={folderId}
@@ -42,6 +45,8 @@ export function NowPlayingBar() {
 
 interface NowPlayingBarContentProps {
   projectId: string;
+  /** A load/reload is in flight - see `nowPlayingStore.canStartPlayback`. */
+  loading: boolean;
   manifest: ProjectManifest;
   durationSec: number;
   folderId: string | null;
@@ -58,6 +63,7 @@ interface NowPlayingBarContentProps {
  */
 function NowPlayingBarContent({
   projectId,
+  loading,
   manifest,
   durationSec,
   folderId,
@@ -111,11 +117,16 @@ function NowPlayingBarContent({
           durationSec={durationSec}
           bpm={manifest.bpm}
           songKey={manifest.key}
-          onPlayPause={() =>
-            audioEngine.getTransportState() === "playing"
-              ? audioEngine.pause()
-              : audioEngine.play()
-          }
+          // Play is locked while a song loads (it would be cut off when the
+          // load ends - see nowPlayingStore.canStartPlayback). Pause never is.
+          playDisabled={loading && transportState !== "playing"}
+          onPlayPause={() => {
+            if (audioEngine.getTransportState() === "playing") {
+              audioEngine.pause();
+            } else if (nowPlayingStore.canStartPlayback()) {
+              audioEngine.play();
+            }
+          }}
           onStop={() => audioEngine.stop()}
           onSeek={(seconds) => audioEngine.seek(seconds)}
         />

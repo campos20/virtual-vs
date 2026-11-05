@@ -108,7 +108,8 @@ function runShortcut(match: ShortcutMatch, toggleHelp: () => void): boolean {
   switch (match.id) {
     case "playPause":
       if (audioEngine.getTransportState() === "playing") audioEngine.pause();
-      else audioEngine.play();
+      // Refused while a song loads - see nowPlayingStore.canStartPlayback.
+      else if (nowPlayingStore.canStartPlayback()) audioEngine.play();
       return true;
     case "stop":
       audioEngine.stop();

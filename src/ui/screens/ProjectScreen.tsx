@@ -659,9 +659,11 @@ export function ProjectScreen() {
    * refused while playing, before anything is saved (playback can be started
    * from the NowPlayingBar while the editor is open). Saving it anyway would
    * leave the saved order and what's on screen out of step until the next
-   * load. Reloading once playback stops was considered and rejected: the
-   * performer may press play again during that reload, and a reload stops
-   * whatever is playing.
+   * load. When stopped, it saves and reloads; play stays locked for the
+   * whole reload (`nowPlayingStore.canStartPlayback`), since the reload ends
+   * by replacing the engine's transport and would cut off a song started
+   * meanwhile. Deferring the reload until playback stops was rejected for
+   * the same reason: it would start right when the performer may press play.
    *
    * Quick repeated taps, or a tap while a rename is still saving, are safe:
    * the storage layer runs every manifest edit for a project one at a time

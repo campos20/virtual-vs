@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react-native";
 import { audioEngine } from "@/engine";
 import { nowPlayingStore } from "@/playback/nowPlayingStore";
 import { decodeProjectAudio, getProjectSourceForEntry } from "@/storage";
@@ -182,5 +182,75 @@ describe("NowPlayingBar", () => {
     expect(audioEngine.getTransportState()).toBe("playing");
     expect(mockPush).not.toHaveBeenCalled();
     audioEngine.stop();
+  });
+
+  // A reload (after adding/removing a stem, saving, or a move that needs a
+  // new waveform lane) ends in audioEngine.loadProject(), which stops the
+  // transport. A song started from this bar while that reload decodes would
+  // be cut off on stage, so play is locked until it finishes.
+  describe("while a reload is in flight", () => {
+    const OPTIONS = { monitorMode: "split" as const, clickEnabled: true };
+
+    /** Opens the song, then starts a reload whose decode waits for `finish()`. */
+    async function startReload() {
+      await nowPlayingStore.openProject(entry, OPTIONS);
+      let finish: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      decodeMock.mockImplementationOnce(async () => {
+        await gate;
+        return { manifest: entry, trackBuffers: {} };
+      });
+      let reload: Promise<unknown> = Promise.resolve();
+      act(() => {
+        reload = nowPlayingStore.reload(entry, OPTIONS);
+      });
+      return {
+        finish: async () => {
+          await act(async () => {
+            finish();
+            await reload;
+          });
+        },
+      };
+    }
+
+    afterEach(() => {
+      audioEngine.stop();
+    });
+
+    it("locks play until the reload finishes, then unlocks it", async () => {
+      renderWithStore(<NowPlayingBar />);
+      const { finish } = await startReload();
+
+      const play = screen.getByTestId("play-pause-button");
+      expect(play.props.accessibilityState).toMatchObject({ disabled: true });
+      fireEvent.press(play);
+      expect(audioEngine.getTransportState()).not.toBe("playing");
+
+      await finish();
+
+      expect(
+        screen.getByTestId("play-pause-button").props.accessibilityState,
+      ).toMatchObject({ disabled: false });
+      fireEvent.press(screen.getByTestId("play-pause-button"));
+      expect(audioEngine.getTransportState()).toBe("playing");
+    });
+
+    // Locking play must never trap a song that's already playing.
+    it("still lets a playing song be paused", async () => {
+      renderWithStore(<NowPlayingBar />);
+      await nowPlayingStore.openProject(entry, OPTIONS);
+      act(() => audioEngine.play());
+      const { finish } = await startReload();
+
+      const pause = screen.getByTestId("play-pause-button");
+      expect(pause.props.accessibilityState).toMatchObject({ disabled: false });
+      fireEvent.press(pause);
+      expect(audioEngine.getTransportState()).toBe("paused");
+
+      await finish();
+    });
   });
 });

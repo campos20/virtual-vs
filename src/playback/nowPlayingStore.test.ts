@@ -179,6 +179,83 @@ describe("nowPlayingStore", () => {
     expect(nowPlayingStore.getSnapshot().projectId).toBeNull();
   });
 
+  describe("canStartPlayback", () => {
+    /** The next decode waits until `finish()`/`fail()`, even if called before decode starts. */
+    function deferredDecode() {
+      let open: () => void = () => {};
+      let close: (error: Error) => void = () => {};
+      const gate = new Promise<void>((resolve, reject) => {
+        open = resolve;
+        close = reject;
+      });
+      // Swallow the rejection until the decode awaits it.
+      gate.catch(() => {});
+      decodeMock.mockImplementationOnce(async (_ctx, source) => {
+        await gate;
+        return { manifest: source.manifest, trackBuffers: {} };
+      });
+      return {
+        finish: () => open(),
+        fail: () => close(new Error("corrupt stem")),
+      };
+    }
+
+    it("is false for the whole of a load, and true again after", async () => {
+      expect(nowPlayingStore.canStartPlayback()).toBe(true);
+      const decode = deferredDecode();
+
+      const load = nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+      // Set before the first await - no gap after the caller's own checks.
+      expect(nowPlayingStore.canStartPlayback()).toBe(false);
+      expect(nowPlayingStore.getSnapshot().loading).toBe(true);
+
+      decode.finish();
+      await load;
+      expect(nowPlayingStore.canStartPlayback()).toBe(true);
+    });
+
+    it("unlocks after a failed load too", async () => {
+      const decode = deferredDecode();
+      const load = nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+
+      decode.fail();
+      await expect(load).rejects.toThrow("corrupt stem");
+      expect(nowPlayingStore.canStartPlayback()).toBe(true);
+    });
+
+    // A superseded load finishing first must not unlock while the newer one
+    // is still decoding towards its own loadProject().
+    it("stays locked until the newest of overlapping loads finishes", async () => {
+      const first = deferredDecode();
+      const second = deferredDecode();
+      const older = nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+      const newer = nowPlayingStore.openProject(entry("b"), ENGINE_OPTIONS);
+
+      first.finish();
+      await expect(older).rejects.toThrow("Superseded");
+      expect(nowPlayingStore.canStartPlayback()).toBe(false);
+
+      second.finish();
+      await newer;
+      expect(nowPlayingStore.canStartPlayback()).toBe(true);
+    });
+
+    it("never stops a song that is already playing", async () => {
+      await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+      audioEngine.play();
+      const decode = deferredDecode();
+      const stopSpy = jest.spyOn(audioEngine, "stop");
+
+      const reload = nowPlayingStore.reload(entry("a"), ENGINE_OPTIONS);
+      expect(audioEngine.getTransportState()).toBe("playing");
+      expect(stopSpy).not.toHaveBeenCalled();
+
+      decode.finish();
+      await reload;
+      audioEngine.stop();
+    });
+  });
+
   describe("reorderTracksLocal", () => {
     const threeTracks = entry("a", {
       tracks: ["x", "y", "z"].map((id) => ({

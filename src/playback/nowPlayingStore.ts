@@ -29,6 +29,14 @@ export interface NowPlayingSnapshot {
    * a fresh project has no folder context until told otherwise.
    */
   folderId: string | null;
+  /**
+   * True while a load or reload is decoding and rebuilding the engine. Every
+   * load ends in `audioEngine.loadProject()`, which stops and replaces the
+   * transport - so playback started during one would be cut off the moment
+   * it finishes. Starting playback is refused meanwhile; see
+   * `canStartPlayback()`.
+   */
+  loading: boolean;
 }
 
 interface EngineOptions {
@@ -47,6 +55,7 @@ const EMPTY_SNAPSHOT: NowPlayingSnapshot = {
   durationSec: 0,
   waveformTracks: [],
   folderId: null,
+  loading: false,
 };
 
 /**
@@ -115,13 +124,44 @@ class NowPlayingStore {
     return this.loadFresh(entry, options, onProgress);
   }
 
+  /**
+   * Whether playback may start right now. False while a load or reload is in
+   * flight: it would end in `audioEngine.loadProject()`, which stops the
+   * transport, cutting off a song started in the meantime - on stage, with
+   * the performer having pressed play on purpose. Every control that starts
+   * playback (NowPlayingBar's play button, the desktop play shortcut) checks
+   * this. It never stops anything already playing.
+   */
+  canStartPlayback(): boolean {
+    return !this.snapshot.loading;
+  }
+
   private async loadFresh(
     entry: LibraryProjectEntry,
-    { monitorMode, clickEnabled }: EngineOptions,
+    options: EngineOptions,
     onProgress?: ProgressReporter,
   ): Promise<LoadResult> {
     const requestId = ++this.requestId;
+    // Set synchronously, before the first await, so there's no gap between
+    // a caller checking the transport and the lock taking effect.
+    if (!this.snapshot.loading)
+      this.commit({ ...this.snapshot, loading: true });
+    try {
+      return await this.decodeAndLoad(entry, options, requestId, onProgress);
+    } finally {
+      // A superseded request leaves the lock to the newer one still running.
+      if (requestId === this.requestId && this.snapshot.loading) {
+        this.commit({ ...this.snapshot, loading: false });
+      }
+    }
+  }
 
+  private async decodeAndLoad(
+    entry: LibraryProjectEntry,
+    { monitorMode, clickEnabled }: EngineOptions,
+    requestId: number,
+    onProgress?: ProgressReporter,
+  ): Promise<LoadResult> {
     const source = await getProjectSourceForEntry(entry);
     const decoded = await decodeProjectAudio(
       audioEngine.context,
@@ -180,6 +220,7 @@ class NowPlayingStore {
       // set explicitly afterwards by `setFolderContext()` if it was opened
       // from one.
       folderId: null,
+      loading: false,
     });
     return { manifest: source.manifest, durationSec };
   }
