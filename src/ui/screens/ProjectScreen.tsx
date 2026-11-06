@@ -657,6 +657,16 @@ export function ProjectScreen() {
   }
 
   /**
+   * Set while a move is saving (and, if it needs one, reloading). The arrows
+   * are disabled meanwhile and the handler refuses taps, so moves run
+   * strictly one at a time and each one is computed from the order the last
+   * one actually saved. The ref is what the handler trusts - a second tap
+   * can land before the re-render that disables the arrows.
+   */
+  const moveInFlightRef = useRef(false);
+  const [moveInFlight, setMoveInFlight] = useState(false);
+
+  /**
    * Moves a track one place up or down. Like a rename, this is allowed while
    * playing: track order is display-only (the engine keys every stem by id
    * and starts them all from one shared time), so it patches the loaded
@@ -664,23 +674,22 @@ export function ProjectScreen() {
    *
    * The one exception is a project with more stems than have waveform lanes,
    * where moving one into view needs its waveform computed - only a full
-   * reload can do that, and a reload rebuilds the graph. So that one move is
-   * refused while playing, before anything is saved (playback can be started
-   * from the NowPlayingBar while the editor is open). Saving it anyway would
-   * leave the saved order and what's on screen out of step until the next
-   * load. When stopped, it saves and reloads; play stays locked for the
-   * whole reload (`nowPlayingStore.canStartPlayback`), since the reload ends
-   * by replacing the engine's transport and would cut off a song started
-   * meanwhile. Deferring the reload until playback stops was rejected for
-   * the same reason: it would start right when the performer may press play.
+   * reload can do that, and a reload ends by replacing the engine's
+   * transport. So that move:
+   * - is refused while playing, before anything is saved (playback can be
+   *   started from the NowPlayingBar while the editor is open);
+   * - when stopped, takes the play lock (`nowPlayingStore.holdPlayback`) in
+   *   the same synchronous step as that check and keeps it through the save
+   *   and the reload, so playback can't start in between and be cut off.
+   *   Deferring the reload until playback stops was rejected: it would start
+   *   right when the performer may press play.
    *
-   * Quick repeated taps, or a tap while a rename is still saving, are safe:
-   * the storage layer runs every manifest edit for a project one at a time
-   * (see `withManifestLock` in importProject.ts), and each one reads the
-   * manifest fresh, so the last result to land is always the latest state.
+   * Moves are serialized (`moveInFlightRef`), so the order computed here is
+   * always the order the save will produce - which is what makes the "does
+   * this need a reload?" decision above reliable.
    */
   function handleMoveStem(stemId: string, direction: "up" | "down") {
-    if (!entry?.sourceDir) return;
+    if (!entry?.sourceDir || moveInFlightRef.current) return;
     const sourceDir = entry.sourceDir;
     const projectId = entry.id;
     const ids = entry.tracks.map((track) => track.id);
@@ -688,58 +697,61 @@ export function ProjectScreen() {
     if (index < 0) return;
     const expected = moveId(ids, index, direction);
     if (expected === ids) return; // already at that end of the list
-    if (
-      transportIsRunning() &&
-      nowPlayingStore.needsReloadToReorder(projectId, expected)
-    ) {
+    const needsReload = nowPlayingStore.needsReloadToReorder(
+      projectId,
+      expected,
+    );
+    if (needsReload && transportIsRunning()) {
       setFormError(t.project.lockedWhilePlayingBody);
       return;
     }
+    const releasePlayback = needsReload ? nowPlayingStore.holdPlayback() : null;
+    moveInFlightRef.current = true;
+    setMoveInFlight(true);
     setFormError(null);
     (async () => {
       const updated = await moveStemInProject(sourceDir, stemId, direction);
-      const updatedIds = updated.tracks.map((track) => track.id);
       dispatch(
         projectUpdated({ id: projectId, changes: { tracks: updated.tracks } }),
       );
-      const patched = nowPlayingStore.reorderTracksLocal(projectId, updatedIds);
+      const patched = nowPlayingStore.reorderTracksLocal(
+        projectId,
+        updated.tracks.map((track) => track.id),
+      );
       if (patched || nowPlayingStore.getSnapshot().projectId !== projectId) {
         return;
       }
-      if (transportIsRunning()) {
-        // Playback started between the check above and the save landing.
-        // Undo the move, so the saved order matches what's loaded and on
-        // screen - but only when the save did exactly the move expected, so
-        // the opposite move is its exact inverse.
-        if (updatedIds.join("\n") === expected.join("\n")) {
-          const reverted = await moveStemInProject(
-            sourceDir,
-            stemId,
-            direction === "up" ? "down" : "up",
-          );
-          dispatch(
-            projectUpdated({
-              id: projectId,
-              changes: { tracks: reverted.tracks },
-            }),
-          );
-        }
+      // Only a reload can apply this order to the loaded project. Holding the
+      // play lock means the transport is still stopped. Without one, the move
+      // was expected to patch in place, so this is unexpected - reload only
+      // if that's safe right now, never under a playing song.
+      if (!releasePlayback && transportIsRunning()) {
         if (mountedRef.current) setFormError(t.project.lockedWhilePlayingBody);
         return;
       }
+      const releaseForReload = releasePlayback
+        ? null
+        : nowPlayingStore.holdPlayback();
       if (mountedRef.current) setBusy(true);
       try {
         await reloadAndSeed();
       } finally {
+        releaseForReload?.();
         if (mountedRef.current) {
           setBusy(false);
           setStatus(null);
         }
       }
-    })().catch((e) => {
-      if (mountedRef.current)
-        setFormError(e instanceof Error ? e.message : String(e));
-    });
+    })()
+      .catch((e) => {
+        if (mountedRef.current)
+          setFormError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        releasePlayback?.();
+        moveInFlightRef.current = false;
+        if (mountedRef.current) setMoveInFlight(false);
+      });
   }
 
   async function handleSubmit(values: ProjectFormValues) {
@@ -1176,6 +1188,7 @@ export function ProjectScreen() {
           onRemoveStem={handleRemoveStem}
           onRenameStem={handleRenameStem}
           onMoveStem={handleMoveStem}
+          movesDisabled={moveInFlight}
           onSubmit={handleSubmit}
           onCancel={handleCancelEditing}
           onDelete={entry?.sourceDir ? handleDelete : undefined}

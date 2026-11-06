@@ -1600,32 +1600,63 @@ describe("ProjectScreen - reordering past the waveform lanes", () => {
     );
   });
 
-  // Playback can start in the moment between the check and the save landing.
-  // The move is then undone, so the saved order matches what's on screen.
-  it("undoes the move if playback started while it was saving", async () => {
-    (moveStemInProject as jest.Mock)
-      .mockImplementationOnce(async () => {
-        audioEngine.play();
-        return manifestWithOrder(t17Up);
-      })
-      .mockResolvedValueOnce(manyStems);
-    const { store } = await renderInEditMode();
+  // Playback must not be able to start between the tap and the reload - the
+  // reload replaces the engine's transport and would cut the song off.
+  it("locks play from the tap until the reload is done", async () => {
+    let finishSave: () => void = () => {};
+    (moveStemInProject as jest.Mock).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishSave = () => resolve(manifestWithOrder(t17Up));
+        }),
+    );
+    await renderInEditMode();
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: manifestWithOrder(t17Up),
+      resolveFile: () => 0,
+    });
 
     fireEvent.press(screen.getByTestId("stem-t17-move-up"));
+    expect(nowPlayingStore.canStartPlayback()).toBe(false);
 
-    await waitFor(() => expect(moveStemInProject).toHaveBeenCalledTimes(2));
-    expect(moveStemInProject).toHaveBeenLastCalledWith(
-      manyStems.sourceDir,
-      "t17",
-      "down",
-    );
+    await waitFor(() => expect(moveStemInProject).toHaveBeenCalled());
+    await act(async () => finishSave());
     await waitFor(() =>
       expect(
-        store.getState().projects.entities["big-song"]?.tracks.map((t) => t.id),
-      ).toEqual(ids),
+        nowPlayingStore.getSnapshot().waveformTracks.map((w) => w.id),
+      ).toContain("t17"),
     );
-    expect(screen.getByText(/Stop playback first/)).toBeTruthy();
-    expect(audioEngine.getTransportState()).toBe("playing");
+    await waitFor(() => expect(nowPlayingStore.canStartPlayback()).toBe(true));
+  });
+
+  // Each move is computed from the order on screen, so overlapping moves
+  // would each be computed from the same, soon-stale order.
+  it("ignores further moves until the one saving has finished", async () => {
+    let finishSave: () => void = () => {};
+    (moveStemInProject as jest.Mock).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishSave = () =>
+            resolve(manifestWithOrder(["t2", "t1", ...ids.slice(2)]));
+        }),
+    );
+    await renderInEditMode();
+
+    fireEvent.press(screen.getByTestId("stem-t2-move-up"));
+    fireEvent.press(screen.getByTestId("stem-t2-move-up"));
+    fireEvent.press(screen.getByTestId("stem-t17-move-up"));
+
+    expect(moveStemInProject).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByTestId("stem-t5-move-up").props.accessibilityState,
+    ).toMatchObject({ disabled: true });
+
+    await act(async () => finishSave());
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("stem-t5-move-up").props.accessibilityState,
+      ).toMatchObject({ disabled: false }),
+    );
   });
 });
 

@@ -40,6 +40,8 @@ interface ProjectFormProps {
   /** Resolves to whether the rename actually persisted, so a failed write doesn't leave the field showing an unsaved name. */
   onRenameStem: (stemId: string, name: string) => Promise<boolean>;
   onMoveStem: (stemId: string, direction: "up" | "down") => void;
+  /** A move is still saving - the arrows wait for it, so moves never overlap. */
+  movesDisabled?: boolean;
   onSubmit: (values: ProjectFormValues) => void;
   onCancel: () => void;
   /** Omitted for a project that can't be deleted. */
@@ -147,6 +149,7 @@ export function ProjectForm({
   onRemoveStem,
   onRenameStem,
   onMoveStem,
+  movesDisabled = false,
   onSubmit,
   onCancel,
   onDelete,
@@ -259,8 +262,8 @@ export function ProjectForm({
                     />
                   </View>
                   <MoveColumn
-                    canMoveUp={!busy && !isFirst}
-                    canMoveDown={!busy && !isLast}
+                    canMoveUp={!busy && !movesDisabled && !isFirst}
+                    canMoveDown={!busy && !movesDisabled && !isLast}
                     onMoveUp={() => onMoveStem(stem.id, "up")}
                     onMoveDown={() => onMoveStem(stem.id, "down")}
                     moveUpAccessibilityLabel={t.projectForm.moveTrackUp(
