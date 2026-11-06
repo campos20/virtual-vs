@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -87,20 +87,43 @@ function StemNameField({
 }: StemNameFieldProps) {
   const [draft, setDraft] = useState(name);
   const [focused, setFocused] = useState(false);
+  /** The last name a rename actually saved - what a failed rename reverts to. */
+  const confirmedRef = useRef(name);
+  /** The newest rename still saving, if any. Only it may touch the field. */
+  const latestRef = useRef<{ attempt: number; name: string } | null>(null);
+  const attemptsRef = useRef(0);
 
   async function commit() {
     setFocused(false);
     const trimmed = draft.trim();
-    if (trimmed.length === 0 || trimmed === name) {
-      setDraft(name);
+    // What the field should show at rest: the name being saved, else the
+    // last saved one. Blurring without a change saves nothing.
+    const current = latestRef.current?.name ?? confirmedRef.current;
+    if (trimmed.length === 0 || trimmed === current) {
+      setDraft(current);
       return;
     }
     // Optimistic, but reverted below if the write fails - `onRename` is an
     // async disk write that can fail, and this field is the only thing
     // holding the not-yet-confirmed name, so it can't just keep showing it.
+    const attempt = ++attemptsRef.current;
+    latestRef.current = { attempt, name: trimmed };
     setDraft(trimmed);
     const persisted = await onRename(stemId, trimmed);
-    if (!persisted) setDraft(name);
+    // Manifest writes run one at a time, in order (see withManifestLock), so
+    // results land oldest first and this tracks what's actually on disk.
+    if (persisted) confirmedRef.current = trimmed;
+    // A newer rename was started while this one saved - the field is its
+    // business now. Rolling back here would show an older name than the
+    // one that ends up saved.
+    if (latestRef.current?.attempt !== attempt) return;
+    latestRef.current = null;
+    // Revert to the last saved name, not the one this field started with -
+    // and only if the field still shows this attempt, so text typed since
+    // isn't thrown away.
+    if (!persisted) {
+      setDraft((shown) => (shown === trimmed ? confirmedRef.current : shown));
+    }
   }
 
   return (

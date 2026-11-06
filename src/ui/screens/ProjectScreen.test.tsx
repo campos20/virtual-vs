@@ -1129,6 +1129,86 @@ describe("ProjectScreen - editing in place", () => {
     );
   });
 
+  describe("overlapping renames of one track", () => {
+    /** Each rename call gets its own promise, settled by the test. */
+    function controlledRenames() {
+      const calls: {
+        resolve: (value: unknown) => void;
+        reject: (error: Error) => void;
+      }[] = [];
+      (renameStemInProject as jest.Mock).mockImplementation(
+        (_dir: string, stemId: string, name: string) =>
+          new Promise((resolve, reject) => {
+            calls.push({
+              resolve: () =>
+                resolve({
+                  ...filesystemProject,
+                  tracks: filesystemProject.tracks.map((t) =>
+                    t.id === stemId ? { ...t, name } : t,
+                  ),
+                }),
+              reject,
+            });
+          }),
+      );
+      return calls;
+    }
+
+    async function renameTwice() {
+      renderEditable();
+      await waitFor(() =>
+        expect(screen.getByTestId("edit-button")).toBeTruthy(),
+      );
+      fireEvent.press(screen.getByTestId("edit-button"));
+      const field = screen.getByTestId("rename-stem-bass");
+      fireEvent.changeText(field, "First");
+      fireEvent(field, "blur");
+      fireEvent.changeText(field, "Second");
+      fireEvent(field, "blur");
+      await waitFor(() => expect(renameStemInProject).toHaveBeenCalledTimes(2));
+      return field;
+    }
+
+    it("keeps the newer name when an older rename fails after it", async () => {
+      const calls = controlledRenames();
+      const field = await renameTwice();
+
+      await act(async () => calls[0].reject(new Error("disk busy")));
+      expect(field.props.value).toBe("Second");
+
+      await act(async () => calls[1].resolve(undefined));
+      expect(field.props.value).toBe("Second");
+    });
+
+    it("reverts to the last saved name, not the original, when the newer rename fails", async () => {
+      const calls = controlledRenames();
+      const field = await renameTwice();
+
+      await act(async () => calls[0].resolve(undefined));
+      await act(async () => calls[1].reject(new Error("disk busy")));
+
+      expect(field.props.value).toBe("First");
+    });
+
+    it("doesn't throw away text typed since, when a rename fails", async () => {
+      const calls = controlledRenames();
+      renderEditable();
+      await waitFor(() =>
+        expect(screen.getByTestId("edit-button")).toBeTruthy(),
+      );
+      fireEvent.press(screen.getByTestId("edit-button"));
+      const field = screen.getByTestId("rename-stem-bass");
+      fireEvent.changeText(field, "First");
+      fireEvent(field, "blur");
+      await waitFor(() => expect(renameStemInProject).toHaveBeenCalled());
+
+      fireEvent.changeText(field, "Still typing");
+      await act(async () => calls[0].reject(new Error("disk busy")));
+
+      expect(field.props.value).toBe("Still typing");
+    });
+  });
+
   // The write can land after another song has loaded (it may queue behind
   // other manifest edits), and stem ids like "bass" repeat across songs.
   it("doesn't rename the same stem id in a song loaded while the rename saved", async () => {
