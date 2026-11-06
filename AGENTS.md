@@ -217,9 +217,12 @@ when touching `ProjectScreen`'s edit handlers, `ProjectForm`,
     reload-needing move) takes `nowPlayingStore.holdPlayback()` in the same
     synchronous step as its `transportIsRunning()` check, before any
     `await`. It releases the hold in `finally`, after its reload. Every
-    control that starts playback checks `canStartPlayback()`: the
-    NowPlayingBar's play button and the desktop Space shortcut. Pause, stop
-    and seek are never locked.
+    place that starts playback checks `canStartPlayback()`: the
+    NowPlayingBar's play button, the desktop Space shortcut, and the song
+    list's "Play next" autoplay (which then leaves the song loaded and
+    stopped, rather than starting it later on its own). A new place that
+    calls `audioEngine.play()` must check it too. Pause, stop and seek are
+    never locked.
   - A reload-needing move is refused while playing, before anything is
     saved. Don't defer a reload until playback stops: it would start right
     when the performer may press play again.

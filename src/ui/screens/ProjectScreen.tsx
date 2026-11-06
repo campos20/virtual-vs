@@ -300,7 +300,17 @@ export function ProjectScreen() {
         // here any other way (Library, previous/next, a plain row tap in that drawer)
         // loads the song and stops, same as always; only this one path is
         // meant to carry straight on without a separate Play tap.
-        if (autoPlay === "1") audioEngine.play();
+        //
+        // Unless the play lock is held: an add/remove/save on this song may
+        // still be saving, and its reload would stop the song moments after
+        // it started. Then the song is left loaded and stopped, and the
+        // performer presses play once the button unlocks. It's not started
+        // automatically when the lock releases - a song starting on its own at
+        // some later, unpredictable moment is worse on stage than not
+        // starting.
+        if (autoPlay === "1" && nowPlayingStore.canStartPlayback()) {
+          audioEngine.play();
+        }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       } finally {

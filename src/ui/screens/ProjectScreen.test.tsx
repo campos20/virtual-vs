@@ -696,6 +696,28 @@ describe("ProjectScreen - quick switch between songs in a folder", () => {
       expect(audioEngine.getTransportState()).toBe("playing"),
     );
   });
+
+  // An add/remove/save on this song may still be saving (the user left the
+  // editor and came back through Play next), and its reload would stop the
+  // song moments after it started. It's left loaded and stopped instead.
+  it("doesn't autoplay while an edit still holds the play lock", async () => {
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: threeStemProject,
+      resolveFile: () => 0,
+    });
+    const releaseEdit = nowPlayingStore.holdPlayback();
+    mockParams = { projectId: threeStemProject.id, autoPlay: "1" };
+    const store = createStore();
+    store.dispatch(projectAdded(threeStemProject));
+    renderWithStore(<ProjectScreen />, store);
+
+    await waitForMixer();
+    expect(audioEngine.getTransportState()).not.toBe("playing");
+
+    // And it doesn't start later on its own when the lock releases.
+    act(() => releaseEdit());
+    expect(audioEngine.getTransportState()).not.toBe("playing");
+  });
 });
 
 describe("ProjectScreen - lyrics", () => {
