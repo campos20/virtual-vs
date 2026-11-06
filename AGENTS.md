@@ -191,6 +191,72 @@ Guardrails for touching `AudioEngine.ts`:
   suite whenever touching `scheduleSources`/`stopSources`/`play`/`pause`/
   `seek`.
 
+# Editing a song (manifest writes, reloads, playback)
+
+Editing runs while the app stays usable. The NowPlayingBar can start
+playback while the editor is open, and edits keep running after the user
+navigates away. These rules came out of the PR #16 review rounds. Keep them
+when touching `ProjectScreen`'s edit handlers, `ProjectForm`,
+`nowPlayingStore` or `storage/importProject.ts`.
+
+- **Every manifest read-modify-write goes through `withManifestLock`**
+  (`storage/importProject.ts`). That covers add, remove, rename, move, the
+  metadata save and `patchProjectManifest` (mixer, click, markers, lyrics).
+  Edits to one project then run one at a time. A new function that rewrites
+  `manifest.json` must use it too, or a stale write can undo another edit,
+  or restore a track whose file was already deleted.
+- **Track order and names are display-only.** The engine keys stems by id,
+  so a rename or move patches the loaded snapshot in place
+  (`renameTrackLocal`/`reorderTracksLocal`) and never reloads. Both take the
+  project id and are no-ops for any other loaded song, because stem ids
+  repeat across songs. The exception is a move that brings a stem without a
+  waveform into the first 16 lanes, which needs a reload.
+- **A reload ends in `audioEngine.loadProject()`, which stops the
+  transport.** So:
+  - Any edit that ends in a reload (add, remove, metadata save, a
+    reload-needing move) takes `nowPlayingStore.holdPlayback()` in the same
+    synchronous step as its `transportIsRunning()` check, before any
+    `await`. It releases the hold in `finally`, after its reload. Every
+    control that starts playback checks `canStartPlayback()`: the
+    NowPlayingBar's play button and the desktop Space shortcut. Pause, stop
+    and seek are never locked.
+  - A reload-needing move is refused while playing, before anything is
+    saved. Don't defer a reload until playback stops: it would start right
+    when the performer may press play again.
+- **An edit's final reload must not replace a song the user chose since.**
+  Edits take `nowPlayingStore.loadGeneration()` when they start and reload
+  through `reloadUnlessSuperseded()`. Opening a song records the user's
+  choice even when it's already loaded and no load runs. That is tracked
+  apart from `requestId`, which only counts actual loads, so re-opening a
+  song never cancels its own reload still in flight.
+- **Moves run one at a time** (`moveInFlightRef`, arrows disabled), so each
+  move is computed from the order the previous one saved.
+- **A track name field only rolls back a failed rename if it's still the
+  field's newest attempt**, and it rolls back to the last name that actually
+  saved.
+
+## Known open issues (pre-existing, not fixed yet)
+
+Both were noticed while fixing PR #16 and are older than it. Neither has a
+test yet.
+
+1. **A finished load can replace a song the user went back to.** Song B is
+   loaded, the user starts opening song C, goes back and re-opens B before C
+   finishes decoding. `openProject(B)` takes the already-loaded fast path,
+   which records the choice but deliberately doesn't supersede loads (see
+   above), so C's load still completes and replaces B. B's screen then shows
+   a load error. A fix has to cancel loads of _other_ projects without
+   cancelling a reload of the same project, because that reload may carry an
+   edit.
+2. **Backing out of a new song mid-import probably deletes its folder.** This
+   is from reading the code, not reproduced. `discardIfEmptyDraft()` deletes
+   a filesystem project with no tracks when the user leaves it, and the Back
+   button stays active during an import. During a brand-new song's first
+   import, `entry.tracks` is still empty until the copy finishes, so Back
+   mid-copy would delete the folder `addStemsToProject` is copying into,
+   and drop the project from Redux. Likely fixes: don't discard while an
+   edit is in flight, or disable Back during a draft's first import.
+
 # Desktop app (`desktop/`)
 
 The desktop build is this app, rendered with react-native-web inside a Tauri
