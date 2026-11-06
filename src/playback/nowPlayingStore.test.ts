@@ -258,6 +258,54 @@ describe("nowPlayingStore", () => {
     });
   });
 
+  // A is loaded and B's slower load is in flight; going back to A (e.g. from
+  // the Now Playing bar) takes the fast path - no load runs - but it is still
+  // the user's choice, so B must not then replace A.
+  describe("going back to the loaded song while another song loads", () => {
+    it("cancels the other song's load (back during decoding)", async () => {
+      await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+      let finishB: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        finishB = resolve;
+      });
+      decodeMock.mockImplementationOnce(async (_ctx, source) => {
+        await gate;
+        return { manifest: source.manifest, trackBuffers: {} };
+      });
+      const loadSpy = jest.spyOn(audioEngine, "loadProject");
+      const openB = nowPlayingStore.openProject(entry("b"), ENGINE_OPTIONS);
+
+      await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+      finishB();
+
+      await expect(openB).rejects.toThrow("Superseded");
+      expect(loadSpy).not.toHaveBeenCalled();
+      expect(nowPlayingStore.getSnapshot().projectId).toBe("a");
+    });
+
+    it("cancels it at the final check too (back during a progress yield)", async () => {
+      await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+      const loadSpy = jest.spyOn(audioEngine, "loadProject");
+      let backToA: Promise<unknown> = Promise.resolve();
+      const onProgress = jest.fn((update: { phase: string }) => {
+        if (update.phase === "building") {
+          backToA = nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+        }
+      });
+
+      const openB = nowPlayingStore.openProject(
+        entry("b"),
+        ENGINE_OPTIONS,
+        onProgress,
+      );
+
+      await expect(openB).rejects.toThrow("Superseded");
+      await backToA;
+      expect(loadSpy).not.toHaveBeenCalled();
+      expect(nowPlayingStore.getSnapshot().projectId).toBe("a");
+    });
+  });
+
   describe("a load overtaken by a newer load", () => {
     function gatedDecode() {
       let open: () => void = () => {};

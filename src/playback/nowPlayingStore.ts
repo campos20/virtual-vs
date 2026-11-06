@@ -289,6 +289,20 @@ class NowPlayingStore {
     return promise;
   }
 
+  /**
+   * Whether a load must not install itself: a newer load was requested, or
+   * the user has since chosen a different song without one - re-opening
+   * the already-loaded song takes `openProject`'s fast path, which runs no
+   * load but records the choice. Without the second half, a slower load of
+   * another song still in flight would replace the song the user just went
+   * back to. A load always starts by recording its own project as the
+   * choice, so only a later, different choice rejects it - re-opening the
+   * same song never cancels a reload of that song (which may carry an edit).
+   */
+  private isStale(requestId: number, projectId: string): boolean {
+    return requestId !== this.requestId || this.intendedProjectId !== projectId;
+  }
+
   private async decodeAndLoad(
     entry: LibraryProjectEntry,
     { monitorMode, clickEnabled }: EngineOptions,
@@ -304,7 +318,7 @@ class NowPlayingStore {
 
     // Bail out early if this request is already stale - no point computing
     // waveforms for it. Not the check that matters, though: see below.
-    if (requestId !== this.requestId) {
+    if (this.isStale(requestId, entry.id)) {
       throw new SupersededLoadError();
     }
 
@@ -347,7 +361,7 @@ class NowPlayingStore {
     // so no newer request can arrive between this check, replacing the
     // engine's graph and publishing the snapshot - the graph and the
     // snapshot always describe the same, current project.
-    if (requestId !== this.requestId) {
+    if (this.isStale(requestId, entry.id)) {
       throw new SupersededLoadError();
     }
     audioEngine.loadProject(

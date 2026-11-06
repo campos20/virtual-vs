@@ -228,7 +228,10 @@ when touching `ProjectScreen`'s edit handlers, `ProjectForm`,
   through `reloadUnlessSuperseded()`. Opening a song records the user's
   choice even when it's already loaded and no load runs. That is tracked
   apart from `requestId`, which only counts actual loads, so re-opening a
-  song never cancels its own reload still in flight.
+  song never cancels its own reload still in flight. A load's final check
+  (`isStale`) also rejects it if the user has chosen a different song since,
+  so going back to the already-loaded song cancels a slower load of another
+  song still in flight.
 - **A load overtaken by a newer load of the same song resolves with that
   newer result** instead of rejecting (`loadFresh`/`latestLoad`). An edit's
   reload can overtake the song screen's own open of that song (the user
@@ -249,18 +252,9 @@ when touching `ProjectScreen`'s edit handlers, `ProjectForm`,
 
 ## Known open issues (pre-existing, not fixed yet)
 
-Both were noticed while fixing PR #16 and are older than it. Neither has a
-test yet.
+Noticed while fixing PR #16, and older than it. No test yet.
 
-1. **A finished load can replace a song the user went back to.** Song B is
-   loaded, the user starts opening song C, goes back and re-opens B before C
-   finishes decoding. `openProject(B)` takes the already-loaded fast path,
-   which records the choice but deliberately doesn't supersede loads (see
-   above), so C's load still completes and replaces B. B's screen then shows
-   a load error. A fix has to cancel loads of _other_ projects without
-   cancelling a reload of the same project, because that reload may carry an
-   edit.
-2. **Backing out of a new song mid-import probably deletes its folder.** This
+1. **Backing out of a new song mid-import probably deletes its folder.** This
    is from reading the code, not reproduced. `discardIfEmptyDraft()` deletes
    a filesystem project with no tracks when the user leaves it, and the Back
    button stays active during an import. During a brand-new song's first
