@@ -8,6 +8,7 @@ import { useSongScreenShortcuts } from "@/platform/desktop";
 import {
   addStemsToProject,
   deleteProjectDirectory,
+  moveStemInProject,
   removeStemFromProject,
   renameStemInProject,
   shareBundle,
@@ -55,6 +56,7 @@ import {
 import { SongListDrawer } from "@/ui/components/SongListDrawer";
 import { WaveformView } from "@/ui/components/WaveformView";
 import { neighbouringSongs, resolveSongSequence } from "@/ui/libraryTree";
+import { moveId } from "@/ui/reorder";
 import { radii, spacing, useThemeColors, type ThemeColors } from "@/ui/theme";
 import {
   getDocumentAsync,
@@ -177,7 +179,7 @@ export function ProjectScreen() {
   } = usePlayhead();
 
   /**
-   * Anything that edits a project ends in nowPlayingStore.reload(), and
+   * Anything that edits a project ends in a nowPlayingStore reload, and
    * AudioEngine.loadProject() opens with stop() + disposeTracks() - so an
    * import or a save mid-song would cut the song off and tear the graph
    * down. Nothing that can do that is reachable while the transport is
@@ -298,7 +300,17 @@ export function ProjectScreen() {
         // here any other way (Library, previous/next, a plain row tap in that drawer)
         // loads the song and stops, same as always; only this one path is
         // meant to carry straight on without a separate Play tap.
-        if (autoPlay === "1") audioEngine.play();
+        //
+        // Unless the play lock is held: an add/remove/save on this song may
+        // still be saving, and its reload would stop the song moments after
+        // it started. Then the song is left loaded and stopped, and the
+        // performer presses play once the button unlocks. It's not started
+        // automatically when the lock releases - a song starting on its own at
+        // some later, unpredictable moment is worse on stage than not
+        // starting.
+        if (autoPlay === "1" && nowPlayingStore.canStartPlayback()) {
+          audioEngine.play();
+        }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -341,21 +353,35 @@ export function ProjectScreen() {
     nowPlayingStore.setFolderContext(entry.id, folderId);
   }, [entry?.id, folderId, nowPlaying.projectId]);
 
-  /** Forces a fresh reload of the current project (its content actually changed) and re-seeds the store's mixer state from the result. */
-  const reloadAndSeed = useCallback(async () => {
-    if (!entry) return;
-    const { manifest } = await nowPlayingStore.reload(
-      entry,
-      { monitorMode, clickEnabled },
-      onProgress,
-    );
-    dispatch(
-      tracksInitializedForProject({
-        projectId: entry.id,
-        tracks: manifest.tracks,
-      }),
-    );
-  }, [entry, monitorMode, clickEnabled, dispatch, onProgress]);
+  /**
+   * Forces a fresh reload of the current project (its content actually
+   * changed) and re-seeds the store's mixer state from the result.
+   *
+   * `generation` is `nowPlayingStore.loadGeneration()` taken when the edit
+   * started. If another song has been opened since (the user navigated away
+   * while the edit's disk work ran), the reload is skipped rather than
+   * replacing the song they chose - see `reloadUnlessSuperseded`.
+   */
+  const reloadAndSeed = useCallback(
+    async (generation: number) => {
+      if (!entry) return;
+      const result = await nowPlayingStore.reloadUnlessSuperseded(
+        entry,
+        { monitorMode, clickEnabled },
+        generation,
+        onProgress,
+      );
+      if (!result) return;
+      const { manifest } = result;
+      dispatch(
+        tracksInitializedForProject({
+          projectId: entry.id,
+          tracks: manifest.tracks,
+        }),
+      );
+    },
+    [entry, monitorMode, clickEnabled, dispatch, onProgress],
+  );
 
   // Kills this screen's own rAF-driven waveform re-render loop before
   // navigating away - independent of whether the engine itself keeps
@@ -480,8 +506,8 @@ export function ProjectScreen() {
     if (transportIsRunning()) return;
     setFormError(null);
     setEditing(true);
-    // Otherwise cancelling out of the form would land back on the mixer
-    // with the drawer still open, right where the user tapped Edit from.
+    // Edit (or a keyboard shortcut) can be hit with the mixer open, and
+    // cancelling out of the form shouldn't land back on the open drawer.
     setMixerOpen(false);
   }
 
@@ -533,6 +559,11 @@ export function ProjectScreen() {
       setFormError(t.project.lockedWhilePlayingBody);
       return;
     }
+    // Held from the check above until the reload is done - through the file
+    // picker and the copy too, so the song can't be started during them and
+    // then cut off by the reload. See nowPlayingStore.holdPlayback.
+    const releasePlayback = nowPlayingStore.holdPlayback();
+    const generation = nowPlayingStore.loadGeneration();
     setFormError(null);
     try {
       const assets = await pickFiles();
@@ -548,11 +579,12 @@ export function ProjectScreen() {
       dispatch(
         projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }),
       );
-      await reloadAndSeed();
+      await reloadAndSeed(generation);
     } catch (e) {
       if (mountedRef.current)
         setFormError(e instanceof Error ? e.message : String(e));
     } finally {
+      releasePlayback();
       if (mountedRef.current) {
         setBusy(false);
         setStatus(null);
@@ -560,24 +592,58 @@ export function ProjectScreen() {
     }
   }
 
-  async function handleRemoveStem(stemId: string) {
+  /**
+   * Removing a track deletes this app's copy of its audio file, and there is
+   * no undo - so, like deleting a whole song, it asks first. The ✕ sits right
+   * next to the move arrows, which makes a stray tap easy.
+   */
+  function handleRemoveStem(stemId: string) {
+    if (transportIsRunning()) {
+      setFormError(t.project.lockedWhilePlayingBody);
+      return;
+    }
+    if (!entry?.sourceDir) return;
+    const name = entry.tracks.find((track) => track.id === stemId)?.name ?? "";
+    Alert.alert(
+      t.projectForm.removeConfirmTitle,
+      t.projectForm.removeConfirmBody(name),
+      [
+        { text: t.common.cancel, style: "cancel" },
+        {
+          text: t.projectForm.removeConfirmConfirm,
+          style: "destructive",
+          onPress: () => {
+            void removeStem(stemId);
+          },
+        },
+      ],
+    );
+  }
+
+  async function removeStem(stemId: string) {
+    // Re-checked: the transport may have started while the dialog was open.
     if (transportIsRunning()) {
       setFormError(t.project.lockedWhilePlayingBody);
       return;
     }
     setFormError(null);
     if (!entry?.sourceDir) return;
+    // Held through the manifest write (which may queue behind other edits)
+    // and the reload - see handleAddStems.
+    const releasePlayback = nowPlayingStore.holdPlayback();
+    const generation = nowPlayingStore.loadGeneration();
     setBusy(true);
     try {
       const updated = await removeStemFromProject(entry.sourceDir, stemId);
       dispatch(
         projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }),
       );
-      await reloadAndSeed();
+      await reloadAndSeed(generation);
     } catch (e) {
       if (mountedRef.current)
         setFormError(e instanceof Error ? e.message : String(e));
     } finally {
+      releasePlayback();
       if (mountedRef.current) setBusy(false);
     }
   }
@@ -601,12 +667,13 @@ export function ProjectScreen() {
   ): Promise<boolean> {
     setFormError(null);
     if (!entry?.sourceDir) return false;
+    const projectId = entry.id;
     try {
       const updated = await renameStemInProject(entry.sourceDir, stemId, name);
       dispatch(
-        projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }),
+        projectUpdated({ id: projectId, changes: { tracks: updated.tracks } }),
       );
-      nowPlayingStore.renameTrackLocal(stemId, name);
+      nowPlayingStore.renameTrackLocal(projectId, stemId, name);
       return true;
     } catch (e) {
       if (mountedRef.current)
@@ -615,12 +682,114 @@ export function ProjectScreen() {
     }
   }
 
+  /**
+   * Set while a move is saving (and, if it needs one, reloading). The arrows
+   * are disabled meanwhile and the handler refuses taps, so moves run
+   * strictly one at a time and each one is computed from the order the last
+   * one actually saved. The ref is what the handler trusts - a second tap
+   * can land before the re-render that disables the arrows.
+   */
+  const moveInFlightRef = useRef(false);
+  const [moveInFlight, setMoveInFlight] = useState(false);
+
+  /**
+   * Moves a track one place up or down. Like a rename, this is allowed while
+   * playing: track order is display-only (the engine keys every stem by id
+   * and starts them all from one shared time), so it patches the loaded
+   * project in place and never rebuilds the audio graph.
+   *
+   * The one exception is a project with more stems than have waveform lanes,
+   * where moving one into view needs its waveform computed - only a full
+   * reload can do that, and a reload ends by replacing the engine's
+   * transport. So that move:
+   * - is refused while playing, before anything is saved (playback can be
+   *   started from the NowPlayingBar while the editor is open);
+   * - when stopped, takes the play lock (`nowPlayingStore.holdPlayback`) in
+   *   the same synchronous step as that check and keeps it through the save
+   *   and the reload, so playback can't start in between and be cut off.
+   *   Deferring the reload until playback stops was rejected: it would start
+   *   right when the performer may press play.
+   *
+   * Moves are serialized (`moveInFlightRef`), so the order computed here is
+   * always the order the save will produce - which is what makes the "does
+   * this need a reload?" decision above reliable.
+   */
+  function handleMoveStem(stemId: string, direction: "up" | "down") {
+    if (!entry?.sourceDir || moveInFlightRef.current) return;
+    const sourceDir = entry.sourceDir;
+    const projectId = entry.id;
+    const ids = entry.tracks.map((track) => track.id);
+    const index = ids.indexOf(stemId);
+    if (index < 0) return;
+    const expected = moveId(ids, index, direction);
+    if (expected === ids) return; // already at that end of the list
+    const needsReload = nowPlayingStore.needsReloadToReorder(
+      projectId,
+      expected,
+    );
+    if (needsReload && transportIsRunning()) {
+      setFormError(t.project.lockedWhilePlayingBody);
+      return;
+    }
+    const releasePlayback = needsReload ? nowPlayingStore.holdPlayback() : null;
+    const generation = nowPlayingStore.loadGeneration();
+    moveInFlightRef.current = true;
+    setMoveInFlight(true);
+    setFormError(null);
+    (async () => {
+      const updated = await moveStemInProject(sourceDir, stemId, direction);
+      dispatch(
+        projectUpdated({ id: projectId, changes: { tracks: updated.tracks } }),
+      );
+      const patched = nowPlayingStore.reorderTracksLocal(
+        projectId,
+        updated.tracks.map((track) => track.id),
+      );
+      if (patched || nowPlayingStore.getSnapshot().projectId !== projectId) {
+        return;
+      }
+      // Only a reload can apply this order to the loaded project. Holding the
+      // play lock means the transport is still stopped. Without one, the move
+      // was expected to patch in place, so this is unexpected - reload only
+      // if that's safe right now, never under a playing song.
+      if (!releasePlayback && transportIsRunning()) {
+        if (mountedRef.current) setFormError(t.project.lockedWhilePlayingBody);
+        return;
+      }
+      const releaseForReload = releasePlayback
+        ? null
+        : nowPlayingStore.holdPlayback();
+      if (mountedRef.current) setBusy(true);
+      try {
+        await reloadAndSeed(generation);
+      } finally {
+        releaseForReload?.();
+        if (mountedRef.current) {
+          setBusy(false);
+          setStatus(null);
+        }
+      }
+    })()
+      .catch((e) => {
+        if (mountedRef.current)
+          setFormError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        releasePlayback?.();
+        moveInFlightRef.current = false;
+        if (mountedRef.current) setMoveInFlight(false);
+      });
+  }
+
   async function handleSubmit(values: ProjectFormValues) {
     if (transportIsRunning()) {
       setFormError(t.project.lockedWhilePlayingBody);
       return;
     }
     if (!entry?.sourceDir) return;
+    // Held through the manifest write and the reload - see handleAddStems.
+    const releasePlayback = nowPlayingStore.holdPlayback();
+    const generation = nowPlayingStore.loadGeneration();
     setBusy(true);
     setFormError(null);
     try {
@@ -628,11 +797,12 @@ export function ProjectScreen() {
       dispatch(projectUpdated({ id: entry.id, changes: values }));
       setEditing(false);
       // bpm may have changed, which adds or removes the click entirely.
-      await reloadAndSeed();
+      await reloadAndSeed(generation);
     } catch (e) {
       if (mountedRef.current)
         setFormError(e instanceof Error ? e.message : String(e));
     } finally {
+      releasePlayback();
       if (mountedRef.current) setBusy(false);
     }
   }
@@ -779,9 +949,16 @@ export function ProjectScreen() {
   }
 
   const canEdit = entry?.origin === "filesystem";
+  // The loaded waveforms, when this is the current project, so each track in
+  // the editor shows its audio like a DAW lane. Matched by id, not position,
+  // so they follow a track through a move.
+  const peaksById = new Map(
+    isCurrent ? nowPlaying.waveformTracks.map((w) => [w.id, w.peaks]) : [],
+  );
   const formStems = (entry?.tracks ?? []).map((t) => ({
     id: t.id,
     name: t.name,
+    peaks: peaksById.get(t.id),
   }));
   const headerTitle =
     (isCurrent ? nowPlaying.manifest?.title : undefined) ?? entry?.title ?? "";
@@ -838,20 +1015,47 @@ export function ProjectScreen() {
             onPress={handleBackFromProject}
             testID="back-button"
           />
-          {showControls && songSequence.length > 0 && (
-            <Pressable
-              onPress={() => setSongListOpen(true)}
-              style={({ pressed }) => [
-                styles.toolButton,
-                pressed && styles.pressed,
-              ]}
-              hitSlop={6}
-              testID="song-list-menu-button"
-              accessibilityLabel={t.project.songs}
-            >
-              <Text style={styles.toolButtonText}>{t.project.songs}</Text>
-            </Pressable>
-          )}
+          <View style={styles.headerActions}>
+            {/* Edit sits up here with the song's other "between songs"
+                actions, out of the toolbar the performer uses mid-song.
+                Shown but inert while playing - editing can rebuild the audio
+                graph, and a greyed-out button explains itself where a
+                missing one would just be confusing. */}
+            {showControls && canEdit && (
+              <Pressable
+                onPress={handleStartEditing}
+                disabled={isPlaying}
+                style={({ pressed }) => [
+                  styles.toolButton,
+                  isPlaying && styles.stepButtonDisabled,
+                  pressed && styles.pressed,
+                ]}
+                hitSlop={6}
+                testID="edit-button"
+                accessibilityLabel={t.project.edit}
+                accessibilityState={{ disabled: isPlaying }}
+                accessibilityHint={
+                  isPlaying ? t.project.lockedWhilePlaying : undefined
+                }
+              >
+                <Text style={styles.toolButtonText}>{t.project.edit}</Text>
+              </Pressable>
+            )}
+            {showControls && songSequence.length > 0 && (
+              <Pressable
+                onPress={() => setSongListOpen(true)}
+                style={({ pressed }) => [
+                  styles.toolButton,
+                  pressed && styles.pressed,
+                ]}
+                hitSlop={6}
+                testID="song-list-menu-button"
+                accessibilityLabel={t.project.songs}
+              >
+                <Text style={styles.toolButtonText}>{t.project.songs}</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
 
         <View style={styles.titleRow}>
@@ -1011,6 +1215,8 @@ export function ProjectScreen() {
           onAddStems={handleAddStems}
           onRemoveStem={handleRemoveStem}
           onRenameStem={handleRenameStem}
+          onMoveStem={handleMoveStem}
+          movesDisabled={moveInFlight}
           onSubmit={handleSubmit}
           onCancel={handleCancelEditing}
           onDelete={entry?.sourceDir ? handleDelete : undefined}
@@ -1050,8 +1256,8 @@ export function ProjectScreen() {
         {renderHeader()}
         <Text style={styles.error}>{error ?? t.project.loadFailed}</Text>
         {/* A failed load (e.g. a corrupted stem) is exactly when editing - to remove or
-            replace the offending stem - matters most, so this can't live only behind the
-            mixer drawer like the rest of Edit's access: there's no mixer to open here. */}
+            replace the offending stem - matters most. The header's Edit only shows for a
+            loaded song, so it's offered here as well. */}
         {canEdit && (
           <View style={styles.errorActions}>
             <HeaderButton
@@ -1143,13 +1349,8 @@ export function ProjectScreen() {
         onMonitorModeChange={handleMonitorModeChange}
         clickEnabled={clickEnabled}
         onClickEnabledChange={handleClickEnabledChange}
-        onEdit={canEdit ? handleStartEditing : undefined}
-        editDisabledReason={
-          isPlaying ? t.project.lockedWhilePlaying : undefined
-        }
-        // Hidden rather than disabled while playing: unlike Edit, which sits
-        // in the same row and explains itself, an export is a thing you do
-        // between sets - there's nothing useful to say about it mid-song.
+        // Hidden while playing: an export is a thing you do between sets -
+        // there's nothing useful to say about it mid-song.
         onExport={entry?.sourceDir && !isPlaying ? handleExport : undefined}
       />
     </SafeAreaView>
@@ -1194,6 +1395,11 @@ function createStyles(colors: ThemeColors) {
       alignItems: "center",
       justifyContent: "space-between",
       marginBottom: spacing.xs,
+    },
+    headerActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
     },
     titleRow: {
       flexDirection: "row",

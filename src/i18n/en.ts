@@ -84,18 +84,29 @@ export const en = {
     titleLabel: "TITLE",
     titlePlaceholder: "Project title",
     tempoLabel: "TEMPO (BPM)",
-    tempoPlaceholder: "Optional — leave empty for no click",
     tempoHintNone:
       "No tempo set, so this project plays without a metronome click.",
     tempoHintSet:
       "The click is generated from this tempo and sent to the cue (L) bus.",
     keyLabel: "KEY",
     keyPlaceholder: "e.g. A minor",
-    stemsLabel: "STEMS",
-    addAudioFiles: "Add Audio Files…",
-    noStemsYet: "No stems yet.",
-    remove: "Remove",
-    deleteProject: "Delete Project",
+    songSection: "SONG",
+    tracksSection: (count: number) => `TRACKS · ${count}`,
+    addTracks: "+ Add Tracks…",
+    noStemsYet:
+      "No tracks yet. Add audio files to start - each file becomes one track.",
+    tracksHint:
+      "Tap a track name to rename it. Use the arrows to change the track order.",
+    trackNameLabel: (position: number) => `Track ${position} name`,
+    moveTrackUp: (name: string) => `Move ${name} up`,
+    moveTrackDown: (name: string) => `Move ${name} down`,
+    removeTrack: (name: string) => `Remove ${name}`,
+    removeConfirmTitle: "Remove track?",
+    removeConfirmBody: (name: string) =>
+      `"${name}" will be removed from this song and its audio file deleted from this device.`,
+    removeConfirmConfirm: "Remove",
+    done: "Done",
+    deleteProject: "Delete Song",
   },
   progress: {
     copying: (name: string) => `Copying ${name}…`,

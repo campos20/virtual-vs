@@ -31,14 +31,6 @@ interface MixerDrawerProps {
   onMonitorModeChange: (mode: MonitorMode) => void;
   clickEnabled: boolean;
   onClickEnabledChange: (enabled: boolean) => void;
-  /** Omitted for a project that can't be edited - matches the old header's `canEdit` check. */
-  onEdit?: () => void;
-  /**
-   * When set, Edit is shown but inert, with this as the explanation. Editing
-   * rebuilds the audio graph, so it's unavailable mid-song - saying why beats
-   * a button that silently does nothing.
-   */
-  editDisabledReason?: string;
   /** Packs this project into a `.vvs` bundle and hands it to the share sheet. */
   onExport?: () => void;
 }
@@ -61,8 +53,6 @@ export function MixerDrawer({
   onMonitorModeChange,
   clickEnabled,
   onClickEnabledChange,
-  onEdit,
-  editDisabledReason,
   onExport,
 }: MixerDrawerProps) {
   const { t } = useTranslation();
@@ -86,9 +76,6 @@ export function MixerDrawer({
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle}>{t.project.mixer}</Text>
           <View style={styles.sheetHeaderActions}>
-            {/* Living behind the mixer drawer rather than on the main header means it takes a
-                deliberate tap to reach, not a stray one during a set - see AGENTS.md-adjacent
-                intent: the mixer already exists to keep rarely-touched controls out of the way. */}
             {onExport && (
               <HeaderButton
                 label={t.folder.export}
@@ -96,18 +83,6 @@ export function MixerDrawer({
                 testID="export-project-button"
               />
             )}
-            {onEdit &&
-              (editDisabledReason ? (
-                <Text style={styles.editLocked} testID="edit-locked-reason">
-                  {editDisabledReason}
-                </Text>
-              ) : (
-                <HeaderButton
-                  label={t.project.edit}
-                  onPress={onEdit}
-                  testID="edit-button"
-                />
-              ))}
             <Pressable
               onPress={onClose}
               hitSlop={8}
@@ -160,13 +135,6 @@ export function MixerDrawer({
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    editLocked: {
-      color: colors.textTertiary,
-      fontSize: 12,
-      fontWeight: "600",
-      maxWidth: 160,
-      textAlign: "right",
-    },
     sheet: {
       marginTop: "auto",
       maxHeight: "80%",

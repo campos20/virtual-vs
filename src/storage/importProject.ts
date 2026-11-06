@@ -46,6 +46,49 @@ function dedupe(candidate: string, used: Set<string>): string {
   return unique;
 }
 
+/**
+ * Tail of the queue of manifest edits for each project folder, keyed by
+ * `sourceDir`. See `withManifestLock`.
+ */
+const manifestLocks = new Map<string, Promise<void>>();
+
+/**
+ * Runs `work` once every earlier manifest edit for the same project folder
+ * has finished, so edits to one project happen strictly one at a time.
+ *
+ * Every function here that changes a project is a read-modify-write of its
+ * manifest.json, and those reads and writes are async - so two edits started
+ * close together (rename a track, then confirm removing another; a mixer
+ * change saving while a stem is being added) would otherwise both read the
+ * same manifest, and the one that saves last would silently undo the other.
+ * Worse, a stale write after a removal would put back a track whose audio
+ * file is already deleted, and the song would then fail to load.
+ *
+ * The lock lives here, in the storage layer, rather than in a screen, so it
+ * covers every caller - including `patchProjectManifest`, which the mixer,
+ * click, markers and lyrics save through from outside the project screen.
+ * A failed edit doesn't block the ones queued after it.
+ */
+function withManifestLock<T>(
+  sourceDir: string,
+  work: () => Promise<T>,
+): Promise<T> {
+  const key = sourceDir.replace(/\/+$/, "");
+  const previous = manifestLocks.get(key) ?? Promise.resolve();
+  const run = previous.then(work);
+  const tail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  manifestLocks.set(key, tail);
+  // Drop the entry once nothing else has queued behind it, so the map
+  // doesn't grow with every project ever edited.
+  void tail.then(() => {
+    if (manifestLocks.get(key) === tail) manifestLocks.delete(key);
+  });
+  return run;
+}
+
 /** Title a freshly created draft carries until the user names it. */
 export const DRAFT_PROJECT_TITLE = "Untitled";
 
@@ -188,25 +231,29 @@ export async function addStemsToProject(
   context?: BaseAudioContext,
   onProgress?: ProgressReporter,
 ): Promise<ProjectManifest> {
-  const directory = new Directory(sourceDir);
-  const manifest = await readProjectManifest(directory);
-  const used = existingNames(manifest);
+  return withManifestLock(sourceDir, async () => {
+    const directory = new Directory(sourceDir);
+    const manifest = await readProjectManifest(directory);
+    const used = existingNames(manifest);
 
-  const added = await copyStems(
-    directory,
-    files,
-    used.files,
-    used.trackIds,
-    context,
-    onProgress,
-  );
-  const updated: ProjectManifest = {
-    ...manifest,
-    tracks: [...manifest.tracks, ...added],
-  };
+    const added = await copyStems(
+      directory,
+      files,
+      used.files,
+      used.trackIds,
+      context,
+      onProgress,
+    );
+    const updated: ProjectManifest = {
+      ...manifest,
+      tracks: [...manifest.tracks, ...added],
+    };
 
-  new File(directory, "manifest.json").write(JSON.stringify(updated, null, 2));
-  return updated;
+    new File(directory, "manifest.json").write(
+      JSON.stringify(updated, null, 2),
+    );
+    return updated;
+  });
 }
 
 /**
@@ -218,24 +265,28 @@ export async function removeStemFromProject(
   sourceDir: string,
   trackId: string,
 ): Promise<ProjectManifest> {
-  const directory = new Directory(sourceDir);
-  const manifest = await readProjectManifest(directory);
+  return withManifestLock(sourceDir, async () => {
+    const directory = new Directory(sourceDir);
+    const manifest = await readProjectManifest(directory);
 
-  const track = manifest.tracks.find((t) => t.id === trackId);
-  if (!track) return manifest;
+    const track = manifest.tracks.find((t) => t.id === trackId);
+    if (!track) return manifest;
 
-  const updated: ProjectManifest = {
-    ...manifest,
-    tracks: manifest.tracks.filter((t) => t.id !== trackId),
-  };
-  new File(directory, "manifest.json").write(JSON.stringify(updated, null, 2));
+    const updated: ProjectManifest = {
+      ...manifest,
+      tracks: manifest.tracks.filter((t) => t.id !== trackId),
+    };
+    new File(directory, "manifest.json").write(
+      JSON.stringify(updated, null, 2),
+    );
 
-  // Manifest first, file second: a stale file with no manifest entry is
-  // harmless, whereas a manifest pointing at a deleted file fails to load.
-  const stem = new File(directory, track.file);
-  if (stem.exists) stem.delete();
+    // Manifest first, file second: a stale file with no manifest entry is
+    // harmless, whereas a manifest pointing at a deleted file fails to load.
+    const stem = new File(directory, track.file);
+    if (stem.exists) stem.delete();
 
-  return updated;
+    return updated;
+  });
 }
 
 /**
@@ -249,15 +300,57 @@ export async function renameStemInProject(
   trackId: string,
   name: string,
 ): Promise<ProjectManifest> {
-  const directory = new Directory(sourceDir);
-  const manifest = await readProjectManifest(directory);
+  return withManifestLock(sourceDir, async () => {
+    const directory = new Directory(sourceDir);
+    const manifest = await readProjectManifest(directory);
 
-  const updated: ProjectManifest = {
-    ...manifest,
-    tracks: manifest.tracks.map((t) => (t.id === trackId ? { ...t, name } : t)),
-  };
-  new File(directory, "manifest.json").write(JSON.stringify(updated, null, 2));
-  return updated;
+    const updated: ProjectManifest = {
+      ...manifest,
+      tracks: manifest.tracks.map((t) =>
+        t.id === trackId ? { ...t, name } : t,
+      ),
+    };
+    new File(directory, "manifest.json").write(
+      JSON.stringify(updated, null, 2),
+    );
+    return updated;
+  });
+}
+
+/**
+ * Moves a stem one place up or down the project's track list. Only the order
+ * of `manifest.tracks` changes - ids, files and mixer state stay as they
+ * were - so, like a rename, this never has to touch the audio graph: the
+ * engine keys every stem by id and schedules them all together regardless
+ * of order. Order only decides how the arrange view and mixer list them.
+ *
+ * Reads the order from disk rather than taking a whole new order from the
+ * caller, so a move always applies to what is actually saved. A move past
+ * either end, or of an unknown stem, leaves the manifest untouched.
+ */
+export async function moveStemInProject(
+  sourceDir: string,
+  trackId: string,
+  direction: "up" | "down",
+): Promise<ProjectManifest> {
+  return withManifestLock(sourceDir, async () => {
+    const directory = new Directory(sourceDir);
+    const manifest = await readProjectManifest(directory);
+
+    const index = manifest.tracks.findIndex((t) => t.id === trackId);
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (index < 0 || targetIndex < 0 || targetIndex >= manifest.tracks.length) {
+      return manifest;
+    }
+
+    const tracks = [...manifest.tracks];
+    [tracks[index], tracks[targetIndex]] = [tracks[targetIndex], tracks[index]];
+    const updated: ProjectManifest = { ...manifest, tracks };
+    new File(directory, "manifest.json").write(
+      JSON.stringify(updated, null, 2),
+    );
+    return updated;
+  });
 }
 
 /**
@@ -272,11 +365,15 @@ export async function patchProjectManifest(
   sourceDir: string,
   changes: Partial<ProjectManifest>,
 ): Promise<ProjectManifest> {
-  const directory = new Directory(sourceDir);
-  const manifest = await readProjectManifest(directory);
-  const updated: ProjectManifest = { ...manifest, ...changes };
-  new File(directory, "manifest.json").write(JSON.stringify(updated, null, 2));
-  return updated;
+  return withManifestLock(sourceDir, async () => {
+    const directory = new Directory(sourceDir);
+    const manifest = await readProjectManifest(directory);
+    const updated: ProjectManifest = { ...manifest, ...changes };
+    new File(directory, "manifest.json").write(
+      JSON.stringify(updated, null, 2),
+    );
+    return updated;
+  });
 }
 
 export interface ProjectMetadataEdits {
@@ -297,12 +394,16 @@ export async function updateProjectMetadata(
   sourceDir: string,
   edits: ProjectMetadataEdits,
 ): Promise<ProjectManifest> {
-  const directory = new Directory(sourceDir);
-  const manifest = await readProjectManifest(directory);
-  const updated: ProjectManifest = { ...manifest, ...edits };
-  // Clearing the tempo field has to actually drop it, otherwise the spread
-  // would leave the project's previous bpm (and its click) in place.
-  if (edits.bpm === undefined) delete updated.bpm;
-  new File(directory, "manifest.json").write(JSON.stringify(updated, null, 2));
-  return updated;
+  return withManifestLock(sourceDir, async () => {
+    const directory = new Directory(sourceDir);
+    const manifest = await readProjectManifest(directory);
+    const updated: ProjectManifest = { ...manifest, ...edits };
+    // Clearing the tempo field has to actually drop it, otherwise the spread
+    // would leave the project's previous bpm (and its click) in place.
+    if (edits.bpm === undefined) delete updated.bpm;
+    new File(directory, "manifest.json").write(
+      JSON.stringify(updated, null, 2),
+    );
+    return updated;
+  });
 }

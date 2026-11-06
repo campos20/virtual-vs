@@ -94,18 +94,29 @@ export const ptBR: TranslationDictionary = {
     titleLabel: "TÍTULO",
     titlePlaceholder: "Título do projeto",
     tempoLabel: "TEMPO (BPM)",
-    tempoPlaceholder: "Opcional — deixe em branco para não ter click",
     tempoHintNone:
       "Nenhum tempo definido, então este projeto toca sem o click do metrônomo.",
     tempoHintSet:
       "O click é gerado a partir deste tempo e enviado ao bus de cue (L).",
     keyLabel: "TOM",
     keyPlaceholder: "ex.: Lá menor",
-    stemsLabel: "FAIXAS",
-    addAudioFiles: "Adicionar Arquivos de Áudio…",
-    noStemsYet: "Nenhuma faixa ainda.",
-    remove: "Remover",
-    deleteProject: "Excluir Projeto",
+    songSection: "MÚSICA",
+    tracksSection: (count: number) => `FAIXAS · ${count}`,
+    addTracks: "+ Adicionar Faixas…",
+    noStemsYet:
+      "Nenhuma faixa ainda. Adicione arquivos de áudio para começar - cada arquivo vira uma faixa.",
+    tracksHint:
+      "Toque no nome de uma faixa para renomeá-la. Use as setas para mudar a ordem das faixas.",
+    trackNameLabel: (position: number) => `Nome da faixa ${position}`,
+    moveTrackUp: (name: string) => `Mover ${name} para cima`,
+    moveTrackDown: (name: string) => `Mover ${name} para baixo`,
+    removeTrack: (name: string) => `Remover ${name}`,
+    removeConfirmTitle: "Remover faixa?",
+    removeConfirmBody: (name: string) =>
+      `"${name}" será removida desta música e seu arquivo de áudio excluído deste dispositivo.`,
+    removeConfirmConfirm: "Remover",
+    done: "Concluir",
+    deleteProject: "Excluir Música",
   },
   progress: {
     copying: (name: string) => `Copiando ${name}…`,

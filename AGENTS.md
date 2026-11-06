@@ -191,6 +191,81 @@ Guardrails for touching `AudioEngine.ts`:
   suite whenever touching `scheduleSources`/`stopSources`/`play`/`pause`/
   `seek`.
 
+# Editing a song (manifest writes, reloads, playback)
+
+Editing runs while the app stays usable. The NowPlayingBar can start
+playback while the editor is open, and edits keep running after the user
+navigates away. These rules came out of the PR #16 review rounds. Keep them
+when touching `ProjectScreen`'s edit handlers, `ProjectForm`,
+`nowPlayingStore` or `storage/importProject.ts`.
+
+- **Every manifest read-modify-write goes through `withManifestLock`**
+  (`storage/importProject.ts`). That covers add, remove, rename, move, the
+  metadata save and `patchProjectManifest` (mixer, click, markers, lyrics).
+  Edits to one project then run one at a time. A new function that rewrites
+  `manifest.json` must use it too, or a stale write can undo another edit,
+  or restore a track whose file was already deleted.
+- **Track order and names are display-only.** The engine keys stems by id,
+  so a rename or move patches the loaded snapshot in place
+  (`renameTrackLocal`/`reorderTracksLocal`) and never reloads. Both take the
+  project id and are no-ops for any other loaded song, because stem ids
+  repeat across songs. The exception is a move that brings a stem without a
+  waveform into the first 16 lanes, which needs a reload.
+- **A reload ends in `audioEngine.loadProject()`, which stops the
+  transport.** So:
+  - Any edit that ends in a reload (add, remove, metadata save, a
+    reload-needing move) takes `nowPlayingStore.holdPlayback()` in the same
+    synchronous step as its `transportIsRunning()` check, before any
+    `await`. It releases the hold in `finally`, after its reload. Every
+    place that starts playback checks `canStartPlayback()`: the
+    NowPlayingBar's play button, the desktop Space shortcut, and the song
+    list's "Play next" autoplay (which then leaves the song loaded and
+    stopped, rather than starting it later on its own). A new place that
+    calls `audioEngine.play()` must check it too. Pause, stop and seek are
+    never locked.
+  - A reload-needing move is refused while playing, before anything is
+    saved. Don't defer a reload until playback stops: it would start right
+    when the performer may press play again.
+- **An edit's final reload must not replace a song the user chose since.**
+  Edits take `nowPlayingStore.loadGeneration()` when they start and reload
+  through `reloadUnlessSuperseded()`. Opening a song records the user's
+  choice even when it's already loaded and no load runs. That is tracked
+  apart from `requestId`, which only counts actual loads, so re-opening a
+  song never cancels its own reload still in flight. A load's final check
+  (`isStale`) also rejects it if the user has chosen a different song since,
+  so going back to the already-loaded song cancels a slower load of another
+  song still in flight.
+- **A load overtaken by a newer load of the same song resolves with that
+  newer result** instead of rejecting (`loadFresh`/`latestLoad`). An edit's
+  reload can overtake the song screen's own open of that song (the user
+  re-opened it mid-edit), and a rejection there would leave the screen on a
+  permanent "load failed". Overtaken by a different song, or by
+  `closeIfCurrent`, it still rejects with `SupersededLoadError`.
+- **No `await` between a load's final "still current?" check and its
+  commit** (`decodeAndLoad`). Every yield, including the progress-label
+  yields from `report()`, comes before the last `requestId` check. After it,
+  `audioEngine.loadProject()` and publishing the snapshot run synchronously.
+  Otherwise a song the user opened during a yield could be overwritten by
+  the stale one, in the engine or in the snapshot.
+- **Moves run one at a time** (`moveInFlightRef`, arrows disabled), so each
+  move is computed from the order the previous one saved.
+- **A track name field only rolls back a failed rename if it's still the
+  field's newest attempt**, and it rolls back to the last name that actually
+  saved.
+
+## Known open issues (pre-existing, not fixed yet)
+
+Noticed while fixing PR #16, and older than it. No test yet.
+
+1. **Backing out of a new song mid-import probably deletes its folder.** This
+   is from reading the code, not reproduced. `discardIfEmptyDraft()` deletes
+   a filesystem project with no tracks when the user leaves it, and the Back
+   button stays active during an import. During a brand-new song's first
+   import, `entry.tracks` is still empty until the copy finishes, so Back
+   mid-copy would delete the folder `addStemsToProject` is copying into,
+   and drop the project from Redux. Likely fixes: don't discard while an
+   edit is in flight, or disable Back during a draft's first import.
+
 # Desktop app (`desktop/`)
 
 The desktop build is this app, rendered with react-native-web inside a Tauri

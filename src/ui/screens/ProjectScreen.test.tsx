@@ -12,6 +12,7 @@ import {
   addStemsToProject,
   deleteProjectDirectory,
   getProjectSourceForEntry,
+  moveStemInProject,
   patchProjectManifest,
   removeStemFromProject,
   renameStemInProject,
@@ -48,6 +49,7 @@ jest.mock("@/storage", () => ({
   addStemsToProject: jest.fn(),
   removeStemFromProject: jest.fn(),
   renameStemInProject: jest.fn(),
+  moveStemInProject: jest.fn(),
   deleteProjectDirectory: jest.fn(),
   getProjectSourceForEntry: jest.fn(),
   patchProjectManifest: jest.fn(),
@@ -156,6 +158,15 @@ async function waitForMixer() {
   await waitFor(() =>
     expect(screen.getByTestId("mixer-menu-button")).toBeTruthy(),
   );
+}
+
+/** Makes the next Alert behave as if the user tapped the button labelled `label`. */
+function answerAlertWith(label: string) {
+  return jest
+    .spyOn(Alert, "alert")
+    .mockImplementation((_title, _message, buttons) => {
+      buttons?.find((button) => button.text === label)?.onPress?.();
+    });
 }
 
 /** Volume/output/click controls live behind the hamburger drawer now - open it before touching them. */
@@ -685,6 +696,28 @@ describe("ProjectScreen - quick switch between songs in a folder", () => {
       expect(audioEngine.getTransportState()).toBe("playing"),
     );
   });
+
+  // An add/remove/save on this song may still be saving (the user left the
+  // editor and came back through Play next), and its reload would stop the
+  // song moments after it started. It's left loaded and stopped instead.
+  it("doesn't autoplay while an edit still holds the play lock", async () => {
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: threeStemProject,
+      resolveFile: () => 0,
+    });
+    const releaseEdit = nowPlayingStore.holdPlayback();
+    mockParams = { projectId: threeStemProject.id, autoPlay: "1" };
+    const store = createStore();
+    store.dispatch(projectAdded(threeStemProject));
+    renderWithStore(<ProjectScreen />, store);
+
+    await waitForMixer();
+    expect(audioEngine.getTransportState()).not.toBe("playing");
+
+    // And it doesn't start later on its own when the lock releases.
+    act(() => releaseEdit());
+    expect(audioEngine.getTransportState()).not.toBe("playing");
+  });
 });
 
 describe("ProjectScreen - lyrics", () => {
@@ -897,9 +930,9 @@ describe("ProjectScreen - editing in place", () => {
     return renderWithStore(<ProjectScreen />, store);
   }
 
-  // Edit lives behind the mixer drawer now, not in the main header, so a
-  // stray tap during a set can't land on it - it takes opening the mixer first.
-  it("keeps Edit out of the header and reachable only through the mixer once loaded", async () => {
+  // Editing the song is a song-level action, so it's in the header - not
+  // hidden inside the mixer, where nobody would look for it.
+  it("offers Edit in the header once loaded, and not again inside the mixer", async () => {
     (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
       manifest: filesystemProject,
       resolveFile: () => 0,
@@ -907,10 +940,13 @@ describe("ProjectScreen - editing in place", () => {
 
     renderEditable();
     await waitForMixer();
-    expect(screen.queryByTestId("edit-button")).toBeNull();
+    expect(screen.getByTestId("edit-button")).toBeTruthy();
 
     openMixer();
-    expect(screen.getByTestId("edit-button")).toBeTruthy();
+    expect(screen.getAllByTestId("edit-button")).toHaveLength(1);
+
+    fireEvent.press(screen.getByTestId("edit-button"));
+    expect(screen.getByTestId("save-button")).toBeTruthy();
   });
 
   // A failed load (e.g. a corrupted stem) is exactly when the user needs to
@@ -1058,6 +1094,7 @@ describe("ProjectScreen - editing in place", () => {
       tracks: filesystemProject.tracks.filter((t) => t.id !== "bass"),
     });
 
+    answerAlertWith("Remove");
     const { store } = renderEditable();
     await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
     fireEvent.press(screen.getByTestId("edit-button"));
@@ -1114,6 +1151,147 @@ describe("ProjectScreen - editing in place", () => {
     );
   });
 
+  describe("overlapping renames of one track", () => {
+    /** Each rename call gets its own promise, settled by the test. */
+    function controlledRenames() {
+      const calls: {
+        resolve: (value: unknown) => void;
+        reject: (error: Error) => void;
+      }[] = [];
+      (renameStemInProject as jest.Mock).mockImplementation(
+        (_dir: string, stemId: string, name: string) =>
+          new Promise((resolve, reject) => {
+            calls.push({
+              resolve: () =>
+                resolve({
+                  ...filesystemProject,
+                  tracks: filesystemProject.tracks.map((t) =>
+                    t.id === stemId ? { ...t, name } : t,
+                  ),
+                }),
+              reject,
+            });
+          }),
+      );
+      return calls;
+    }
+
+    async function renameTwice() {
+      renderEditable();
+      await waitFor(() =>
+        expect(screen.getByTestId("edit-button")).toBeTruthy(),
+      );
+      fireEvent.press(screen.getByTestId("edit-button"));
+      const field = screen.getByTestId("rename-stem-bass");
+      fireEvent.changeText(field, "First");
+      fireEvent(field, "blur");
+      fireEvent.changeText(field, "Second");
+      fireEvent(field, "blur");
+      await waitFor(() => expect(renameStemInProject).toHaveBeenCalledTimes(2));
+      return field;
+    }
+
+    it("keeps the newer name when an older rename fails after it", async () => {
+      const calls = controlledRenames();
+      const field = await renameTwice();
+
+      await act(async () => calls[0].reject(new Error("disk busy")));
+      expect(field.props.value).toBe("Second");
+
+      await act(async () => calls[1].resolve(undefined));
+      expect(field.props.value).toBe("Second");
+    });
+
+    it("reverts to the last saved name, not the original, when the newer rename fails", async () => {
+      const calls = controlledRenames();
+      const field = await renameTwice();
+
+      await act(async () => calls[0].resolve(undefined));
+      await act(async () => calls[1].reject(new Error("disk busy")));
+
+      expect(field.props.value).toBe("First");
+    });
+
+    it("doesn't throw away text typed since, when a rename fails", async () => {
+      const calls = controlledRenames();
+      renderEditable();
+      await waitFor(() =>
+        expect(screen.getByTestId("edit-button")).toBeTruthy(),
+      );
+      fireEvent.press(screen.getByTestId("edit-button"));
+      const field = screen.getByTestId("rename-stem-bass");
+      fireEvent.changeText(field, "First");
+      fireEvent(field, "blur");
+      await waitFor(() => expect(renameStemInProject).toHaveBeenCalled());
+
+      fireEvent.changeText(field, "Still typing");
+      await act(async () => calls[0].reject(new Error("disk busy")));
+
+      expect(field.props.value).toBe("Still typing");
+    });
+  });
+
+  // The write can land after another song has loaded (it may queue behind
+  // other manifest edits), and stem ids like "bass" repeat across songs.
+  it("doesn't rename the same stem id in a song loaded while the rename saved", async () => {
+    let finishRename: () => void = () => {};
+    (renameStemInProject as jest.Mock).mockReturnValue(
+      new Promise((resolve) => {
+        finishRename = () =>
+          resolve({
+            ...filesystemProject,
+            tracks: filesystemProject.tracks.map((t) =>
+              t.id === "bass" ? { ...t, name: "Low End" } : t,
+            ),
+          });
+      }),
+    );
+    const { store } = renderEditable();
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
+    fireEvent.press(screen.getByTestId("edit-button"));
+
+    const field = screen.getByTestId("rename-stem-bass");
+    fireEvent.changeText(field, "Low End");
+    fireEvent(field, "blur");
+    await waitFor(() => expect(renameStemInProject).toHaveBeenCalled());
+
+    // Another song, with its own "bass" stem, becomes the loaded one.
+    const otherSong = {
+      ...threeStemProject,
+      id: "other-song",
+      sourceDir: "file:///mock/document/projects/other-song",
+    };
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: otherSong,
+      resolveFile: () => 0,
+    });
+    await act(async () => {
+      await nowPlayingStore.openProject(otherSong, {
+        monitorMode: "split",
+        clickEnabled: true,
+      });
+    });
+
+    await act(async () => finishRename());
+
+    await waitFor(() =>
+      expect(
+        store
+          .getState()
+          .projects.entities["my-song"]?.tracks.find((t) => t.id === "bass")
+          ?.name,
+      ).toBe("Low End"),
+    );
+    const loaded = nowPlayingStore.getSnapshot();
+    expect(loaded.projectId).toBe("other-song");
+    expect(loaded.manifest?.tracks.find((t) => t.id === "bass")?.name).toBe(
+      "Bass",
+    );
+    expect(loaded.waveformTracks.find((t) => t.id === "bass")?.name).toBe(
+      "Bass",
+    );
+  });
+
   it("ignores an empty rename instead of blanking the stem name", async () => {
     renderEditable();
     await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
@@ -1146,6 +1324,64 @@ describe("ProjectScreen - editing in place", () => {
     await waitFor(() => expect(renameStemInProject).toHaveBeenCalled());
     await waitFor(() => expect(bassNameInput.props.value).toBe("Bass"));
     expect(screen.getByText("disk full")).toBeTruthy();
+  });
+
+  // Removing deletes the stem's audio file with no undo, and the ✕ sits right
+  // next to the move arrows - so it must never happen on one tap.
+  it("asks before removing a stem, and keeps it if dismissed", async () => {
+    const alertSpy = answerAlertWith("Cancel");
+    renderEditable();
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
+    fireEvent.press(screen.getByTestId("edit-button"));
+    fireEvent.press(screen.getByTestId("remove-stem-bass"));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      "Remove track?",
+      expect.stringContaining("Bass"),
+      expect.any(Array),
+    );
+    expect(removeStemFromProject).not.toHaveBeenCalled();
+  });
+
+  it("moves a stem through to the project folder and reorders the editor", async () => {
+    const reversed = [...filesystemProject.tracks].reverse();
+    (moveStemInProject as jest.Mock).mockResolvedValue({
+      ...filesystemProject,
+      tracks: reversed,
+    });
+
+    const { store } = renderEditable();
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
+    fireEvent.press(screen.getByTestId("edit-button"));
+    fireEvent.press(screen.getByTestId("stem-keys-move-up"));
+
+    await waitFor(() =>
+      expect(moveStemInProject).toHaveBeenCalledWith(
+        filesystemProject.sourceDir,
+        "keys",
+        "up",
+      ),
+    );
+    await waitFor(() =>
+      expect(
+        store.getState().projects.entities["my-song"]?.tracks.map((t) => t.id),
+      ).toEqual(["keys", "bass"]),
+    );
+    const lanes = within(screen.getByTestId("track-list"))
+      .getAllByTestId(/^track-lane-/)
+      .map((lane) => lane.props.testID);
+    expect(lanes).toEqual(["track-lane-keys", "track-lane-bass"]);
+  });
+
+  it("can't move the first track up or the last track down", async () => {
+    renderEditable();
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
+    fireEvent.press(screen.getByTestId("edit-button"));
+
+    fireEvent.press(screen.getByTestId("stem-bass-move-up"));
+    fireEvent.press(screen.getByTestId("stem-keys-move-down"));
+
+    expect(moveStemInProject).not.toHaveBeenCalled();
   });
 });
 
@@ -1246,25 +1482,25 @@ describe("ProjectScreen - locked while playing", () => {
     audioEngine.stop();
   });
 
-  it("offers no Edit button while the transport is running", async () => {
+  it("greys Edit out while the transport is running, saying why", async () => {
     renderEditing();
     await waitForMixer();
-    audioEngine.play();
+    act(() => audioEngine.play());
 
-    openMixer();
+    const edit = screen.getByTestId("edit-button");
+    expect(edit.props.accessibilityState).toMatchObject({ disabled: true });
+    expect(edit.props.accessibilityHint).toBe("Stop playback to edit");
 
-    expect(screen.queryByTestId("edit-button")).toBeNull();
-    expect(screen.getByTestId("edit-locked-reason")).toBeTruthy();
+    fireEvent.press(edit);
+    expect(screen.queryByTestId("save-button")).toBeNull();
   });
 
   it("offers Edit when the transport is stopped", async () => {
     renderEditing();
     await waitForMixer();
 
-    openMixer();
-
-    expect(screen.getByTestId("edit-button")).toBeTruthy();
-    expect(screen.queryByTestId("edit-locked-reason")).toBeNull();
+    const edit = screen.getByTestId("edit-button");
+    expect(edit.props.accessibilityState).toMatchObject({ disabled: false });
   });
 
   // The buttons are hidden, but a stale tap or a race must not get through
@@ -1273,7 +1509,6 @@ describe("ProjectScreen - locked while playing", () => {
   it("refuses to import, remove or save while playing, even if invoked directly", async () => {
     renderEditing();
     await waitForMixer();
-    openMixer();
     fireEvent.press(screen.getByTestId("edit-button"));
 
     audioEngine.play();
@@ -1302,7 +1537,6 @@ describe("ProjectScreen - locked while playing", () => {
     (renameStemInProject as jest.Mock).mockResolvedValue(filesystemProject);
     renderEditing();
     await waitForMixer();
-    openMixer();
     fireEvent.press(screen.getByTestId("edit-button"));
 
     audioEngine.play();
@@ -1312,6 +1546,475 @@ describe("ProjectScreen - locked while playing", () => {
 
     await waitFor(() => expect(renameStemInProject).toHaveBeenCalled());
     expect(audioEngine.getTransportState()).toBe("playing");
+  });
+});
+
+// Add, remove and save each check the transport, then wait (file picker,
+// copying, a manifest write) before reloading. Play is held locked from that
+// check until the reload ends, so a song can't be started in the wait and
+// then cut off by the reload.
+describe("ProjectScreen - play stays locked through an edit's whole reload", () => {
+  function deferred<T>() {
+    let resolve: (value: T) => void = () => {};
+    let reject: (error: Error) => void = () => {};
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
+
+  async function renderInEditMode() {
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: filesystemProject,
+      resolveFile: () => 0,
+    });
+    mockParams = { projectId: "my-song" };
+    const store = createStore();
+    store.dispatch(projectAdded(filesystemProject));
+    renderWithStore(<ProjectScreen />, store);
+    await waitForMixer();
+    fireEvent.press(screen.getByTestId("edit-button"));
+    expect(nowPlayingStore.canStartPlayback()).toBe(true);
+  }
+
+  it("locks from Add Tracks through the picker, the copy and the reload", async () => {
+    await renderInEditMode();
+    const picker = deferred<unknown>();
+    const copy = deferred<unknown>();
+    pickerMock.mockReturnValue(picker.promise);
+    (addStemsToProject as jest.Mock).mockReturnValue(copy.promise);
+
+    fireEvent.press(screen.getByTestId("pick-files-button"));
+    // While the file picker is open.
+    expect(nowPlayingStore.canStartPlayback()).toBe(false);
+
+    await act(async () => {
+      picker.resolve({
+        canceled: false,
+        assets: [asset("gtr.wav", "file:///tmp/gtr.wav")],
+      });
+    });
+    // While the stems are being copied in.
+    await waitFor(() => expect(addStemsToProject).toHaveBeenCalled());
+    expect(nowPlayingStore.canStartPlayback()).toBe(false);
+
+    await act(async () => {
+      copy.resolve(filesystemProject);
+    });
+    await waitFor(() => expect(nowPlayingStore.canStartPlayback()).toBe(true));
+  });
+
+  it("unlocks when the picker is cancelled", async () => {
+    await renderInEditMode();
+    pickerMock.mockResolvedValue({ canceled: true, assets: null });
+
+    fireEvent.press(screen.getByTestId("pick-files-button"));
+
+    await waitFor(() => expect(nowPlayingStore.canStartPlayback()).toBe(true));
+  });
+
+  it("unlocks when adding fails", async () => {
+    await renderInEditMode();
+    pickerMock.mockResolvedValue({
+      canceled: false,
+      assets: [asset("gtr.wav", "file:///tmp/gtr.wav")],
+    });
+    (addStemsToProject as jest.Mock).mockRejectedValue(new Error("disk full"));
+
+    fireEvent.press(screen.getByTestId("pick-files-button"));
+
+    await waitFor(() => expect(screen.getByText("disk full")).toBeTruthy());
+    expect(nowPlayingStore.canStartPlayback()).toBe(true);
+  });
+
+  it("locks while a removal saves and reloads", async () => {
+    await renderInEditMode();
+    answerAlertWith("Remove");
+    const removal = deferred<unknown>();
+    (removeStemFromProject as jest.Mock).mockReturnValue(removal.promise);
+
+    fireEvent.press(screen.getByTestId("remove-stem-bass"));
+    expect(nowPlayingStore.canStartPlayback()).toBe(false);
+
+    await act(async () => {
+      removal.resolve(filesystemProject);
+    });
+    await waitFor(() => expect(nowPlayingStore.canStartPlayback()).toBe(true));
+  });
+
+  it("locks while the song info saves and reloads", async () => {
+    await renderInEditMode();
+    const save = deferred<unknown>();
+    (updateProjectMetadata as jest.Mock).mockReturnValue(save.promise);
+
+    fireEvent.press(screen.getByTestId("save-button"));
+    expect(nowPlayingStore.canStartPlayback()).toBe(false);
+
+    await act(async () => {
+      save.resolve(filesystemProject);
+    });
+    await waitFor(() => expect(nowPlayingStore.canStartPlayback()).toBe(true));
+  });
+});
+
+// Edits keep running after the user navigates away, and only reload once
+// their disk work is done. If another song was opened meanwhile, the late
+// reload must not replace it.
+describe("ProjectScreen - an edit finishing after another song was opened", () => {
+  const otherSong: LibraryProjectEntry = {
+    ...threeStemProject,
+    id: "other-song",
+    sourceDir: "file:///mock/document/projects/other-song",
+  };
+
+  async function renderInEditMode() {
+    (getProjectSourceForEntry as jest.Mock).mockImplementation(
+      async (e: LibraryProjectEntry) => ({ manifest: e, resolveFile: () => 0 }),
+    );
+    mockParams = { projectId: "my-song" };
+    const store = createStore();
+    store.dispatch(projectAdded(filesystemProject));
+    const rendered = renderWithStore(<ProjectScreen />, store);
+    await waitForMixer();
+    fireEvent.press(screen.getByTestId("edit-button"));
+    return rendered;
+  }
+
+  async function openOtherSong() {
+    await act(async () => {
+      await nowPlayingStore.openProject(otherSong, {
+        monitorMode: "split",
+        clickEnabled: true,
+      });
+    });
+  }
+
+  it("keeps the other song loaded when a stem import finishes late, but saves the import", async () => {
+    const { store } = await renderInEditMode();
+    let finishCopy: () => void = () => {};
+    pickerMock.mockResolvedValue({
+      canceled: false,
+      assets: [asset("gtr.wav", "file:///tmp/gtr.wav")],
+    });
+    const withGuitar = {
+      ...filesystemProject,
+      tracks: [
+        ...filesystemProject.tracks,
+        {
+          id: "gtr",
+          name: "gtr",
+          file: "gtr.wav",
+          gain: 1,
+          bus: "main" as const,
+        },
+      ],
+    };
+    (addStemsToProject as jest.Mock).mockReturnValue(
+      new Promise((resolve) => {
+        finishCopy = () => resolve(withGuitar);
+      }),
+    );
+
+    fireEvent.press(screen.getByTestId("pick-files-button"));
+    await waitFor(() => expect(addStemsToProject).toHaveBeenCalled());
+    await openOtherSong();
+    const loadSpy = jest.spyOn(audioEngine, "loadProject");
+
+    await act(async () => finishCopy());
+
+    await waitFor(() =>
+      expect(
+        store.getState().projects.entities["my-song"]?.tracks,
+      ).toHaveLength(3),
+    );
+    expect(loadSpy).not.toHaveBeenCalled();
+    expect(nowPlayingStore.getSnapshot().projectId).toBe("other-song");
+    await waitFor(() => expect(nowPlayingStore.canStartPlayback()).toBe(true));
+  });
+
+  // A brand-new song has no stems, so its screen never loads anything - the
+  // song already loaded (B) stays loaded while stems are added to it. Going
+  // back to B is then a no-op load, which must still count as choosing B.
+  it("keeps the already-loaded song when the user goes back to it during a new song's first import", async () => {
+    const draft: LibraryProjectEntry = {
+      id: "untitled-abc",
+      title: "Untitled",
+      key: "",
+      tracks: [],
+      sections: [],
+      origin: "filesystem",
+      sourceDir: "file:///mock/document/projects/untitled-abc",
+    };
+    (getProjectSourceForEntry as jest.Mock).mockImplementation(
+      async (e: LibraryProjectEntry) => ({ manifest: e, resolveFile: () => 0 }),
+    );
+    await openOtherSong(); // B is the loaded song
+    mockParams = { projectId: draft.id };
+    const store = createStore();
+    store.dispatch(projectAdded(draft));
+    renderWithStore(<ProjectScreen />, store);
+    expect(screen.getByTestId("pick-files-button")).toBeTruthy();
+
+    let finishCopy: () => void = () => {};
+    pickerMock.mockResolvedValue({
+      canceled: false,
+      assets: [asset("gtr.wav", "file:///tmp/gtr.wav")],
+    });
+    (addStemsToProject as jest.Mock).mockReturnValue(
+      new Promise((resolve) => {
+        finishCopy = () =>
+          resolve({
+            ...draft,
+            tracks: [
+              {
+                id: "gtr",
+                name: "gtr",
+                file: "gtr.wav",
+                gain: 1,
+                bus: "main" as const,
+              },
+            ],
+          });
+      }),
+    );
+    fireEvent.press(screen.getByTestId("pick-files-button"));
+    await waitFor(() => expect(addStemsToProject).toHaveBeenCalled());
+
+    await openOtherSong(); // back to B - already loaded, so no load runs
+    const loadSpy = jest.spyOn(audioEngine, "loadProject");
+    await act(async () => finishCopy());
+
+    await waitFor(() =>
+      expect(store.getState().projects.entities[draft.id]?.tracks).toHaveLength(
+        1,
+      ),
+    );
+    expect(loadSpy).not.toHaveBeenCalled();
+    expect(nowPlayingStore.getSnapshot().projectId).toBe("other-song");
+  });
+
+  // The user re-opens the edited song while its edit is still saving: the
+  // screen's open of it is then overtaken by the edit's reload of the same
+  // song. The screen must show the song, not a load failure.
+  it("shows the song, not a load error, when its own open is overtaken by an edit's reload", async () => {
+    let finishOpen: () => void = () => {};
+    const openGate = new Promise<void>((resolve) => {
+      finishOpen = resolve;
+    });
+    (getProjectSourceForEntry as jest.Mock)
+      .mockImplementationOnce(async (e: LibraryProjectEntry) => {
+        await openGate;
+        return { manifest: e, resolveFile: () => 0 };
+      })
+      .mockImplementation(async (e: LibraryProjectEntry) => ({
+        manifest: e,
+        resolveFile: () => 0,
+      }));
+    mockParams = { projectId: "my-song" };
+    const store = createStore();
+    store.dispatch(projectAdded(filesystemProject));
+    renderWithStore(<ProjectScreen />, store);
+    await waitFor(() =>
+      expect(getProjectSourceForEntry).toHaveBeenCalledTimes(1),
+    );
+
+    // The edit (started from an earlier visit to this song) reloads it.
+    await act(async () => {
+      await nowPlayingStore.reload(filesystemProject, {
+        monitorMode: "split",
+        clickEnabled: true,
+      });
+    });
+    await act(async () => finishOpen());
+
+    await waitForMixer();
+    expect(screen.queryByText(/Superseded/)).toBeNull();
+  });
+
+  it("keeps the other song loaded when a song info save finishes late", async () => {
+    await renderInEditMode();
+    let finishSave: () => void = () => {};
+    (updateProjectMetadata as jest.Mock).mockReturnValue(
+      new Promise((resolve) => {
+        finishSave = () => resolve(filesystemProject);
+      }),
+    );
+
+    fireEvent.press(screen.getByTestId("save-button"));
+    await openOtherSong();
+    const loadSpy = jest.spyOn(audioEngine, "loadProject");
+
+    await act(async () => finishSave());
+
+    await waitFor(() => expect(nowPlayingStore.canStartPlayback()).toBe(true));
+    expect(loadSpy).not.toHaveBeenCalled();
+    expect(nowPlayingStore.getSnapshot().projectId).toBe("other-song");
+  });
+});
+
+// The arrange view only computes waveforms for its first 16 lanes, so in a
+// song with more stems, moving one into those lanes needs a full reload -
+// which rebuilds the audio graph and so can't happen mid-song.
+describe("ProjectScreen - reordering past the waveform lanes", () => {
+  const manyStems: LibraryProjectEntry = {
+    id: "big-song",
+    title: "Big Song",
+    bpm: 100,
+    key: "",
+    tracks: Array.from({ length: 17 }, (_, i) => ({
+      id: `t${i + 1}`,
+      name: `Track ${i + 1}`,
+      file: `t${i + 1}.wav`,
+      gain: 1,
+      bus: "main" as const,
+    })),
+    sections: [],
+    origin: "filesystem",
+    sourceDir: "file:///mock/document/projects/big-song",
+  };
+  const ids = manyStems.tracks.map((t) => t.id);
+  /** t17 swapped with t16 - the move that brings t17 into the lanes. */
+  const t17Up = [...ids.slice(0, 15), "t17", "t16"];
+
+  function manifestWithOrder(order: string[]) {
+    return {
+      ...manyStems,
+      tracks: order.map((id) => manyStems.tracks.find((t) => t.id === id)!),
+    };
+  }
+
+  async function renderInEditMode() {
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: manyStems,
+      resolveFile: () => 0,
+    });
+    mockParams = { projectId: "big-song" };
+    const store = createStore();
+    store.dispatch(projectAdded(manyStems));
+    const rendered = renderWithStore(<ProjectScreen />, store);
+    await waitForMixer();
+    fireEvent.press(screen.getByTestId("edit-button"));
+    return rendered;
+  }
+
+  afterEach(() => {
+    audioEngine.stop();
+  });
+
+  it("refuses the move while playing, before saving anything", async () => {
+    const { store } = await renderInEditMode();
+    act(() => audioEngine.play());
+    const loadSpy = jest.spyOn(audioEngine, "loadProject");
+
+    fireEvent.press(screen.getByTestId("stem-t17-move-up"));
+
+    expect(moveStemInProject).not.toHaveBeenCalled();
+    expect(screen.getByText(/Stop playback first/)).toBeTruthy();
+    expect(loadSpy).not.toHaveBeenCalled();
+    expect(audioEngine.getTransportState()).toBe("playing");
+    expect(
+      store.getState().projects.entities["big-song"]?.tracks.map((t) => t.id),
+    ).toEqual(ids);
+  });
+
+  // Moves within the lanes are display-only, so they stay allowed mid-song.
+  it("still allows moves inside the lanes while playing", async () => {
+    (moveStemInProject as jest.Mock).mockResolvedValue(
+      manifestWithOrder(["t2", "t1", ...ids.slice(2)]),
+    );
+    await renderInEditMode();
+    act(() => audioEngine.play());
+
+    fireEvent.press(screen.getByTestId("stem-t2-move-up"));
+
+    await waitFor(() => expect(moveStemInProject).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(
+        nowPlayingStore.getSnapshot().manifest?.tracks.map((t) => t.id),
+      ).toEqual(["t2", "t1", ...ids.slice(2)]),
+    );
+    expect(audioEngine.getTransportState()).toBe("playing");
+  });
+
+  it("saves the move and reloads when stopped", async () => {
+    (moveStemInProject as jest.Mock).mockResolvedValue(
+      manifestWithOrder(t17Up),
+    );
+    await renderInEditMode();
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: manifestWithOrder(t17Up),
+      resolveFile: () => 0,
+    });
+    const loadSpy = jest.spyOn(audioEngine, "loadProject");
+
+    fireEvent.press(screen.getByTestId("stem-t17-move-up"));
+
+    await waitFor(() => expect(loadSpy).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(
+        nowPlayingStore.getSnapshot().waveformTracks.map((w) => w.id),
+      ).toContain("t17"),
+    );
+  });
+
+  // Playback must not be able to start between the tap and the reload - the
+  // reload replaces the engine's transport and would cut the song off.
+  it("locks play from the tap until the reload is done", async () => {
+    let finishSave: () => void = () => {};
+    (moveStemInProject as jest.Mock).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishSave = () => resolve(manifestWithOrder(t17Up));
+        }),
+    );
+    await renderInEditMode();
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: manifestWithOrder(t17Up),
+      resolveFile: () => 0,
+    });
+
+    fireEvent.press(screen.getByTestId("stem-t17-move-up"));
+    expect(nowPlayingStore.canStartPlayback()).toBe(false);
+
+    await waitFor(() => expect(moveStemInProject).toHaveBeenCalled());
+    await act(async () => finishSave());
+    await waitFor(() =>
+      expect(
+        nowPlayingStore.getSnapshot().waveformTracks.map((w) => w.id),
+      ).toContain("t17"),
+    );
+    await waitFor(() => expect(nowPlayingStore.canStartPlayback()).toBe(true));
+  });
+
+  // Each move is computed from the order on screen, so overlapping moves
+  // would each be computed from the same, soon-stale order.
+  it("ignores further moves until the one saving has finished", async () => {
+    let finishSave: () => void = () => {};
+    (moveStemInProject as jest.Mock).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishSave = () =>
+            resolve(manifestWithOrder(["t2", "t1", ...ids.slice(2)]));
+        }),
+    );
+    await renderInEditMode();
+
+    fireEvent.press(screen.getByTestId("stem-t2-move-up"));
+    fireEvent.press(screen.getByTestId("stem-t2-move-up"));
+    fireEvent.press(screen.getByTestId("stem-t17-move-up"));
+
+    expect(moveStemInProject).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByTestId("stem-t5-move-up").props.accessibilityState,
+    ).toMatchObject({ disabled: true });
+
+    await act(async () => finishSave());
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("stem-t5-move-up").props.accessibilityState,
+      ).toMatchObject({ disabled: false }),
+    );
   });
 });
 
@@ -1336,14 +2039,6 @@ describe("ProjectScreen - deleting", () => {
   }
 
   /** Drives Alert.alert by invoking the button matching `label`. */
-  function answerAlertWith(label: string) {
-    return jest
-      .spyOn(Alert, "alert")
-      .mockImplementation((_title, _message, buttons) => {
-        buttons?.find((button) => button.text === label)?.onPress?.();
-      });
-  }
-
   // Deleting needs a folder to delete. Nothing produces a sourceDir-less
   // entry now that the bundled demo is gone, but the guard is still there and
   // a project the app can't locate must not offer to destroy it.
@@ -1439,7 +2134,6 @@ describe("ProjectScreen - deleting", () => {
     // Edit can't be opened mid-song any more (see "locked while playing"), so
     // open it first and start playback after - what's under test is that
     // deleting a *playing* project stops the engine, not how Edit was reached.
-    openMixer();
     fireEvent.press(screen.getByTestId("edit-button"));
     audioEngine.play();
 
