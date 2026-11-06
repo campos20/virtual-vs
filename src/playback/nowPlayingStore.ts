@@ -49,6 +49,14 @@ interface LoadResult {
   durationSec: number;
 }
 
+/** A load that a newer `openProject`/`reload` overtook before it committed. */
+class SupersededLoadError extends Error {
+  constructor() {
+    super("Superseded by a newer openProject/reload call");
+    this.name = "SupersededLoadError";
+  }
+}
+
 const EMPTY_SNAPSHOT: NowPlayingSnapshot = {
   projectId: null,
   manifest: null,
@@ -229,7 +237,27 @@ class NowPlayingStore {
     };
   }
 
-  private async loadFresh(
+  /**
+   * The newest load request and its result - lets a load superseded by a
+   * newer load of the *same* project resolve with that newer result instead
+   * of failing (see `loadFresh`).
+   */
+  private latestLoad: {
+    requestId: number;
+    projectId: string;
+    promise: Promise<LoadResult>;
+  } | null = null;
+
+  /**
+   * Superseded by a newer load of the same project: resolves with that newer
+   * load's result rather than rejecting. The caller asked for this project,
+   * and the newer load delivers it - typically an edit's reload (after an
+   * add/remove/save) landing while the user had just re-opened the song, so
+   * the song screen's own open would otherwise show a permanent "load
+   * failed" while the reload loads the song fine. Superseded by a load of a
+   * *different* project (or by `closeIfCurrent`), it still rejects.
+   */
+  private loadFresh(
     entry: LibraryProjectEntry,
     options: EngineOptions,
     onProgress?: ProgressReporter,
@@ -239,11 +267,26 @@ class NowPlayingStore {
     // Taken synchronously, before the first await, so there's no gap between
     // a caller checking the transport and the lock taking effect.
     const release = this.holdPlayback();
-    try {
-      return await this.decodeAndLoad(entry, options, requestId, onProgress);
-    } finally {
-      release();
-    }
+    const promise = (async () => {
+      try {
+        return await this.decodeAndLoad(entry, options, requestId, onProgress);
+      } catch (error) {
+        const latest = this.latestLoad;
+        if (
+          error instanceof SupersededLoadError &&
+          latest &&
+          latest.requestId !== requestId &&
+          latest.projectId === entry.id
+        ) {
+          return await latest.promise;
+        }
+        throw error;
+      } finally {
+        release();
+      }
+    })();
+    this.latestLoad = { requestId, projectId: entry.id, promise };
+    return promise;
   }
 
   private async decodeAndLoad(
@@ -264,7 +307,7 @@ class NowPlayingStore {
     // *different* project that's since become current (e.g. the user
     // backed out before this one finished decoding and opened another).
     if (requestId !== this.requestId) {
-      throw new Error("Superseded by a newer openProject/reload call");
+      throw new SupersededLoadError();
     }
 
     // Building the graph also generates the click track, which is a
@@ -338,6 +381,7 @@ class NowPlayingStore {
     if (this.snapshot.projectId !== projectId) return;
     audioEngine.stop();
     this.requestId++; // also supersedes any load still in flight for it
+    this.latestLoad = null;
     this.recordIntent(null);
     this.commit(EMPTY_SNAPSHOT);
   }
@@ -470,6 +514,7 @@ class NowPlayingStore {
    */
   resetForTests(): void {
     this.requestId++;
+    this.latestLoad = null;
     this.intentGeneration = 0;
     this.intendedProjectId = null;
     this.playbackHolds = 0;

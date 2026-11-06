@@ -229,6 +229,12 @@ when touching `ProjectScreen`'s edit handlers, `ProjectForm`,
   choice even when it's already loaded and no load runs. That is tracked
   apart from `requestId`, which only counts actual loads, so re-opening a
   song never cancels its own reload still in flight.
+- **A load overtaken by a newer load of the same song resolves with that
+  newer result** instead of rejecting (`loadFresh`/`latestLoad`). An edit's
+  reload can overtake the song screen's own open of that song (the user
+  re-opened it mid-edit), and a rejection there would leave the screen on a
+  permanent "load failed". Overtaken by a different song, or by
+  `closeIfCurrent`, it still rejects with `SupersededLoadError`.
 - **Moves run one at a time** (`moveInFlightRef`, arrows disabled), so each
   move is computed from the order the previous one saved.
 - **A track name field only rolls back a failed rename if it's still the

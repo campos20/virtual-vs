@@ -193,6 +193,58 @@ describe("nowPlayingStore", () => {
 
   // Edits reload only once their disk work is done, which can be after the
   // user has gone back and opened a different song.
+  // A song screen's open of A can be overtaken by an edit's reload of A
+  // (the user re-opened A while the edit was still saving). The open asked
+  // for A and the reload delivers A - it must not fail.
+  describe("a load overtaken by a newer load", () => {
+    function gatedDecode() {
+      let open: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        open = resolve;
+      });
+      decodeMock.mockImplementationOnce(async (_ctx, source) => {
+        await gate;
+        return { manifest: source.manifest, trackBuffers: {} };
+      });
+      return () => open();
+    }
+
+    it("resolves with the newer load's result when it's the same song", async () => {
+      const finishOpen = gatedDecode();
+      const opening = nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+      const edited = entry("a", { title: "Edited" });
+
+      const reloaded = await nowPlayingStore.reload(edited, ENGINE_OPTIONS);
+      finishOpen();
+
+      await expect(opening).resolves.toEqual(reloaded);
+      expect(nowPlayingStore.getSnapshot().manifest?.title).toBe("Edited");
+    });
+
+    it("still rejects when overtaken by a different song", async () => {
+      const finishOpen = gatedDecode();
+      const opening = nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+
+      await nowPlayingStore.openProject(entry("b"), ENGINE_OPTIONS);
+      finishOpen();
+
+      await expect(opening).rejects.toThrow("Superseded");
+      expect(nowPlayingStore.getSnapshot().projectId).toBe("b");
+    });
+
+    it("still rejects when the song was closed meanwhile", async () => {
+      await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+      const finishReload = gatedDecode();
+      const reloading = nowPlayingStore.reload(entry("a"), ENGINE_OPTIONS);
+
+      nowPlayingStore.closeIfCurrent("a");
+      finishReload();
+
+      await expect(reloading).rejects.toThrow("Superseded");
+      expect(nowPlayingStore.getSnapshot().projectId).toBeNull();
+    });
+  });
+
   describe("reloadUnlessSuperseded", () => {
     it("reloads when nothing else was requested since the edit began", async () => {
       await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);

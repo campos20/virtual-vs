@@ -1772,6 +1772,44 @@ describe("ProjectScreen - an edit finishing after another song was opened", () =
     expect(nowPlayingStore.getSnapshot().projectId).toBe("other-song");
   });
 
+  // The user re-opens the edited song while its edit is still saving: the
+  // screen's open of it is then overtaken by the edit's reload of the same
+  // song. The screen must show the song, not a load failure.
+  it("shows the song, not a load error, when its own open is overtaken by an edit's reload", async () => {
+    let finishOpen: () => void = () => {};
+    const openGate = new Promise<void>((resolve) => {
+      finishOpen = resolve;
+    });
+    (getProjectSourceForEntry as jest.Mock)
+      .mockImplementationOnce(async (e: LibraryProjectEntry) => {
+        await openGate;
+        return { manifest: e, resolveFile: () => 0 };
+      })
+      .mockImplementation(async (e: LibraryProjectEntry) => ({
+        manifest: e,
+        resolveFile: () => 0,
+      }));
+    mockParams = { projectId: "my-song" };
+    const store = createStore();
+    store.dispatch(projectAdded(filesystemProject));
+    renderWithStore(<ProjectScreen />, store);
+    await waitFor(() =>
+      expect(getProjectSourceForEntry).toHaveBeenCalledTimes(1),
+    );
+
+    // The edit (started from an earlier visit to this song) reloads it.
+    await act(async () => {
+      await nowPlayingStore.reload(filesystemProject, {
+        monitorMode: "split",
+        clickEnabled: true,
+      });
+    });
+    await act(async () => finishOpen());
+
+    await waitForMixer();
+    expect(screen.queryByText(/Superseded/)).toBeNull();
+  });
+
   it("keeps the other song loaded when a song info save finishes late", async () => {
     await renderInEditMode();
     let finishSave: () => void = () => {};
