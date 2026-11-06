@@ -191,6 +191,112 @@ describe("nowPlayingStore", () => {
     expect(nowPlayingStore.getSnapshot().projectId).toBeNull();
   });
 
+  // Edits reload only once their disk work is done, which can be after the
+  // user has gone back and opened a different song.
+  describe("reloadUnlessSuperseded", () => {
+    it("reloads when nothing else was requested since the edit began", async () => {
+      await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+      const generation = nowPlayingStore.loadGeneration();
+      const loadSpy = jest.spyOn(audioEngine, "loadProject");
+
+      const result = await nowPlayingStore.reloadUnlessSuperseded(
+        entry("a"),
+        ENGINE_OPTIONS,
+        generation,
+      );
+
+      expect(result).not.toBeNull();
+      expect(loadSpy).toHaveBeenCalledTimes(1);
+    });
+
+    // E.g. a brand-new song's first stems, added while another song was the
+    // loaded one: the edited song becoming loaded is the point.
+    it("loads the edited song even if a different one was loaded before the edit", async () => {
+      await nowPlayingStore.openProject(entry("other"), ENGINE_OPTIONS);
+      const generation = nowPlayingStore.loadGeneration();
+
+      await nowPlayingStore.reloadUnlessSuperseded(
+        entry("a"),
+        ENGINE_OPTIONS,
+        generation,
+      );
+
+      expect(nowPlayingStore.getSnapshot().projectId).toBe("a");
+    });
+
+    it("leaves a song opened since the edit began alone", async () => {
+      await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+      const generation = nowPlayingStore.loadGeneration();
+      await nowPlayingStore.openProject(entry("b"), ENGINE_OPTIONS);
+      const loadSpy = jest.spyOn(audioEngine, "loadProject");
+
+      const result = await nowPlayingStore.reloadUnlessSuperseded(
+        entry("a"),
+        ENGINE_OPTIONS,
+        generation,
+      );
+
+      expect(result).toBeNull();
+      expect(loadSpy).not.toHaveBeenCalled();
+      expect(nowPlayingStore.getSnapshot().projectId).toBe("b");
+    });
+
+    // The reviewed case exactly: B still decoding when A's edit finishes.
+    it("doesn't supersede a different song's load that is still in flight", async () => {
+      await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+      const generation = nowPlayingStore.loadGeneration();
+      let finishB: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        finishB = resolve;
+      });
+      decodeMock.mockImplementationOnce(async (_ctx, source) => {
+        await gate;
+        return { manifest: source.manifest, trackBuffers: {} };
+      });
+      const openB = nowPlayingStore.openProject(entry("b"), ENGINE_OPTIONS);
+
+      const result = await nowPlayingStore.reloadUnlessSuperseded(
+        entry("a"),
+        ENGINE_OPTIONS,
+        generation,
+      );
+      finishB();
+      await openB;
+
+      expect(result).toBeNull();
+      expect(nowPlayingStore.getSnapshot().projectId).toBe("b");
+    });
+
+    it("still reloads when the newer request was for the same song", async () => {
+      await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+      const generation = nowPlayingStore.loadGeneration();
+      await nowPlayingStore.reload(entry("a"), ENGINE_OPTIONS);
+
+      const result = await nowPlayingStore.reloadUnlessSuperseded(
+        entry("a"),
+        ENGINE_OPTIONS,
+        generation,
+      );
+
+      expect(result).not.toBeNull();
+    });
+
+    it("skips after the edited song was closed (e.g. deleted)", async () => {
+      await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+      const generation = nowPlayingStore.loadGeneration();
+      nowPlayingStore.closeIfCurrent("a");
+
+      const result = await nowPlayingStore.reloadUnlessSuperseded(
+        entry("a"),
+        ENGINE_OPTIONS,
+        generation,
+      );
+
+      expect(result).toBeNull();
+      expect(nowPlayingStore.getSnapshot().projectId).toBeNull();
+    });
+  });
+
   describe("canStartPlayback", () => {
     /** The next decode waits until `finish()`/`fail()`, even if called before decode starts. */
     function deferredDecode() {

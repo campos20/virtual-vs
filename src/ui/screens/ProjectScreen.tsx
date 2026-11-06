@@ -179,7 +179,7 @@ export function ProjectScreen() {
   } = usePlayhead();
 
   /**
-   * Anything that edits a project ends in nowPlayingStore.reload(), and
+   * Anything that edits a project ends in a nowPlayingStore reload, and
    * AudioEngine.loadProject() opens with stop() + disposeTracks() - so an
    * import or a save mid-song would cut the song off and tear the graph
    * down. Nothing that can do that is reachable while the transport is
@@ -343,21 +343,35 @@ export function ProjectScreen() {
     nowPlayingStore.setFolderContext(entry.id, folderId);
   }, [entry?.id, folderId, nowPlaying.projectId]);
 
-  /** Forces a fresh reload of the current project (its content actually changed) and re-seeds the store's mixer state from the result. */
-  const reloadAndSeed = useCallback(async () => {
-    if (!entry) return;
-    const { manifest } = await nowPlayingStore.reload(
-      entry,
-      { monitorMode, clickEnabled },
-      onProgress,
-    );
-    dispatch(
-      tracksInitializedForProject({
-        projectId: entry.id,
-        tracks: manifest.tracks,
-      }),
-    );
-  }, [entry, monitorMode, clickEnabled, dispatch, onProgress]);
+  /**
+   * Forces a fresh reload of the current project (its content actually
+   * changed) and re-seeds the store's mixer state from the result.
+   *
+   * `generation` is `nowPlayingStore.loadGeneration()` taken when the edit
+   * started. If another song has been opened since (the user navigated away
+   * while the edit's disk work ran), the reload is skipped rather than
+   * replacing the song they chose - see `reloadUnlessSuperseded`.
+   */
+  const reloadAndSeed = useCallback(
+    async (generation: number) => {
+      if (!entry) return;
+      const result = await nowPlayingStore.reloadUnlessSuperseded(
+        entry,
+        { monitorMode, clickEnabled },
+        generation,
+        onProgress,
+      );
+      if (!result) return;
+      const { manifest } = result;
+      dispatch(
+        tracksInitializedForProject({
+          projectId: entry.id,
+          tracks: manifest.tracks,
+        }),
+      );
+    },
+    [entry, monitorMode, clickEnabled, dispatch, onProgress],
+  );
 
   // Kills this screen's own rAF-driven waveform re-render loop before
   // navigating away - independent of whether the engine itself keeps
@@ -539,6 +553,7 @@ export function ProjectScreen() {
     // picker and the copy too, so the song can't be started during them and
     // then cut off by the reload. See nowPlayingStore.holdPlayback.
     const releasePlayback = nowPlayingStore.holdPlayback();
+    const generation = nowPlayingStore.loadGeneration();
     setFormError(null);
     try {
       const assets = await pickFiles();
@@ -554,7 +569,7 @@ export function ProjectScreen() {
       dispatch(
         projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }),
       );
-      await reloadAndSeed();
+      await reloadAndSeed(generation);
     } catch (e) {
       if (mountedRef.current)
         setFormError(e instanceof Error ? e.message : String(e));
@@ -606,13 +621,14 @@ export function ProjectScreen() {
     // Held through the manifest write (which may queue behind other edits)
     // and the reload - see handleAddStems.
     const releasePlayback = nowPlayingStore.holdPlayback();
+    const generation = nowPlayingStore.loadGeneration();
     setBusy(true);
     try {
       const updated = await removeStemFromProject(entry.sourceDir, stemId);
       dispatch(
         projectUpdated({ id: entry.id, changes: { tracks: updated.tracks } }),
       );
-      await reloadAndSeed();
+      await reloadAndSeed(generation);
     } catch (e) {
       if (mountedRef.current)
         setFormError(e instanceof Error ? e.message : String(e));
@@ -706,6 +722,7 @@ export function ProjectScreen() {
       return;
     }
     const releasePlayback = needsReload ? nowPlayingStore.holdPlayback() : null;
+    const generation = nowPlayingStore.loadGeneration();
     moveInFlightRef.current = true;
     setMoveInFlight(true);
     setFormError(null);
@@ -734,7 +751,7 @@ export function ProjectScreen() {
         : nowPlayingStore.holdPlayback();
       if (mountedRef.current) setBusy(true);
       try {
-        await reloadAndSeed();
+        await reloadAndSeed(generation);
       } finally {
         releaseForReload?.();
         if (mountedRef.current) {
@@ -762,6 +779,7 @@ export function ProjectScreen() {
     if (!entry?.sourceDir) return;
     // Held through the manifest write and the reload - see handleAddStems.
     const releasePlayback = nowPlayingStore.holdPlayback();
+    const generation = nowPlayingStore.loadGeneration();
     setBusy(true);
     setFormError(null);
     try {
@@ -769,7 +787,7 @@ export function ProjectScreen() {
       dispatch(projectUpdated({ id: entry.id, changes: values }));
       setEditing(false);
       // bpm may have changed, which adds or removes the click entirely.
-      await reloadAndSeed();
+      await reloadAndSeed(generation);
     } catch (e) {
       if (mountedRef.current)
         setFormError(e instanceof Error ? e.message : String(e));

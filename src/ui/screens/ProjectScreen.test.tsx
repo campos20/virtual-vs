@@ -1636,6 +1636,102 @@ describe("ProjectScreen - play stays locked through an edit's whole reload", () 
   });
 });
 
+// Edits keep running after the user navigates away, and only reload once
+// their disk work is done. If another song was opened meanwhile, the late
+// reload must not replace it.
+describe("ProjectScreen - an edit finishing after another song was opened", () => {
+  const otherSong: LibraryProjectEntry = {
+    ...threeStemProject,
+    id: "other-song",
+    sourceDir: "file:///mock/document/projects/other-song",
+  };
+
+  async function renderInEditMode() {
+    (getProjectSourceForEntry as jest.Mock).mockImplementation(
+      async (e: LibraryProjectEntry) => ({ manifest: e, resolveFile: () => 0 }),
+    );
+    mockParams = { projectId: "my-song" };
+    const store = createStore();
+    store.dispatch(projectAdded(filesystemProject));
+    const rendered = renderWithStore(<ProjectScreen />, store);
+    await waitForMixer();
+    fireEvent.press(screen.getByTestId("edit-button"));
+    return rendered;
+  }
+
+  async function openOtherSong() {
+    await act(async () => {
+      await nowPlayingStore.openProject(otherSong, {
+        monitorMode: "split",
+        clickEnabled: true,
+      });
+    });
+  }
+
+  it("keeps the other song loaded when a stem import finishes late, but saves the import", async () => {
+    const { store } = await renderInEditMode();
+    let finishCopy: () => void = () => {};
+    pickerMock.mockResolvedValue({
+      canceled: false,
+      assets: [asset("gtr.wav", "file:///tmp/gtr.wav")],
+    });
+    const withGuitar = {
+      ...filesystemProject,
+      tracks: [
+        ...filesystemProject.tracks,
+        {
+          id: "gtr",
+          name: "gtr",
+          file: "gtr.wav",
+          gain: 1,
+          bus: "main" as const,
+        },
+      ],
+    };
+    (addStemsToProject as jest.Mock).mockReturnValue(
+      new Promise((resolve) => {
+        finishCopy = () => resolve(withGuitar);
+      }),
+    );
+
+    fireEvent.press(screen.getByTestId("pick-files-button"));
+    await waitFor(() => expect(addStemsToProject).toHaveBeenCalled());
+    await openOtherSong();
+    const loadSpy = jest.spyOn(audioEngine, "loadProject");
+
+    await act(async () => finishCopy());
+
+    await waitFor(() =>
+      expect(
+        store.getState().projects.entities["my-song"]?.tracks,
+      ).toHaveLength(3),
+    );
+    expect(loadSpy).not.toHaveBeenCalled();
+    expect(nowPlayingStore.getSnapshot().projectId).toBe("other-song");
+    await waitFor(() => expect(nowPlayingStore.canStartPlayback()).toBe(true));
+  });
+
+  it("keeps the other song loaded when a song info save finishes late", async () => {
+    await renderInEditMode();
+    let finishSave: () => void = () => {};
+    (updateProjectMetadata as jest.Mock).mockReturnValue(
+      new Promise((resolve) => {
+        finishSave = () => resolve(filesystemProject);
+      }),
+    );
+
+    fireEvent.press(screen.getByTestId("save-button"));
+    await openOtherSong();
+    const loadSpy = jest.spyOn(audioEngine, "loadProject");
+
+    await act(async () => finishSave());
+
+    await waitFor(() => expect(nowPlayingStore.canStartPlayback()).toBe(true));
+    expect(loadSpy).not.toHaveBeenCalled();
+    expect(nowPlayingStore.getSnapshot().projectId).toBe("other-song");
+  });
+});
+
 // The arrange view only computes waveforms for its first 16 lanes, so in a
 // song with more stems, moving one into those lanes needs a full reload -
 // which rebuilds the audio graph and so can't happen mid-song.

@@ -87,6 +87,9 @@ class NowPlayingStore {
 
   getSnapshot = (): NowPlayingSnapshot => this.snapshot;
 
+  /** The project the newest load request was for - see `reloadUnlessSuperseded`. */
+  private requestedProjectId: string | null = null;
+
   /** Outstanding `holdPlayback()` holds - see `canStartPlayback()`. */
   private playbackHolds = 0;
 
@@ -126,6 +129,43 @@ class NowPlayingStore {
     options: EngineOptions,
     onProgress?: ProgressReporter,
   ): Promise<LoadResult> {
+    return this.loadFresh(entry, options, onProgress);
+  }
+
+  /**
+   * A marker for "load requests made so far". An edit takes one when it
+   * starts and hands it to `reloadUnlessSuperseded` when it finishes.
+   */
+  loadGeneration(): number {
+    return this.requestId;
+  }
+
+  /**
+   * `reload()`, unless a load of a *different* project has been requested
+   * since `generation` (or the loaded project was closed) - then it does
+   * nothing and resolves to null.
+   *
+   * Edits (adding/removing stems, saving the song info) keep running after
+   * the user navigates away, and only reload once their disk work is done -
+   * which can take long enough for the user to have gone back and opened
+   * another song meanwhile. Reloading the edited song then would supersede
+   * the song the user actually chose, and leave the edited one loaded
+   * instead. The edit's disk change is already saved either way; the edited
+   * song picks it up the next time it's opened, since opening a song that
+   * isn't the loaded one always decodes it fresh from disk.
+   *
+   * A newer request for the *same* project doesn't count: reloading it
+   * still ends with the project the user is looking at, now with the edit.
+   */
+  async reloadUnlessSuperseded(
+    entry: LibraryProjectEntry,
+    options: EngineOptions,
+    generation: number,
+    onProgress?: ProgressReporter,
+  ): Promise<LoadResult | null> {
+    if (this.requestId !== generation && this.requestedProjectId !== entry.id) {
+      return null;
+    }
     return this.loadFresh(entry, options, onProgress);
   }
 
@@ -173,6 +213,7 @@ class NowPlayingStore {
     onProgress?: ProgressReporter,
   ): Promise<LoadResult> {
     const requestId = ++this.requestId;
+    this.requestedProjectId = entry.id;
     // Taken synchronously, before the first await, so there's no gap between
     // a caller checking the transport and the lock taking effect.
     const release = this.holdPlayback();
@@ -275,6 +316,7 @@ class NowPlayingStore {
     if (this.snapshot.projectId !== projectId) return;
     audioEngine.stop();
     this.requestId++; // also supersedes any load still in flight for it
+    this.requestedProjectId = null;
     this.commit(EMPTY_SNAPSHOT);
   }
 
@@ -406,6 +448,7 @@ class NowPlayingStore {
    */
   resetForTests(): void {
     this.requestId++;
+    this.requestedProjectId = null;
     this.playbackHolds = 0;
     this.snapshot = EMPTY_SNAPSHOT;
   }
