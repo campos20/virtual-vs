@@ -1386,6 +1386,115 @@ describe("ProjectScreen - locked while playing", () => {
   });
 });
 
+// Add, remove and save each check the transport, then wait (file picker,
+// copying, a manifest write) before reloading. Play is held locked from that
+// check until the reload ends, so a song can't be started in the wait and
+// then cut off by the reload.
+describe("ProjectScreen - play stays locked through an edit's whole reload", () => {
+  function deferred<T>() {
+    let resolve: (value: T) => void = () => {};
+    let reject: (error: Error) => void = () => {};
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
+
+  async function renderInEditMode() {
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: filesystemProject,
+      resolveFile: () => 0,
+    });
+    mockParams = { projectId: "my-song" };
+    const store = createStore();
+    store.dispatch(projectAdded(filesystemProject));
+    renderWithStore(<ProjectScreen />, store);
+    await waitForMixer();
+    fireEvent.press(screen.getByTestId("edit-button"));
+    expect(nowPlayingStore.canStartPlayback()).toBe(true);
+  }
+
+  it("locks from Add Tracks through the picker, the copy and the reload", async () => {
+    await renderInEditMode();
+    const picker = deferred<unknown>();
+    const copy = deferred<unknown>();
+    pickerMock.mockReturnValue(picker.promise);
+    (addStemsToProject as jest.Mock).mockReturnValue(copy.promise);
+
+    fireEvent.press(screen.getByTestId("pick-files-button"));
+    // While the file picker is open.
+    expect(nowPlayingStore.canStartPlayback()).toBe(false);
+
+    await act(async () => {
+      picker.resolve({
+        canceled: false,
+        assets: [asset("gtr.wav", "file:///tmp/gtr.wav")],
+      });
+    });
+    // While the stems are being copied in.
+    await waitFor(() => expect(addStemsToProject).toHaveBeenCalled());
+    expect(nowPlayingStore.canStartPlayback()).toBe(false);
+
+    await act(async () => {
+      copy.resolve(filesystemProject);
+    });
+    await waitFor(() => expect(nowPlayingStore.canStartPlayback()).toBe(true));
+  });
+
+  it("unlocks when the picker is cancelled", async () => {
+    await renderInEditMode();
+    pickerMock.mockResolvedValue({ canceled: true, assets: null });
+
+    fireEvent.press(screen.getByTestId("pick-files-button"));
+
+    await waitFor(() => expect(nowPlayingStore.canStartPlayback()).toBe(true));
+  });
+
+  it("unlocks when adding fails", async () => {
+    await renderInEditMode();
+    pickerMock.mockResolvedValue({
+      canceled: false,
+      assets: [asset("gtr.wav", "file:///tmp/gtr.wav")],
+    });
+    (addStemsToProject as jest.Mock).mockRejectedValue(new Error("disk full"));
+
+    fireEvent.press(screen.getByTestId("pick-files-button"));
+
+    await waitFor(() => expect(screen.getByText("disk full")).toBeTruthy());
+    expect(nowPlayingStore.canStartPlayback()).toBe(true);
+  });
+
+  it("locks while a removal saves and reloads", async () => {
+    await renderInEditMode();
+    answerAlertWith("Remove");
+    const removal = deferred<unknown>();
+    (removeStemFromProject as jest.Mock).mockReturnValue(removal.promise);
+
+    fireEvent.press(screen.getByTestId("remove-stem-bass"));
+    expect(nowPlayingStore.canStartPlayback()).toBe(false);
+
+    await act(async () => {
+      removal.resolve(filesystemProject);
+    });
+    await waitFor(() => expect(nowPlayingStore.canStartPlayback()).toBe(true));
+  });
+
+  it("locks while the song info saves and reloads", async () => {
+    await renderInEditMode();
+    const save = deferred<unknown>();
+    (updateProjectMetadata as jest.Mock).mockReturnValue(save.promise);
+
+    fireEvent.press(screen.getByTestId("save-button"));
+    expect(nowPlayingStore.canStartPlayback()).toBe(false);
+
+    await act(async () => {
+      save.resolve(filesystemProject);
+    });
+    await waitFor(() => expect(nowPlayingStore.canStartPlayback()).toBe(true));
+  });
+});
+
 // The arrange view only computes waveforms for its first 16 lanes, so in a
 // song with more stems, moving one into those lanes needs a full reload -
 // which rebuilds the audio graph and so can't happen mid-song.

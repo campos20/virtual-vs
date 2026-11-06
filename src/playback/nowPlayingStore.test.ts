@@ -240,6 +240,33 @@ describe("nowPlayingStore", () => {
       expect(nowPlayingStore.canStartPlayback()).toBe(true);
     });
 
+    it("holdPlayback locks until released, counting overlapping holds", () => {
+      const first = nowPlayingStore.holdPlayback();
+      const second = nowPlayingStore.holdPlayback();
+      expect(nowPlayingStore.canStartPlayback()).toBe(false);
+      expect(nowPlayingStore.getSnapshot().loading).toBe(true);
+
+      first();
+      first(); // releasing twice must not release someone else's hold
+      expect(nowPlayingStore.canStartPlayback()).toBe(false);
+
+      second();
+      expect(nowPlayingStore.canStartPlayback()).toBe(true);
+      expect(nowPlayingStore.getSnapshot().loading).toBe(false);
+    });
+
+    // An edit holds the lock across its own reload; the reload finishing
+    // must not unlock while the edit still holds it.
+    it("a load finishing doesn't release an edit's hold", async () => {
+      const release = nowPlayingStore.holdPlayback();
+
+      await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+      expect(nowPlayingStore.canStartPlayback()).toBe(false);
+
+      release();
+      expect(nowPlayingStore.canStartPlayback()).toBe(true);
+    });
+
     it("never stops a song that is already playing", async () => {
       await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
       audioEngine.play();

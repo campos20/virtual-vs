@@ -535,6 +535,10 @@ export function ProjectScreen() {
       setFormError(t.project.lockedWhilePlayingBody);
       return;
     }
+    // Held from the check above until the reload is done - through the file
+    // picker and the copy too, so the song can't be started during them and
+    // then cut off by the reload. See nowPlayingStore.holdPlayback.
+    const releasePlayback = nowPlayingStore.holdPlayback();
     setFormError(null);
     try {
       const assets = await pickFiles();
@@ -555,6 +559,7 @@ export function ProjectScreen() {
       if (mountedRef.current)
         setFormError(e instanceof Error ? e.message : String(e));
     } finally {
+      releasePlayback();
       if (mountedRef.current) {
         setBusy(false);
         setStatus(null);
@@ -598,6 +603,9 @@ export function ProjectScreen() {
     }
     setFormError(null);
     if (!entry?.sourceDir) return;
+    // Held through the manifest write (which may queue behind other edits)
+    // and the reload - see handleAddStems.
+    const releasePlayback = nowPlayingStore.holdPlayback();
     setBusy(true);
     try {
       const updated = await removeStemFromProject(entry.sourceDir, stemId);
@@ -609,6 +617,7 @@ export function ProjectScreen() {
       if (mountedRef.current)
         setFormError(e instanceof Error ? e.message : String(e));
     } finally {
+      releasePlayback();
       if (mountedRef.current) setBusy(false);
     }
   }
@@ -739,6 +748,8 @@ export function ProjectScreen() {
       return;
     }
     if (!entry?.sourceDir) return;
+    // Held through the manifest write and the reload - see handleAddStems.
+    const releasePlayback = nowPlayingStore.holdPlayback();
     setBusy(true);
     setFormError(null);
     try {
@@ -751,6 +762,7 @@ export function ProjectScreen() {
       if (mountedRef.current)
         setFormError(e instanceof Error ? e.message : String(e));
     } finally {
+      releasePlayback();
       if (mountedRef.current) setBusy(false);
     }
   }

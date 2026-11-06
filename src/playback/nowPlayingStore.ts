@@ -30,11 +30,11 @@ export interface NowPlayingSnapshot {
    */
   folderId: string | null;
   /**
-   * True while a load or reload is decoding and rebuilding the engine. Every
+   * True while playback is locked - a load or reload is decoding and
+   * rebuilding the engine, or an edit that ends in one is under way. Every
    * load ends in `audioEngine.loadProject()`, which stops and replaces the
-   * transport - so playback started during one would be cut off the moment
-   * it finishes. Starting playback is refused meanwhile; see
-   * `canStartPlayback()`.
+   * transport, so playback started meanwhile would be cut off the moment it
+   * finishes. See `canStartPlayback()`/`holdPlayback()`.
    */
   loading: boolean;
 }
@@ -87,8 +87,13 @@ class NowPlayingStore {
 
   getSnapshot = (): NowPlayingSnapshot => this.snapshot;
 
+  /** Outstanding `holdPlayback()` holds - see `canStartPlayback()`. */
+  private playbackHolds = 0;
+
   private commit(next: NowPlayingSnapshot): void {
-    this.snapshot = next;
+    // Derived, never set directly: true exactly while something holds the
+    // lock, whatever the caller passed in.
+    this.snapshot = { ...next, loading: this.playbackHolds > 0 };
     for (const listener of this.listeners) listener();
   }
 
@@ -125,15 +130,41 @@ class NowPlayingStore {
   }
 
   /**
-   * Whether playback may start right now. False while a load or reload is in
-   * flight: it would end in `audioEngine.loadProject()`, which stops the
-   * transport, cutting off a song started in the meantime - on stage, with
+   * Whether playback may start right now. False while anything holds the
+   * lock (`holdPlayback()`): every load and reload, and every edit that will
+   * end in one. A load ends in `audioEngine.loadProject()`, which stops the
+   * transport, so a song started meanwhile would be cut off - on stage, with
    * the performer having pressed play on purpose. Every control that starts
    * playback (NowPlayingBar's play button, the desktop play shortcut) checks
-   * this. It never stops anything already playing.
+   * this. The lock never stops anything already playing.
    */
   canStartPlayback(): boolean {
-    return !this.snapshot.loading;
+    return this.playbackHolds === 0;
+  }
+
+  /**
+   * Keeps playback from starting until the returned release is called
+   * (idempotent). Every load holds it for its whole run. An edit that will
+   * end in a reload - adding or removing a stem, saving the song info - must
+   * take it in the same synchronous step as its "is the transport stopped?"
+   * check, before awaiting anything (a file picker, a copy, a manifest
+   * write), and release it once its reload is done: otherwise the song could
+   * be started during that wait and then cut off by the reload.
+   *
+   * A count, not a flag, so overlapping holders (an edit and its own
+   * reload; two loads, one superseding the other) never release each other's
+   * lock early.
+   */
+  holdPlayback(): () => void {
+    this.playbackHolds += 1;
+    this.commit(this.snapshot);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.playbackHolds -= 1;
+      this.commit(this.snapshot);
+    };
   }
 
   private async loadFresh(
@@ -142,17 +173,13 @@ class NowPlayingStore {
     onProgress?: ProgressReporter,
   ): Promise<LoadResult> {
     const requestId = ++this.requestId;
-    // Set synchronously, before the first await, so there's no gap between
+    // Taken synchronously, before the first await, so there's no gap between
     // a caller checking the transport and the lock taking effect.
-    if (!this.snapshot.loading)
-      this.commit({ ...this.snapshot, loading: true });
+    const release = this.holdPlayback();
     try {
       return await this.decodeAndLoad(entry, options, requestId, onProgress);
     } finally {
-      // A superseded request leaves the lock to the newer one still running.
-      if (requestId === this.requestId && this.snapshot.loading) {
-        this.commit({ ...this.snapshot, loading: false });
-      }
+      release();
     }
   }
 
@@ -370,6 +397,7 @@ class NowPlayingStore {
    */
   resetForTests(): void {
     this.requestId++;
+    this.playbackHolds = 0;
     this.snapshot = EMPTY_SNAPSHOT;
   }
 }
