@@ -1711,6 +1711,67 @@ describe("ProjectScreen - an edit finishing after another song was opened", () =
     await waitFor(() => expect(nowPlayingStore.canStartPlayback()).toBe(true));
   });
 
+  // A brand-new song has no stems, so its screen never loads anything - the
+  // song already loaded (B) stays loaded while stems are added to it. Going
+  // back to B is then a no-op load, which must still count as choosing B.
+  it("keeps the already-loaded song when the user goes back to it during a new song's first import", async () => {
+    const draft: LibraryProjectEntry = {
+      id: "untitled-abc",
+      title: "Untitled",
+      key: "",
+      tracks: [],
+      sections: [],
+      origin: "filesystem",
+      sourceDir: "file:///mock/document/projects/untitled-abc",
+    };
+    (getProjectSourceForEntry as jest.Mock).mockImplementation(
+      async (e: LibraryProjectEntry) => ({ manifest: e, resolveFile: () => 0 }),
+    );
+    await openOtherSong(); // B is the loaded song
+    mockParams = { projectId: draft.id };
+    const store = createStore();
+    store.dispatch(projectAdded(draft));
+    renderWithStore(<ProjectScreen />, store);
+    expect(screen.getByTestId("pick-files-button")).toBeTruthy();
+
+    let finishCopy: () => void = () => {};
+    pickerMock.mockResolvedValue({
+      canceled: false,
+      assets: [asset("gtr.wav", "file:///tmp/gtr.wav")],
+    });
+    (addStemsToProject as jest.Mock).mockReturnValue(
+      new Promise((resolve) => {
+        finishCopy = () =>
+          resolve({
+            ...draft,
+            tracks: [
+              {
+                id: "gtr",
+                name: "gtr",
+                file: "gtr.wav",
+                gain: 1,
+                bus: "main" as const,
+              },
+            ],
+          });
+      }),
+    );
+    fireEvent.press(screen.getByTestId("pick-files-button"));
+    await waitFor(() => expect(addStemsToProject).toHaveBeenCalled());
+
+    await openOtherSong(); // back to B - already loaded, so no load runs
+    const loadSpy = jest.spyOn(audioEngine, "loadProject");
+    await act(async () => finishCopy());
+
+    await waitFor(() =>
+      expect(store.getState().projects.entities[draft.id]?.tracks).toHaveLength(
+        1,
+      ),
+    );
+    expect(loadSpy).not.toHaveBeenCalled();
+    expect(nowPlayingStore.getSnapshot().projectId).toBe("other-song");
+  });
+
   it("keeps the other song loaded when a song info save finishes late", async () => {
     await renderInEditMode();
     let finishSave: () => void = () => {};

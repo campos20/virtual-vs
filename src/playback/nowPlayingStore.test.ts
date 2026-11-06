@@ -267,6 +267,60 @@ describe("nowPlayingStore", () => {
       expect(nowPlayingStore.getSnapshot().projectId).toBe("b");
     });
 
+    // The reviewed case: B loaded, an edit of draft A starts, the user goes
+    // back to B (already loaded, so no load runs), then A's edit finishes.
+    it("counts opening the already-loaded song as choosing it", async () => {
+      await nowPlayingStore.openProject(entry("b"), ENGINE_OPTIONS);
+      const generation = nowPlayingStore.loadGeneration();
+      const loadSpy = jest.spyOn(audioEngine, "loadProject");
+      await nowPlayingStore.openProject(entry("b"), ENGINE_OPTIONS);
+      expect(loadSpy).not.toHaveBeenCalled(); // still the fast path
+
+      const result = await nowPlayingStore.reloadUnlessSuperseded(
+        entry("a"),
+        ENGINE_OPTIONS,
+        generation,
+      );
+
+      expect(result).toBeNull();
+      expect(loadSpy).not.toHaveBeenCalled();
+      expect(nowPlayingStore.getSnapshot().projectId).toBe("b");
+    });
+
+    it("still reloads after the user re-opens the song being edited", async () => {
+      await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+      const generation = nowPlayingStore.loadGeneration();
+      await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+
+      const result = await nowPlayingStore.reloadUnlessSuperseded(
+        entry("a"),
+        ENGINE_OPTIONS,
+        generation,
+      );
+
+      expect(result).not.toBeNull();
+    });
+
+    // Recording that choice must not cancel anything: a reload of the song
+    // still in flight carries an edit, and dropping it would lose the edit.
+    it("re-opening a song doesn't supersede its own reload in flight", async () => {
+      await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+      let finish: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      decodeMock.mockImplementationOnce(async (_ctx, source) => {
+        await gate;
+        return { manifest: source.manifest, trackBuffers: {} };
+      });
+      const reload = nowPlayingStore.reload(entry("a"), ENGINE_OPTIONS);
+
+      await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
+      finish();
+
+      await expect(reload).resolves.toBeTruthy();
+    });
+
     it("still reloads when the newer request was for the same song", async () => {
       await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
       const generation = nowPlayingStore.loadGeneration();

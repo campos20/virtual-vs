@@ -87,8 +87,21 @@ class NowPlayingStore {
 
   getSnapshot = (): NowPlayingSnapshot => this.snapshot;
 
-  /** The project the newest load request was for - see `reloadUnlessSuperseded`. */
-  private requestedProjectId: string | null = null;
+  /**
+   * Which project the user last asked for, and a counter bumped on every
+   * such request - see `reloadUnlessSuperseded`. Kept apart from
+   * `requestId`, which only counts actual loads: opening the song that's
+   * already loaded is still the user choosing it, but must not supersede a
+   * reload of it that's still in flight (that would drop the edit it
+   * carries).
+   */
+  private intentGeneration = 0;
+  private intendedProjectId: string | null = null;
+
+  private recordIntent(projectId: string | null): void {
+    this.intentGeneration += 1;
+    this.intendedProjectId = projectId;
+  }
 
   /** Outstanding `holdPlayback()` holds - see `canStartPlayback()`. */
   private playbackHolds = 0;
@@ -112,6 +125,9 @@ class NowPlayingStore {
     onProgress?: ProgressReporter,
   ): Promise<LoadResult> {
     if (entry.id === this.snapshot.projectId && this.snapshot.manifest) {
+      // No load, but still the user choosing this song - an edit of another
+      // song that finishes later must not take them away from it.
+      this.recordIntent(entry.id);
       return {
         manifest: this.snapshot.manifest,
         durationSec: this.snapshot.durationSec,
@@ -133,17 +149,20 @@ class NowPlayingStore {
   }
 
   /**
-   * A marker for "load requests made so far". An edit takes one when it
-   * starts and hands it to `reloadUnlessSuperseded` when it finishes.
+   * A marker for "songs the user has asked for so far" - every
+   * `openProject`/`reload`, including opening the already-loaded song. An
+   * edit takes one when it starts and hands it to `reloadUnlessSuperseded`
+   * when it finishes.
    */
   loadGeneration(): number {
-    return this.requestId;
+    return this.intentGeneration;
   }
 
   /**
-   * `reload()`, unless a load of a *different* project has been requested
-   * since `generation` (or the loaded project was closed) - then it does
-   * nothing and resolves to null.
+   * `reload()`, unless a *different* project has been asked for since
+   * `generation` - opened (even if it was already the loaded one, so no load
+   * ran), or the loaded project was closed - then it does nothing and
+   * resolves to null.
    *
    * Edits (adding/removing stems, saving the song info) keep running after
    * the user navigates away, and only reload once their disk work is done -
@@ -163,7 +182,10 @@ class NowPlayingStore {
     generation: number,
     onProgress?: ProgressReporter,
   ): Promise<LoadResult | null> {
-    if (this.requestId !== generation && this.requestedProjectId !== entry.id) {
+    if (
+      this.intentGeneration !== generation &&
+      this.intendedProjectId !== entry.id
+    ) {
       return null;
     }
     return this.loadFresh(entry, options, onProgress);
@@ -213,7 +235,7 @@ class NowPlayingStore {
     onProgress?: ProgressReporter,
   ): Promise<LoadResult> {
     const requestId = ++this.requestId;
-    this.requestedProjectId = entry.id;
+    this.recordIntent(entry.id);
     // Taken synchronously, before the first await, so there's no gap between
     // a caller checking the transport and the lock taking effect.
     const release = this.holdPlayback();
@@ -316,7 +338,7 @@ class NowPlayingStore {
     if (this.snapshot.projectId !== projectId) return;
     audioEngine.stop();
     this.requestId++; // also supersedes any load still in flight for it
-    this.requestedProjectId = null;
+    this.recordIntent(null);
     this.commit(EMPTY_SNAPSHOT);
   }
 
@@ -448,7 +470,8 @@ class NowPlayingStore {
    */
   resetForTests(): void {
     this.requestId++;
-    this.requestedProjectId = null;
+    this.intentGeneration = 0;
+    this.intendedProjectId = null;
     this.playbackHolds = 0;
     this.snapshot = EMPTY_SNAPSHOT;
   }
