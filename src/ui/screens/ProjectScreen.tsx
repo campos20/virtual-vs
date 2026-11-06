@@ -647,7 +647,7 @@ export function ProjectScreen() {
       dispatch(
         projectUpdated({ id: projectId, changes: { tracks: updated.tracks } }),
       );
-      nowPlayingStore.renameTrackLocal(stemId, name);
+      nowPlayingStore.renameTrackLocal(projectId, stemId, name);
       return true;
     } catch (e) {
       if (mountedRef.current)

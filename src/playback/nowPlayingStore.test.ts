@@ -161,7 +161,7 @@ describe("nowPlayingStore", () => {
   it("renameTrackLocal patches both the manifest and the waveform tracks", async () => {
     await nowPlayingStore.openProject(entry("a"), ENGINE_OPTIONS);
 
-    nowPlayingStore.renameTrackLocal("a", "Renamed");
+    nowPlayingStore.renameTrackLocal("a", "a", "Renamed");
 
     const snapshot = nowPlayingStore.getSnapshot();
     expect(snapshot.manifest?.tracks.find((t) => t.id === "a")?.name).toBe(
@@ -172,9 +172,21 @@ describe("nowPlayingStore", () => {
     );
   });
 
+  // A rename's write can land after the user has switched songs, and stem
+  // ids are commonly shared between songs ("bass", "keys").
+  it("renameTrackLocal leaves a different loaded song alone, even with the same stem id", async () => {
+    await nowPlayingStore.openProject(entry("other-song"), ENGINE_OPTIONS);
+
+    nowPlayingStore.renameTrackLocal("renamed-song", "a", "Renamed");
+
+    const snapshot = nowPlayingStore.getSnapshot();
+    expect(snapshot.manifest?.tracks.find((t) => t.id === "a")?.name).toBe("A");
+    expect(snapshot.waveformTracks.find((t) => t.id === "a")?.name).toBe("A");
+  });
+
   it("renameTrackLocal is a no-op when nothing is loaded", () => {
     expect(() =>
-      nowPlayingStore.renameTrackLocal("a", "Renamed"),
+      nowPlayingStore.renameTrackLocal("a", "a", "Renamed"),
     ).not.toThrow();
     expect(nowPlayingStore.getSnapshot().projectId).toBeNull();
   });

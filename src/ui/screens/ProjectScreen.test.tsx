@@ -1129,6 +1129,67 @@ describe("ProjectScreen - editing in place", () => {
     );
   });
 
+  // The write can land after another song has loaded (it may queue behind
+  // other manifest edits), and stem ids like "bass" repeat across songs.
+  it("doesn't rename the same stem id in a song loaded while the rename saved", async () => {
+    let finishRename: () => void = () => {};
+    (renameStemInProject as jest.Mock).mockReturnValue(
+      new Promise((resolve) => {
+        finishRename = () =>
+          resolve({
+            ...filesystemProject,
+            tracks: filesystemProject.tracks.map((t) =>
+              t.id === "bass" ? { ...t, name: "Low End" } : t,
+            ),
+          });
+      }),
+    );
+    const { store } = renderEditable();
+    await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());
+    fireEvent.press(screen.getByTestId("edit-button"));
+
+    const field = screen.getByTestId("rename-stem-bass");
+    fireEvent.changeText(field, "Low End");
+    fireEvent(field, "blur");
+    await waitFor(() => expect(renameStemInProject).toHaveBeenCalled());
+
+    // Another song, with its own "bass" stem, becomes the loaded one.
+    const otherSong = {
+      ...threeStemProject,
+      id: "other-song",
+      sourceDir: "file:///mock/document/projects/other-song",
+    };
+    (getProjectSourceForEntry as jest.Mock).mockResolvedValue({
+      manifest: otherSong,
+      resolveFile: () => 0,
+    });
+    await act(async () => {
+      await nowPlayingStore.openProject(otherSong, {
+        monitorMode: "split",
+        clickEnabled: true,
+      });
+    });
+
+    await act(async () => finishRename());
+
+    await waitFor(() =>
+      expect(
+        store
+          .getState()
+          .projects.entities["my-song"]?.tracks.find((t) => t.id === "bass")
+          ?.name,
+      ).toBe("Low End"),
+    );
+    const loaded = nowPlayingStore.getSnapshot();
+    expect(loaded.projectId).toBe("other-song");
+    expect(loaded.manifest?.tracks.find((t) => t.id === "bass")?.name).toBe(
+      "Bass",
+    );
+    expect(loaded.waveformTracks.find((t) => t.id === "bass")?.name).toBe(
+      "Bass",
+    );
+  });
+
   it("ignores an empty rename instead of blanking the stem name", async () => {
     renderEditable();
     await waitFor(() => expect(screen.getByTestId("edit-button")).toBeTruthy());

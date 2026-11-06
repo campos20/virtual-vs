@@ -278,10 +278,19 @@ class NowPlayingStore {
     this.commit(EMPTY_SNAPSHOT);
   }
 
-  /** Patches a track's display name in place after a successful rename write - no re-decode needed. */
-  renameTrackLocal(stemId: string, name: string): void {
+  /**
+   * Patches a track's display name in place after a successful rename write -
+   * no re-decode needed.
+   *
+   * A no-op unless `projectId` is still the loaded project. The rename's
+   * write is async and can queue behind other manifest edits, so it may land
+   * after the user has switched songs - and stem ids ("bass", "keys") are
+   * routinely the same across songs, so patching by stem id alone would
+   * silently rename a track in whatever song is loaded now.
+   */
+  renameTrackLocal(projectId: string, stemId: string, name: string): void {
     const { manifest, waveformTracks } = this.snapshot;
-    if (!manifest) return;
+    if (!manifest || this.snapshot.projectId !== projectId) return;
     this.commit({
       ...this.snapshot,
       manifest: {
