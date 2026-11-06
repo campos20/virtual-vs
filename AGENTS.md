@@ -235,6 +235,12 @@ when touching `ProjectScreen`'s edit handlers, `ProjectForm`,
   re-opened it mid-edit), and a rejection there would leave the screen on a
   permanent "load failed". Overtaken by a different song, or by
   `closeIfCurrent`, it still rejects with `SupersededLoadError`.
+- **No `await` between a load's final "still current?" check and its
+  commit** (`decodeAndLoad`). Every yield, including the progress-label
+  yields from `report()`, comes before the last `requestId` check. After it,
+  `audioEngine.loadProject()` and publishing the snapshot run synchronously.
+  Otherwise a song the user opened during a yield could be overwritten by
+  the stale one, in the engine or in the snapshot.
 - **Moves run one at a time** (`moveInFlightRef`, arrows disabled), so each
   move is computed from the order the previous one saved.
 - **A track name field only rolls back a failed rename if it's still the

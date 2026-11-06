@@ -196,6 +196,68 @@ describe("nowPlayingStore", () => {
   // A song screen's open of A can be overtaken by an edit's reload of A
   // (the user re-opened A while the edit was still saving). The open asked
   // for A and the reload delivers A - it must not fail.
+  // With progress reporting on, each phase label yields to the UI before
+  // its synchronous work. A different song opened during one of those
+  // yields must win: the stale load may neither install its graph in the
+  // engine nor publish itself as loaded.
+  describe("a different song opened during a progress yield", () => {
+    function loadedIds(loadSpy: jest.SpyInstance) {
+      return loadSpy.mock.calls.map(
+        ([decoded]) => (decoded as { manifest: { id: string } }).manifest.id,
+      );
+    }
+
+    it.each(["waveforms", "building"])(
+      "never installs or publishes the stale song (opened at %s)",
+      async (phase) => {
+        const loadSpy = jest.spyOn(audioEngine, "loadProject");
+        let openB: Promise<unknown> = Promise.resolve();
+        const onProgress = jest.fn((update: { phase: string }) => {
+          if (update.phase === phase) {
+            openB = nowPlayingStore.openProject(entry("b"), ENGINE_OPTIONS);
+          }
+        });
+
+        const openA = nowPlayingStore.openProject(
+          entry("a"),
+          ENGINE_OPTIONS,
+          onProgress,
+        );
+
+        await expect(openA).rejects.toThrow("Superseded");
+        await openB;
+        expect(loadedIds(loadSpy)).toEqual(["b"]);
+        expect(nowPlayingStore.getSnapshot().projectId).toBe("b");
+      },
+    );
+
+    // The reviewed worst case: B fails to load. A must still not end up
+    // loaded - the user chose B, not A.
+    it("leaves the stale song unloaded even if the newer song fails", async () => {
+      const loadSpy = jest.spyOn(audioEngine, "loadProject");
+      let openB: Promise<unknown> = Promise.resolve();
+      const onProgress = jest.fn((update: { phase: string }) => {
+        if (update.phase === "building") {
+          decodeMock.mockRejectedValueOnce(new Error("corrupt stem"));
+          openB = nowPlayingStore.openProject(entry("b"), ENGINE_OPTIONS);
+          // Handled below; marked handled now so it isn't reported early.
+          openB.catch(() => {});
+        }
+      });
+
+      const openA = nowPlayingStore.openProject(
+        entry("a"),
+        ENGINE_OPTIONS,
+        onProgress,
+      );
+
+      await expect(openA).rejects.toThrow("Superseded");
+      await expect(openB).rejects.toThrow("corrupt stem");
+      expect(loadedIds(loadSpy)).toEqual([]);
+      expect(nowPlayingStore.getSnapshot().projectId).not.toBe("a");
+    });
+  });
+
   describe("a load overtaken by a newer load", () => {
     function gatedDecode() {
       let open: () => void = () => {};

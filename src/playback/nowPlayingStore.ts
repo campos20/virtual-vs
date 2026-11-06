@@ -302,30 +302,21 @@ class NowPlayingStore {
       onProgress,
     );
 
-    // A slower, now-superseded request resolving after a newer one already
-    // committed must never win - most importantly, must never clobber a
-    // *different* project that's since become current (e.g. the user
-    // backed out before this one finished decoding and opened another).
+    // Bail out early if this request is already stale - no point computing
+    // waveforms for it. Not the check that matters, though: see below.
     if (requestId !== this.requestId) {
       throw new SupersededLoadError();
     }
-
-    // Building the graph also generates the click track, which is a
-    // synchronous pass over the whole project length.
-    await report(onProgress, { phase: "building" });
-    audioEngine.loadProject(
-      decoded,
-      trackRuntimeStatesFromManifest(source.manifest.tracks),
-    );
-    audioEngine.setMonitorMode(monitorMode);
-    audioEngine.setClickEnabled(clickEnabled);
 
     const durationSec = source.manifest.tracks.reduce(
       (max, t) => Math.max(max, decoded.trackBuffers[t.id]?.duration ?? 0),
       0,
     );
 
-    // Peak computation walks every sample of every stem, synchronously.
+    // Peak computation walks every sample of every stem, synchronously. It
+    // only reads the decoded buffers, never the engine, so it's done before
+    // the engine is touched - keeping every yield to the UI ahead of the
+    // final check below.
     await report(onProgress, { phase: "waveforms" });
     const waveformStems = source.manifest.tracks.slice(0, MAX_WAVEFORM_STEMS);
     const laneBarCount = waveformBarCount(durationSec, waveformStems.length);
@@ -343,6 +334,28 @@ class NowPlayingStore {
           : new Float32Array(laneBarCount),
       }),
     );
+
+    // Building the graph also generates the click track, which is a
+    // synchronous pass over the whole project length - this yield lets the
+    // "building" label paint first. It's the last await in this function.
+    await report(onProgress, { phase: "building" });
+
+    // The check that matters: a slower, now-superseded request must never
+    // win - most importantly, must never clobber a *different* project the
+    // user has asked for since (e.g. they opened another song during one of
+    // the yields above). From here to the commit everything is synchronous,
+    // so no newer request can arrive between this check, replacing the
+    // engine's graph and publishing the snapshot - the graph and the
+    // snapshot always describe the same, current project.
+    if (requestId !== this.requestId) {
+      throw new SupersededLoadError();
+    }
+    audioEngine.loadProject(
+      decoded,
+      trackRuntimeStatesFromManifest(source.manifest.tracks),
+    );
+    audioEngine.setMonitorMode(monitorMode);
+    audioEngine.setClickEnabled(clickEnabled);
 
     this.commit({
       projectId: entry.id,
